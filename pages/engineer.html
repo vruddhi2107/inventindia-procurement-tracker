@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ProcureOps — Engineer Portal</title>
+  <link rel="stylesheet" href="../css/styles.css"/>
+</head>
+<body>
+<div id="navbarMount"></div>
+<div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div><span style="font-family:var(--font-mono);font-size:0.8rem;color:var(--gray-4)">Loading...</span></div>
+
+<main class="page-container">
+  <div class="page-header">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px">
+      <div>
+        <h1 class="page-title">Engineer <span>Portal</span></h1>
+        <p class="page-sub">Submit, track and review your procurement requests</p>
+      </div>
+      <button class="btn btn-primary" onclick="openModal('newPRModal')">+ New Request</button>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-card-value" id="statMine">—</div><div class="stat-card-label">My Requests</div><div class="stat-card-icon">📋</div></div>
+    <div class="stat-card" style="--accent:#f59e0b"><div class="stat-card-value" id="statInProgress">—</div><div class="stat-card-label">In Progress</div><div class="stat-card-icon">⚡</div></div>
+    <div class="stat-card" style="--accent:#E02020"><div class="stat-card-value" id="statActionNeeded">—</div><div class="stat-card-label">Action Needed</div><div class="stat-card-icon">🔔</div></div>
+    <div class="stat-card" style="--accent:#22c55e"><div class="stat-card-value" id="statClosed">—</div><div class="stat-card-label">Closed</div><div class="stat-card-icon">✔</div></div>
+  </div>
+
+  <!-- ACTION NEEDED BANNER -->
+  <div id="actionBanner" style="display:none;margin-bottom:20px"></div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('all')">All Requests</button>
+    <button class="tab-btn" onclick="switchTab('action')">🔔 Needs Action</button>
+    <button class="tab-btn" onclick="switchTab('closed')">Closed</button>
+  </div>
+
+  <div class="filter-bar">
+    <input type="text" id="searchInput" placeholder="Search requests..." oninput="filterRequests()"/>
+    <select id="filterPhase" onchange="filterRequests()">
+      <option value="">All Phases</option>
+      <option value="submitted">Submitted</option>
+      <option value="engineer_review">Quotation to Review</option>
+      <option value="pending_client_approval">Pending Client Approval</option>
+      <option value="pending_pm_approval">Pending PM Approval</option>
+      <option value="approved">Approved</option>
+      <option value="order_placed">Order Placed</option>
+      <option value="grn_pending">GRN / Quality Check</option>
+      <option value="accepted">Accepted</option>
+      <option value="rejected">Rejected</option>
+    </select>
+    <button class="btn btn-ghost btn-sm" onclick="document.getElementById('searchInput').value='';document.getElementById('filterPhase').value='';filterRequests()">✕ Clear</button>
+  </div>
+
+  <div class="card">
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr><th>PR #</th><th>Project</th><th>Category</th><th>Order Type</th><th>Phase</th><th>Submitted</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="requestsBody"><tr><td colspan="7" style="text-align:center;padding:40px;color:var(--gray-4)">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<!-- ── NEW PR MODAL ── -->
+<div class="modal-overlay" id="newPRModal">
+  <div class="modal" style="max-width:720px">
+    <div class="modal-header">
+      <div><div class="modal-title">New Procurement Request</div><div class="modal-title-sub">Fill in all required details — your request will be sent to the procurement team</div></div>
+      <button class="modal-close" onclick="closeModal('newPRModal')">✕</button>
+    </div>
+    <div class="modal-body" style="max-height:72vh;overflow-y:auto">
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Request Category *</label>
+          <select class="form-control" id="fCategory">
+            <option value="">Select</option>
+            <option value="RFQ">RFQ (Request for Quotation)</option>
+            <option value="vendor_info">Request for Vendor Info</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Department *</label>
+          <select class="form-control" id="fDept">
+            <option value="">Select</option>
+            <option value="mech">Mechanical</option>
+            <option value="id">Industrial Design</option>
+            <option value="electronics">Electronics</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Project Name *</label>
+          <input class="form-control" id="fProject" placeholder="e.g. Smart Grid Phase 2"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Project Phase *</label>
+          <input class="form-control" id="fPhase" placeholder="e.g. Design, Prototype, Production"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Project Manager Name *</label>
+          <input class="form-control" id="fPM" placeholder="e.g. Omar Farooq"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Team Member Name *</label>
+          <input class="form-control" id="fTeam" placeholder="Your name or team member"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Order Type *</label>
+          <select class="form-control" id="fOrderType">
+            <option value="">Select</option>
+            <option value="repeat">Repeat Order (Previously Requested)</option>
+            <option value="custom">Custom Order (Vendor Customization Required)</option>
+            <option value="modification">Modification Request (Change to Previous)</option>
+            <option value="inventory">Inventory Item (Available in Inventory)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Vendor Suggestion</label>
+          <input class="form-control" id="fVendor" placeholder="Preferred vendor (optional)"/>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Description / Requirements</label>
+          <textarea class="form-control" id="fDesc" placeholder="Describe what you need, specifications, quantities, etc."></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('newPRModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitPR()">Submit Request →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── PR DETAIL / ACTION MODAL ── -->
+<div class="modal-overlay" id="prActionModal">
+  <div class="modal" style="max-width:780px">
+    <div class="modal-header">
+      <div><div class="modal-title" id="prActionTitle">Request Details</div><div class="modal-title-sub" id="prActionSub"></div></div>
+      <button class="modal-close" onclick="closeModal('prActionModal')">✕</button>
+    </div>
+    <div class="modal-body" id="prActionBody" style="max-height:72vh;overflow-y:auto"></div>
+    <div class="modal-footer" id="prActionFooter">
+      <button class="btn btn-secondary" onclick="closeModal('prActionModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<div id="footerMount"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../js/supabase-config.js"></script>
+<script src="../js/shared.js"></script>
+<script>
+let currentUser, myRequests = [], activeTab = 'all', currentPR = null;
+
+async function init() {
+  currentUser = Session.require(['engineer']);
+  if (!currentUser) return;
+  document.getElementById('navbarMount').innerHTML = buildNavbar(currentUser);
+  document.getElementById('footerMount').innerHTML = buildFooter();
+  initNavbar(currentUser);
+  // Pre-fill department from user profile
+  if (currentUser.department) {
+    document.getElementById('fDept').value = currentUser.department;
+  }
+  showLoader(true);
+  await loadRequests();
+  showLoader(false);
+}
+
+async function loadRequests() {
+  const { data } = await db.from('procurement_requests')
+    .select('*')
+    .eq('created_by', currentUser.id)
+    .order('created_at', { ascending: false });
+  myRequests = data || [];
+  updateStats();
+  renderBanner();
+  filterRequests();
+}
+
+function updateStats() {
+  const closed = ['accepted','rejected'];
+  const actionPhases = ['engineer_review','grn_pending'];
+  document.getElementById('statMine').textContent = myRequests.length;
+  document.getElementById('statInProgress').textContent = myRequests.filter(r => !closed.includes(r.phase)).length;
+  document.getElementById('statActionNeeded').textContent = myRequests.filter(r => actionPhases.includes(r.phase)).length;
+  document.getElementById('statClosed').textContent = myRequests.filter(r => closed.includes(r.phase)).length;
+}
+
+function renderBanner() {
+  const actionItems = myRequests.filter(r => ['engineer_review','grn_pending'].includes(r.phase));
+  const banner = document.getElementById('actionBanner');
+  if (!actionItems.length) { banner.style.display = 'none'; return; }
+  banner.style.display = 'block';
+  banner.innerHTML = `
+    <div style="background:rgba(224,32,32,0.07);border:1.5px solid rgba(224,32,32,0.25);border-radius:var(--radius);padding:14px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <span style="font-size:1.2rem">🔔</span>
+      <div style="flex:1">
+        <strong style="font-family:var(--font-display);font-size:0.9rem">You have ${actionItems.length} request${actionItems.length>1?'s':''} needing your attention</strong>
+        <div style="font-size:0.8rem;color:var(--gray-3);margin-top:2px">${actionItems.map(r=>`PR-${String(r.request_number).padStart(4,'0')} (${PHASES[r.phase]?.label||r.phase})`).join(' · ')}</div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="switchTab('action')">View Actions</button>
+    </div>`;
+}
+
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', ['all','action','closed'][i]===tab));
+  filterRequests();
+}
+
+function filterRequests() {
+  const s = document.getElementById('searchInput').value.toLowerCase();
+  const ph = document.getElementById('filterPhase').value;
+  const closed = ['accepted','rejected'];
+  const actionPhases = ['engineer_review','grn_pending'];
+
+  let reqs = myRequests;
+  if (activeTab === 'action') reqs = reqs.filter(r => actionPhases.includes(r.phase));
+  if (activeTab === 'closed') reqs = reqs.filter(r => closed.includes(r.phase));
+  if (s) reqs = reqs.filter(r => r.project_name.toLowerCase().includes(s) || String(r.request_number).includes(s));
+  if (ph) reqs = reqs.filter(r => r.phase === ph);
+  renderRequests(reqs);
+}
+
+function renderRequests(reqs) {
+  const tbody = document.getElementById('requestsBody');
+  if (!reqs.length) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="empty-state-icon">📭</div><h3>No requests here</h3><p>${activeTab==='action'?'No actions needed right now — great!':'Submit a new request to get started.'}</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = reqs.map(r => {
+    const needsAction = ['engineer_review','grn_pending'].includes(r.phase);
+    return `<tr style="${needsAction?'background:rgba(224,32,32,0.03)':''}">
+      <td><span class="pr-number">PR-${String(r.request_number).padStart(4,'0')}</span>${needsAction?'<span style="margin-left:6px;font-size:0.68rem;background:var(--red);color:white;padding:1px 6px;border-radius:3px;font-family:var(--font-mono)">ACTION</span>':''}</td>
+      <td><strong>${r.project_name}</strong><br/><span style="font-size:0.75rem;color:var(--gray-4)">${r.project_phase}</span></td>
+      <td class="mono">${r.request_category}</td>
+      <td style="font-size:0.8rem">${ORDER_TYPES[r.order_type]||r.order_type}</td>
+      <td>${getPhaseBadge(r.phase)}</td>
+      <td class="mono" style="font-size:0.78rem">${formatDate(r.created_at)}</td>
+      <td><button class="btn ${needsAction?'btn-primary':'btn-ghost'} btn-sm" onclick='openPRAction("${r.id}")'>${needsAction?'Take Action':'View'}</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function submitPR() {
+  const vals = {
+    request_category: document.getElementById('fCategory').value,
+    project_name: document.getElementById('fProject').value.trim(),
+    project_phase: document.getElementById('fPhase').value.trim(),
+    project_manager_name: document.getElementById('fPM').value.trim(),
+    team_member_name: document.getElementById('fTeam').value.trim(),
+    department: document.getElementById('fDept').value,
+    order_type: document.getElementById('fOrderType').value,
+    vendor_suggestion: document.getElementById('fVendor').value.trim()||null,
+    description: document.getElementById('fDesc').value.trim()||null,
+    created_by: currentUser.id,
+    phase: 'submitted'
+  };
+  const required = ['request_category','project_name','project_phase','project_manager_name','team_member_name','department','order_type'];
+  if (required.some(k => !vals[k])) { showToast('Please fill all required fields','error'); return; }
+  showLoader(true);
+  const { error } = await db.from('procurement_requests').insert(vals);
+  showLoader(false);
+  if (error) { showToast('Submit failed: '+error.message,'error'); return; }
+  showToast('Request submitted successfully!','success');
+  closeModal('newPRModal');
+  ['fCategory','fProject','fPhase','fPM','fTeam','fOrderType','fVendor','fDesc'].forEach(id => {
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  if (currentUser.department) document.getElementById('fDept').value = currentUser.department;
+  await loadRequests();
+}
+
+async function openPRAction(id) {
+  currentPR = myRequests.find(r => r.id === id);
+  if (!currentPR) return;
+  document.getElementById('prActionTitle').textContent = `PR-${String(currentPR.request_number).padStart(4,'0')} — ${currentPR.project_name}`;
+  document.getElementById('prActionSub').textContent = `${currentPR.request_category} · ${DEPARTMENTS[currentPR.department]} · ${formatDate(currentPR.created_at)}`;
+
+  const comments = await loadComments(id);
+  let actionSection = '';
+  const footer = document.getElementById('prActionFooter');
+  footer.innerHTML = `<button class="btn btn-secondary" onclick="closeModal('prActionModal')">Close</button>`;
+
+  // ENGINEER REVIEW: Quotation attached, engineer must review and choose approval type
+  if (currentPR.phase === 'engineer_review') {
+    actionSection = `
+      <div class="action-section">
+        <div class="action-section-title">🔍 Review Quotation <span class="action-badge">ACTION REQUIRED</span></div>
+        <p style="font-size:0.85rem;color:var(--gray-3);margin-bottom:16px">The procurement team has attached a quotation. Please review it and select your approval path.</p>
+        ${currentPR.quotation_url ? `<a href="${currentPR.quotation_url}" target="_blank" class="btn btn-secondary btn-sm" style="margin-bottom:16px">📎 View Quotation</a>` : '<p style="color:var(--gray-4);font-size:0.82rem;margin-bottom:16px">Quotation document will appear here.</p>'}
+        ${currentPR.quotation_notes ? `<p style="font-size:0.83rem;background:var(--off-white);padding:10px;border-radius:var(--radius-sm);border:1px solid var(--border);margin-bottom:16px"><strong>Procurement Notes:</strong> ${currentPR.quotation_notes}</p>` : ''}
+        <div class="form-label" style="margin-bottom:10px">Select Approval Path *</div>
+        <div class="approval-options">
+          <div class="approval-option" id="optClient" onclick="selectApproval('client')">
+            <div class="approval-option-icon">👤</div>
+            <div class="approval-option-label">Client Approval</div>
+            <div class="approval-option-sub">Attach client confirmation screenshot</div>
+          </div>
+          <div class="approval-option" id="optPM" onclick="selectApproval('project_manager')">
+            <div class="approval-option-icon">👔</div>
+            <div class="approval-option-label">Project Manager</div>
+            <div class="approval-option-sub">Forward to PM for approval</div>
+          </div>
+        </div>
+        <div id="clientUploadSection" style="display:none;margin-top:16px">
+          <div class="form-label" style="margin-bottom:8px">Client Approval Screenshot *</div>
+          <div class="file-input-wrap">
+            <input type="file" id="clientScreenshot" accept="image/*,.pdf"/>
+            <div class="file-input-icon">📷</div>
+            <div class="file-input-label">Click to upload screenshot</div>
+            <div class="file-input-hint">PNG, JPG or PDF — max 10MB</div>
+          </div>
+          <input class="form-control" id="screenshotUrl" placeholder="Or paste image/file URL here" style="margin-top:8px"/>
+        </div>
+        <div id="reviewComment" style="margin-top:16px">
+          <div class="form-label" style="margin-bottom:6px">Comment (optional)</div>
+          <textarea class="form-control" id="reviewNote" placeholder="Add any notes for the procurement team..."></textarea>
+        </div>
+      </div>`;
+    footer.innerHTML = `
+      <button class="btn btn-secondary" onclick="closeModal('prActionModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitEngineerReview()">Submit Review →</button>`;
+  }
+
+  // GRN PENDING: Quality check by engineer
+  if (currentPR.phase === 'grn_pending') {
+    actionSection = `
+      <div class="action-section">
+        <div class="action-section-title">📦 GRN Quality Check <span class="action-badge">ACTION REQUIRED</span></div>
+        <p style="font-size:0.85rem;color:var(--gray-3);margin-bottom:16px">Parts have arrived. Please inspect the goods and record your quality check result.</p>
+        ${currentPR.grn_notes ? `<p style="font-size:0.83rem;background:var(--off-white);padding:10px;border-radius:var(--radius-sm);border:1px solid var(--border);margin-bottom:16px"><strong>Procurement Notes:</strong> ${currentPR.grn_notes}</p>` : ''}
+        <div class="form-group" style="margin-bottom:14px">
+          <label class="form-label">Quality Check Result *</label>
+          <select class="form-control" id="qcResult">
+            <option value="">Select outcome</option>
+            <option value="accepted">✅ Accepted — Parts meet requirements</option>
+            <option value="rejected">❌ Rejected — Parts do not meet requirements</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Quality Check Notes *</label>
+          <textarea class="form-control" id="qcNotes" placeholder="Describe the inspection findings, issues found (if any), quantities checked..."></textarea>
+        </div>
+      </div>`;
+    footer.innerHTML = `
+      <button class="btn btn-secondary" onclick="closeModal('prActionModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="submitQualityCheck()">Submit Quality Check →</button>`;
+  }
+
+  document.getElementById('prActionBody').innerHTML = buildPRDetailHTML(currentPR) + actionSection +
+    `<div style="margin-top:24px;border-top:1.5px solid var(--border);padding-top:18px">
+      <div class="section-title" style="margin-bottom:12px">💬 Comments</div>
+      <div id="commentsList">${renderComments(comments)}</div>
+      <div style="display:flex;gap:10px;margin-top:12px">
+        <input class="form-control" id="commentInput" placeholder="Add a comment..." style="flex:1" onkeydown="if(event.key==='Enter')addComment()"/>
+        <button class="btn btn-secondary" onclick="addComment()">Post</button>
+      </div>
+    </div>`;
+  openModal('prActionModal');
+}
+
+let selectedApproval = null;
+function selectApproval(type) {
+  selectedApproval = type;
+  document.getElementById('optClient').classList.toggle('selected', type === 'client');
+  document.getElementById('optPM').classList.toggle('selected', type === 'project_manager');
+  document.getElementById('clientUploadSection').style.display = type === 'client' ? 'block' : 'none';
+}
+
+async function submitEngineerReview() {
+  if (!selectedApproval) { showToast('Please select an approval path','error'); return; }
+  const note = document.getElementById('reviewNote')?.value.trim();
+  let screenshotUrl = null;
+  let newPhase;
+
+  if (selectedApproval === 'client') {
+    screenshotUrl = document.getElementById('screenshotUrl')?.value.trim();
+    // File upload would normally go to Supabase Storage; for now we use URL
+    if (!screenshotUrl) { showToast('Please provide client approval screenshot URL','error'); return; }
+    newPhase = 'pending_client_approval';
+  } else {
+    newPhase = 'pending_pm_approval';
+  }
+
+  showLoader(true);
+  const updates = {
+    phase: selectedApproval === 'client' ? 'approved' : 'pending_pm_approval',
+    approval_type: selectedApproval,
+    approval_screenshot_url: screenshotUrl,
+    updated_at: new Date().toISOString()
+  };
+  // If client approval, screenshot = proof, go straight to approved
+  // If PM approval, route to PM
+  if (selectedApproval === 'client') {
+    updates.phase = 'approved';
+  }
+
+  const { error } = await db.from('procurement_requests').update(updates).eq('id', currentPR.id);
+  if (!error && note) await postComment(currentPR.id, currentUser.id, note);
+  showLoader(false);
+  if (error) { showToast('Error: '+error.message,'error'); return; }
+  showToast(selectedApproval==='client'?'Approved via client! Sent to procurement.':'Forwarded to Project Manager for approval.','success');
+  selectedApproval = null;
+  closeModal('prActionModal');
+  await loadRequests();
+}
+
+async function submitQualityCheck() {
+  const result = document.getElementById('qcResult').value;
+  const notes = document.getElementById('qcNotes').value.trim();
+  if (!result) { showToast('Please select quality check result','error'); return; }
+  if (!notes) { showToast('Please add quality check notes','error'); return; }
+  showLoader(true);
+  const { error } = await db.from('procurement_requests').update({
+    phase: result, quality_check_result: result, quality_check_notes: notes, updated_at: new Date().toISOString()
+  }).eq('id', currentPR.id);
+  showLoader(false);
+  if (error) { showToast('Error: '+error.message,'error'); return; }
+  showToast(result==='accepted'?'Quality accepted — Request closed!':'Quality rejected — Request closed.', result==='accepted'?'success':'error');
+  closeModal('prActionModal');
+  await loadRequests();
+}
+
+async function addComment() {
+  const input = document.getElementById('commentInput');
+  const text = input?.value.trim();
+  if (!text || !currentPR) return;
+  try {
+    await postComment(currentPR.id, currentUser.id, text);
+    input.value = '';
+    const comments = await loadComments(currentPR.id);
+    document.getElementById('commentsList').innerHTML = renderComments(comments);
+  } catch(e) { showToast('Comment failed','error'); }
+}
+
+init();
+</script>
+</body>
+</html>

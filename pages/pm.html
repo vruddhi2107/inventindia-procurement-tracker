@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ProcureOps — Project Manager</title>
+  <link rel="stylesheet" href="../css/styles.css"/>
+</head>
+<body>
+<div id="navbarMount"></div>
+<div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div><span style="font-family:var(--font-mono);font-size:0.8rem;color:var(--gray-4)">Loading...</span></div>
+
+<main class="page-container">
+  <div class="page-header">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px">
+      <div>
+        <h1 class="page-title">Project Manager <span>View</span></h1>
+        <p class="page-sub">Review and approve procurement requests assigned to you</p>
+      </div>
+      <button class="btn btn-secondary" onclick="loadRequests()">↻ Refresh</button>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-card-value" id="statPending">—</div><div class="stat-card-label">Pending Your Approval</div><div class="stat-card-icon">⏳</div></div>
+    <div class="stat-card" style="--accent:#22c55e"><div class="stat-card-value" id="statApproved">—</div><div class="stat-card-label">Approved by You</div><div class="stat-card-icon">✅</div></div>
+    <div class="stat-card" style="--accent:#ef4444"><div class="stat-card-value" id="statRejected">—</div><div class="stat-card-label">Rejected by You</div><div class="stat-card-icon">✖</div></div>
+    <div class="stat-card" style="--accent:#3b82f6"><div class="stat-card-value" id="statTotal">—</div><div class="stat-card-label">Total Seen</div><div class="stat-card-icon">📋</div></div>
+  </div>
+
+  <!-- PENDING APPROVALS BANNER -->
+  <div id="pendingBanner" style="display:none;margin-bottom:20px"></div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('pending')">⏳ Pending Approval</button>
+    <button class="tab-btn" onclick="switchTab('all')">All Requests</button>
+  </div>
+
+  <div class="card">
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead>
+          <tr><th>PR #</th><th>Project</th><th>Dept</th><th>Category</th><th>Order Type</th><th>PM Approval</th><th>Phase</th><th>Submitted</th><th>Actions</th></tr>
+        </thead>
+        <tbody id="requestsBody"><tr><td colspan="9" style="text-align:center;padding:40px;color:var(--gray-4)">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+
+<!-- PR ACTION MODAL -->
+<div class="modal-overlay" id="prModal">
+  <div class="modal" style="max-width:780px">
+    <div class="modal-header">
+      <div><div class="modal-title" id="prModalTitle">Request Details</div><div class="modal-title-sub" id="prModalSub"></div></div>
+      <button class="modal-close" onclick="closeModal('prModal')">✕</button>
+    </div>
+    <div class="modal-body" id="prModalBody" style="max-height:74vh;overflow-y:auto"></div>
+    <div class="modal-footer" id="prModalFooter"><button class="btn btn-secondary" onclick="closeModal('prModal')">Close</button></div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<div id="footerMount"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../js/supabase-config.js"></script>
+<script src="../js/shared.js"></script>
+<script>
+let currentUser, allRequests = [], activeTab = 'pending', currentPR = null;
+
+async function init() {
+  currentUser = Session.require(['project_manager']);
+  if (!currentUser) return;
+  document.getElementById('navbarMount').innerHTML = buildNavbar(currentUser);
+  document.getElementById('footerMount').innerHTML = buildFooter();
+  initNavbar(currentUser);
+  showLoader(true);
+  await loadRequests();
+  showLoader(false);
+}
+
+async function loadRequests() {
+  // PM sees requests forwarded to them AND requests where they are named as project_manager
+  const { data } = await db.from('procurement_requests')
+    .select('*, users!procurement_requests_created_by_fkey(name,email)')
+    .or(`phase.eq.pending_pm_approval,approval_type.eq.project_manager`)
+    .order('created_at', { ascending: false });
+  allRequests = data || [];
+  updateStats();
+  renderBanner();
+  renderRequests();
+}
+
+function updateStats() {
+  const pending = allRequests.filter(r=>r.phase==='pending_pm_approval');
+  const approved = allRequests.filter(r=>r.pm_approval_status==='approved');
+  const rejected = allRequests.filter(r=>r.pm_approval_status==='rejected');
+  document.getElementById('statPending').textContent = pending.length;
+  document.getElementById('statApproved').textContent = approved.length;
+  document.getElementById('statRejected').textContent = rejected.length;
+  document.getElementById('statTotal').textContent = allRequests.length;
+}
+
+function renderBanner() {
+  const pending = allRequests.filter(r=>r.phase==='pending_pm_approval');
+  const banner = document.getElementById('pendingBanner');
+  if (!pending.length) { banner.style.display='none'; return; }
+  banner.style.display='block';
+  banner.innerHTML = `
+    <div style="background:rgba(224,32,32,0.07);border:1.5px solid rgba(224,32,32,0.25);border-radius:var(--radius);padding:14px 18px;display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <span style="font-size:1.2rem">⏳</span>
+      <div style="flex:1">
+        <strong style="font-family:var(--font-display);font-size:0.9rem">${pending.length} request${pending.length>1?'s':''} awaiting your approval</strong>
+        <div style="font-size:0.8rem;color:var(--gray-3);margin-top:2px">${pending.map(r=>`PR-${String(r.request_number).padStart(4,'0')} — ${r.project_name}`).join(' · ')}</div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="switchTab('pending')">Review Now</button>
+    </div>`;
+}
+
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',['pending','all'][i]===tab));
+  renderRequests();
+}
+
+function renderRequests() {
+  let reqs = allRequests;
+  if (activeTab==='pending') reqs = reqs.filter(r=>r.phase==='pending_pm_approval');
+  const tbody = document.getElementById('requestsBody');
+  if (!reqs.length) {
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="empty-state-icon">🎉</div><h3>${activeTab==='pending'?'No pending approvals':'No requests yet'}</h3><p>${activeTab==='pending'?'You are all caught up!':'Requests forwarded to you will appear here.'}</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = reqs.map(r => {
+    const isPending = r.phase==='pending_pm_approval';
+    const pmStatus = r.pm_approval_status;
+    const pmBadge = pmStatus==='approved'?'<span style="background:rgba(34,197,94,0.1);color:#16a34a;border:1px solid rgba(34,197,94,0.3);padding:2px 8px;border-radius:4px;font-family:var(--font-mono);font-size:0.7rem">✓ Approved</span>'
+      :pmStatus==='rejected'?'<span style="background:rgba(224,32,32,0.1);color:var(--red);border:1px solid rgba(224,32,32,0.3);padding:2px 8px;border-radius:4px;font-family:var(--font-mono);font-size:0.7rem">✗ Rejected</span>'
+      :'<span style="color:var(--gray-4);font-size:0.8rem">—</span>';
+    return `<tr style="${isPending?'background:rgba(224,32,32,0.02)':''}">
+      <td><span class="pr-number">PR-${String(r.request_number).padStart(4,'0')}</span>${isPending?'<span style="margin-left:6px;font-size:0.65rem;background:var(--red);color:white;padding:1px 6px;border-radius:3px;font-family:var(--font-mono)">PENDING</span>':''}</td>
+      <td><strong>${r.project_name}</strong><br/><span style="font-size:0.75rem;color:var(--gray-4)">${r.project_phase}</span></td>
+      <td style="font-size:0.82rem">${DEPARTMENTS[r.department]||r.department}</td>
+      <td class="mono">${r.request_category}</td>
+      <td style="font-size:0.78rem">${ORDER_TYPES[r.order_type]||r.order_type}</td>
+      <td>${pmBadge}</td>
+      <td>${getPhaseBadge(r.phase)}</td>
+      <td class="mono" style="font-size:0.78rem">${formatDate(r.created_at)}</td>
+      <td><button class="btn ${isPending?'btn-primary':'btn-ghost'} btn-sm" onclick='openPR("${r.id}")'>${isPending?'Review':'View'}</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function openPR(id) {
+  currentPR = allRequests.find(r=>r.id===id);
+  if (!currentPR) return;
+  document.getElementById('prModalTitle').textContent = `PR-${String(currentPR.request_number).padStart(4,'0')} — ${currentPR.project_name}`;
+  document.getElementById('prModalSub').textContent = `${currentPR.request_category} · ${DEPARTMENTS[currentPR.department]} · ${formatDate(currentPR.created_at)}`;
+
+  const comments = await loadComments(id);
+  let actionSection = '';
+  const footer = document.getElementById('prModalFooter');
+  footer.innerHTML = `<button class="btn btn-secondary" onclick="closeModal('prModal')">Close</button>`;
+
+  if (currentPR.phase === 'pending_pm_approval') {
+    actionSection = `
+      <div class="action-section">
+        <div class="action-section-title">✍️ Your Approval Decision <span class="action-badge">ACTION REQUIRED</span></div>
+        <p style="font-size:0.85rem;color:var(--gray-3);margin-bottom:14px">The engineer has reviewed the quotation and is requesting your approval. Please review and make your decision.</p>
+        ${currentPR.quotation_url ? `<a href="${currentPR.quotation_url}" target="_blank" class="btn btn-secondary btn-sm" style="margin-bottom:14px">📎 View Quotation</a>` : ''}
+        <div class="form-group" style="margin-bottom:14px">
+          <label class="form-label">Your Decision Notes *</label>
+          <textarea class="form-control" id="pmNotes" placeholder="State your reason for approval or rejection, any conditions, or modifications required..."></textarea>
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap">
+          <button class="btn btn-success" onclick="pmDecide('approved')" style="flex:1">✅ Approve Request</button>
+          <button class="btn btn-danger" onclick="pmDecide('rejected')" style="flex:1">✗ Reject Request</button>
+        </div>
+      </div>`;
+    footer.innerHTML = `<button class="btn btn-secondary" onclick="closeModal('prModal')">Cancel</button>`;
+  }
+
+  document.getElementById('prModalBody').innerHTML = buildPRDetailHTML(currentPR) + actionSection +
+    `<div style="margin-top:24px;border-top:1.5px solid var(--border);padding-top:18px">
+      <div class="section-title" style="margin-bottom:12px">💬 Comments</div>
+      <div id="commentsList">${renderComments(comments)}</div>
+      <div style="display:flex;gap:10px;margin-top:12px">
+        <input class="form-control" id="commentInput" placeholder="Add a comment..." style="flex:1" onkeydown="if(event.key==='Enter')addComment()"/>
+        <button class="btn btn-secondary" onclick="addComment()">Post</button>
+      </div>
+    </div>`;
+  openModal('prModal');
+}
+
+async function pmDecide(decision) {
+  const notes = document.getElementById('pmNotes').value.trim();
+  if (!notes) { showToast('Please add decision notes','error'); return; }
+  const newPhase = decision==='approved' ? 'approved' : 'rejected';
+  showLoader(true);
+  const { error } = await db.from('procurement_requests').update({
+    phase: newPhase,
+    pm_approval_status: decision,
+    pm_approval_notes: notes,
+    rejection_reason: decision==='rejected' ? notes : null,
+    updated_at: new Date().toISOString()
+  }).eq('id', currentPR.id);
+  if (!error) await postComment(currentPR.id, currentUser.id, `${decision==='approved'?'✅':'❌'} PM ${decision==='approved'?'Approved':'Rejected'}: ${notes}`);
+  showLoader(false);
+  if (error) { showToast('Error: '+error.message,'error'); return; }
+  showToast(decision==='approved'?'Request approved — sent to procurement for ordering!':'Request rejected.', decision==='approved'?'success':'error');
+  closeModal('prModal');
+  await loadRequests();
+}
+
+async function addComment() {
+  const input = document.getElementById('commentInput');
+  const text = input?.value.trim();
+  if (!text || !currentPR) return;
+  try {
+    await postComment(currentPR.id, currentUser.id, text);
+    input.value = '';
+    const comments = await loadComments(currentPR.id);
+    document.getElementById('commentsList').innerHTML = renderComments(comments);
+  } catch(e) { showToast('Comment failed','error'); }
+}
+
+init();
+</script>
+</body>
+</html>

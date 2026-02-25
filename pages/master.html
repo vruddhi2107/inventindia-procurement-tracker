@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>ProcureOps — Master Dashboard</title>
+  <link rel="stylesheet" href="../css/styles.css"/>
+</head>
+<body>
+<div id="navbarMount"></div>
+<div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div><span style="font-family:var(--font-mono);font-size:0.8rem;color:var(--gray-4)">Loading...</span></div>
+
+<main class="page-container">
+  <div class="page-header">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px">
+      <div>
+        <h1 class="page-title">Master <span>Dashboard</span></h1>
+        <p class="page-sub">Full system overview — all requests, users, and analytics</p>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary" onclick="exportCSV()">⬇ Export CSV</button>
+        <button class="btn btn-primary" onclick="openAddUser()">+ Add User</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-grid">
+    <div class="stat-card"><div class="stat-card-value" id="statTotal">—</div><div class="stat-card-label">Total Requests</div><div class="stat-card-icon">📋</div></div>
+    <div class="stat-card" style="--accent:#f59e0b"><div class="stat-card-value" id="statActive">—</div><div class="stat-card-label">Active Requests</div><div class="stat-card-icon">⚡</div></div>
+    <div class="stat-card" style="--accent:#22c55e"><div class="stat-card-value" id="statAccepted">—</div><div class="stat-card-label">Accepted & Closed</div><div class="stat-card-icon">✔</div></div>
+    <div class="stat-card" style="--accent:#3b82f6"><div class="stat-card-value" id="statUsers">—</div><div class="stat-card-label">Total Users</div><div class="stat-card-icon">👥</div></div>
+    <div class="stat-card" style="--accent:#8b5cf6"><div class="stat-card-value" id="statPending">—</div><div class="stat-card-label">Pending Approvals</div><div class="stat-card-icon">⏳</div></div>
+    <div class="stat-card" style="--accent:#ef4444"><div class="stat-card-value" id="statRejected">—</div><div class="stat-card-label">Rejected</div><div class="stat-card-icon">✖</div></div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('requests')">📋 All Requests</button>
+    <button class="tab-btn" onclick="switchTab('users')">👥 User Management</button>
+    <button class="tab-btn" onclick="switchTab('analytics')">📊 Analytics</button>
+  </div>
+
+  <!-- REQUESTS TAB -->
+  <div id="tab-requests">
+    <div class="filter-bar">
+      <input type="text" id="searchInput" placeholder="Search by project, PR number, team member..." oninput="filterRequests()"/>
+      <select id="filterPhase" onchange="filterRequests()">
+        <option value="">All Phases</option>
+        <option value="submitted">Submitted</option>
+        <option value="quotation_attached">Quotation Attached</option>
+        <option value="engineer_review">Engineer Review</option>
+        <option value="pending_client_approval">Pending Client Approval</option>
+        <option value="pending_pm_approval">Pending PM Approval</option>
+        <option value="approved">Approved</option>
+        <option value="order_placed">Order Placed</option>
+        <option value="grn_pending">GRN Pending</option>
+        <option value="accepted">Accepted</option>
+        <option value="rejected">Rejected</option>
+      </select>
+      <select id="filterDept" onchange="filterRequests()">
+        <option value="">All Departments</option>
+        <option value="mech">Mechanical</option>
+        <option value="id">Industrial Design</option>
+        <option value="electronics">Electronics</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" onclick="clearFilters()">✕ Clear</button>
+    </div>
+    <div class="card">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>PR #</th><th>Project</th><th>Category</th><th>Dept</th><th>Order Type</th><th>Phase</th><th>Submitted</th><th>Requester</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="requestsBody"><tr><td colspan="9" style="text-align:center;padding:40px;color:var(--gray-4)">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- USERS TAB -->
+  <div id="tab-users" style="display:none">
+    <div class="card">
+      <div class="card-header">
+        <span class="section-title">All System Users</span>
+        <button class="btn btn-primary btn-sm" onclick="openAddUser()">+ Add User</button>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Department</th><th>Joined</th><th>Actions</th></tr></thead>
+          <tbody id="usersBody"><tr><td colspan="6" style="text-align:center;padding:40px;color:var(--gray-4)">Loading...</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ANALYTICS TAB -->
+  <div id="tab-analytics" style="display:none">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px">
+      <div class="card">
+        <div class="card-header"><span class="section-title">Requests by Phase</span></div>
+        <div class="card-body" id="phaseBreakdown"><p style="color:var(--gray-4)">Loading...</p></div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="section-title">Requests by Department</span></div>
+        <div class="card-body" id="deptBreakdown"><p style="color:var(--gray-4)">Loading...</p></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="section-title">Recent Activity</span></div>
+      <div class="card-body" id="recentActivity"><p style="color:var(--gray-4)">Loading...</p></div>
+    </div>
+  </div>
+</main>
+
+<!-- PR DETAIL MODAL -->
+<div class="modal-overlay" id="prDetailModal">
+  <div class="modal" style="max-width:780px">
+    <div class="modal-header">
+      <div><div class="modal-title" id="prDetailTitle">Request Details</div><div class="modal-title-sub" id="prDetailSub"></div></div>
+      <button class="modal-close" onclick="closeModal('prDetailModal')">✕</button>
+    </div>
+    <div class="modal-body" id="prDetailBody" style="max-height:72vh;overflow-y:auto"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('prDetailModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- USER MODAL -->
+<div class="modal-overlay" id="userModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div><div class="modal-title" id="userModalTitle">Add New User</div><div class="modal-title-sub">Default password: 12345</div></div>
+      <button class="modal-close" onclick="closeModal('userModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group full"><label class="form-label">Full Name *</label><input class="form-control" id="uName" placeholder="Jane Doe"/></div>
+        <div class="form-group"><label class="form-label">Email *</label><input class="form-control" id="uEmail" type="email" placeholder="jane@company.com"/></div>
+        <div class="form-group"><label class="form-label">Password</label><input class="form-control" id="uPassword" value="12345"/></div>
+        <div class="form-group"><label class="form-label">Role *</label>
+          <select class="form-control" id="uRole" onchange="toggleDeptVisibility()">
+            <option value="">Select role</option>
+            <option value="master">Master Admin</option>
+            <option value="procurement_manager">Procurement Manager</option>
+            <option value="engineer">Engineer</option>
+            <option value="project_manager">Project Manager</option>
+          </select>
+        </div>
+        <div class="form-group" id="deptGroup"><label class="form-label">Department</label>
+          <select class="form-control" id="uDept">
+            <option value="">—</option>
+            <option value="mech">Mechanical</option>
+            <option value="id">Industrial Design</option>
+            <option value="electronics">Electronics</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('userModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveUser()">Save User</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+<div id="footerMount"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../js/supabase-config.js"></script>
+<script src="../js/shared.js"></script>
+<script>
+let currentUser, allRequests = [], allUsers = [], editingUserId = null;
+
+async function init() {
+  currentUser = Session.require(['master']);
+  if (!currentUser) return;
+  document.getElementById('navbarMount').innerHTML = buildNavbar(currentUser);
+  document.getElementById('footerMount').innerHTML = buildFooter();
+  initNavbar(currentUser);
+  showLoader(true);
+  await Promise.all([loadRequests(), loadUsers()]);
+  showLoader(false);
+}
+
+async function loadRequests() {
+  const { data } = await db.from('procurement_requests')
+    .select('*, users!procurement_requests_created_by_fkey(name,email)')
+    .order('created_at', { ascending: false });
+  allRequests = data || [];
+  updateStats();
+  renderRequests(allRequests);
+  renderAnalytics();
+}
+
+async function loadUsers() {
+  const { data } = await db.from('users').select('*').order('created_at');
+  allUsers = data || [];
+  document.getElementById('statUsers').textContent = allUsers.length;
+  renderUsers();
+}
+
+function updateStats() {
+  document.getElementById('statTotal').textContent = allRequests.length;
+  document.getElementById('statActive').textContent = allRequests.filter(r => !['accepted','rejected'].includes(r.phase)).length;
+  document.getElementById('statAccepted').textContent = allRequests.filter(r => r.phase==='accepted').length;
+  document.getElementById('statPending').textContent = allRequests.filter(r => ['pending_client_approval','pending_pm_approval'].includes(r.phase)).length;
+  document.getElementById('statRejected').textContent = allRequests.filter(r => r.phase==='rejected').length;
+}
+
+function renderRequests(reqs) {
+  const tbody = document.getElementById('requestsBody');
+  if (!reqs.length) {
+    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="empty-state-icon">📭</div><h3>No requests found</h3><p>No procurement requests match your filters.</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = reqs.map(r => `<tr>
+    <td><span class="pr-number">PR-${String(r.request_number).padStart(4,'0')}</span></td>
+    <td><strong>${r.project_name}</strong><br/><span style="font-size:0.75rem;color:var(--gray-4)">${r.project_phase}</span></td>
+    <td class="mono">${r.request_category}</td>
+    <td style="font-size:0.82rem">${DEPARTMENTS[r.department]||r.department}</td>
+    <td style="font-size:0.78rem;max-width:130px">${ORDER_TYPES[r.order_type]||r.order_type}</td>
+    <td>${getPhaseBadge(r.phase)}</td>
+    <td class="mono" style="font-size:0.78rem">${formatDate(r.created_at)}</td>
+    <td style="font-size:0.82rem">${r.users?.name||'—'}</td>
+    <td style="white-space:nowrap">
+      <button class="btn btn-ghost btn-sm" onclick='viewPR("${r.id}")'>View</button>
+      <button class="btn btn-danger btn-sm" onclick='deletePR("${r.id}")'>Del</button>
+    </td>
+  </tr>`).join('');
+}
+
+function renderUsers() {
+  const tbody = document.getElementById('usersBody');
+  tbody.innerHTML = allUsers.map(u => `<tr>
+    <td><strong>${u.name}</strong></td>
+    <td class="mono" style="font-size:0.8rem">${u.email}</td>
+    <td><span class="user-role-tag role-${u.role}">${roleLabel(u.role)}</span></td>
+    <td style="font-size:0.83rem">${u.department?DEPARTMENTS[u.department]:'—'}</td>
+    <td class="mono" style="font-size:0.78rem">${formatDate(u.created_at)}</td>
+    <td style="white-space:nowrap">
+      <button class="btn btn-ghost btn-sm" onclick='editUser("${u.id}")'>Edit</button>
+      ${u.id!==currentUser.id?`<button class="btn btn-danger btn-sm" onclick='deleteUser("${u.id}")'>Del</button>`:''}
+    </td>
+  </tr>`).join('');
+}
+
+function renderAnalytics() {
+  const phaseCounts = {};
+  allRequests.forEach(r => { phaseCounts[r.phase]=(phaseCounts[r.phase]||0)+1; });
+  const maxP = Math.max(...Object.values(phaseCounts),1);
+  document.getElementById('phaseBreakdown').innerHTML = Object.entries(phaseCounts).map(([phase,count]) => {
+    const p = PHASES[phase]||{label:phase,color:'#888'};
+    return `<div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+        <span style="font-size:0.83rem">${p.icon||''} ${p.label}</span>
+        <span style="font-family:var(--font-mono);font-size:0.8rem;font-weight:600">${count}</span>
+      </div>
+      <div style="height:7px;background:var(--gray-6);border-radius:99px;overflow:hidden">
+        <div style="height:100%;width:${(count/maxP)*100}%;background:${p.color};border-radius:99px"></div>
+      </div>
+    </div>`;
+  }).join('')||'<p style="color:var(--gray-4);font-size:0.83rem">No data yet.</p>';
+
+  const deptCounts={mech:0,id:0,electronics:0};
+  allRequests.forEach(r=>{if(deptCounts[r.department]!==undefined)deptCounts[r.department]++;});
+  const deptColors={mech:'#E02020',id:'#3b82f6',electronics:'#10b981'};
+  const maxD=Math.max(...Object.values(deptCounts),1);
+  document.getElementById('deptBreakdown').innerHTML = Object.entries(deptCounts).map(([d,c])=>`
+    <div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:5px">
+        <span style="font-size:0.83rem">${DEPARTMENTS[d]}</span>
+        <span style="font-family:var(--font-mono);font-size:0.8rem;font-weight:600">${c}</span>
+      </div>
+      <div style="height:7px;background:var(--gray-6);border-radius:99px;overflow:hidden">
+        <div style="height:100%;width:${(c/maxD)*100}%;background:${deptColors[d]};border-radius:99px"></div>
+      </div>
+    </div>`).join('');
+
+  document.getElementById('recentActivity').innerHTML = allRequests.slice(0,10).map(r=>`
+    <div style="display:flex;align-items:center;gap:14px;padding:11px 0;border-bottom:1px solid var(--border)">
+      <span class="pr-number">PR-${String(r.request_number).padStart(4,'0')}</span>
+      <span style="flex:1;font-size:0.85rem"><strong>${r.project_name}</strong> — ${r.project_phase}</span>
+      ${getPhaseBadge(r.phase)}
+      <span style="font-family:var(--font-mono);font-size:0.75rem;color:var(--gray-4)">${formatDate(r.created_at)}</span>
+    </div>`).join('')||'<p style="color:var(--gray-4)">No requests yet.</p>';
+}
+
+function filterRequests() {
+  const s=document.getElementById('searchInput').value.toLowerCase();
+  const ph=document.getElementById('filterPhase').value;
+  const dp=document.getElementById('filterDept').value;
+  renderRequests(allRequests.filter(r=>{
+    const ms=!s||r.project_name.toLowerCase().includes(s)||String(r.request_number).includes(s)||r.team_member_name.toLowerCase().includes(s)||r.project_manager_name.toLowerCase().includes(s);
+    return ms&&(!ph||r.phase===ph)&&(!dp||r.department===dp);
+  }));
+}
+
+function clearFilters() {
+  document.getElementById('searchInput').value='';
+  document.getElementById('filterPhase').value='';
+  document.getElementById('filterDept').value='';
+  renderRequests(allRequests);
+}
+
+function switchTab(tab) {
+  ['requests','users','analytics'].forEach((t,i)=>{
+    document.getElementById(`tab-${t}`).style.display=t===tab?'':'none';
+    document.querySelectorAll('.tab-btn')[i].classList.toggle('active',t===tab);
+  });
+  if(tab==='analytics') renderAnalytics();
+}
+
+async function viewPR(id) {
+  const pr=allRequests.find(r=>r.id===id);
+  if(!pr)return;
+  document.getElementById('prDetailTitle').textContent=`PR-${String(pr.request_number).padStart(4,'0')} — ${pr.project_name}`;
+  document.getElementById('prDetailSub').textContent=`${pr.request_category} · ${DEPARTMENTS[pr.department]} · ${formatDate(pr.created_at)}`;
+  const comments=await loadComments(id);
+  document.getElementById('prDetailBody').innerHTML=buildPRDetailHTML(pr)+
+    `<div style="margin-top:24px;border-top:1.5px solid var(--border);padding-top:18px">
+      <div class="section-title" style="margin-bottom:12px">💬 Comments</div>
+      ${renderComments(comments)}
+    </div>`;
+  openModal('prDetailModal');
+}
+
+async function deletePR(id) {
+  if(!confirm('Delete this procurement request permanently? This cannot be undone.'))return;
+  showLoader(true);
+  const{error}=await db.from('procurement_requests').delete().eq('id',id);
+  showLoader(false);
+  if(error){showToast('Delete failed: '+error.message,'error');return;}
+  showToast('Request deleted','success');
+  await loadRequests();
+}
+
+function toggleDeptVisibility() {
+  const r=document.getElementById('uRole').value;
+  document.getElementById('deptGroup').style.opacity=r==='engineer'?'1':'0.5';
+}
+
+function openAddUser() {
+  editingUserId=null;
+  document.getElementById('userModalTitle').textContent='Add New User';
+  ['uName','uEmail','uRole','uDept'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('uPassword').value='12345';
+  openModal('userModal');
+}
+
+function editUser(id) {
+  const u=allUsers.find(u=>u.id===id);
+  if(!u)return;
+  editingUserId=id;
+  document.getElementById('userModalTitle').textContent='Edit User';
+  document.getElementById('uName').value=u.name;
+  document.getElementById('uEmail').value=u.email;
+  document.getElementById('uPassword').value=u.password;
+  document.getElementById('uRole').value=u.role;
+  document.getElementById('uDept').value=u.department||'';
+  openModal('userModal');
+}
+
+async function saveUser() {
+  const name=document.getElementById('uName').value.trim();
+  const email=document.getElementById('uEmail').value.trim();
+  const password=document.getElementById('uPassword').value.trim()||'12345';
+  const role=document.getElementById('uRole').value;
+  const department=document.getElementById('uDept').value||null;
+  if(!name||!email||!role){showToast('Please fill all required fields','error');return;}
+  showLoader(true);
+  let error;
+  if(editingUserId){
+    ({error}=await db.from('users').update({name,email,password,role,department}).eq('id',editingUserId));
+  }else{
+    ({error}=await db.from('users').insert({name,email,password,role,department}));
+  }
+  showLoader(false);
+  if(error){showToast('Error: '+error.message,'error');return;}
+  showToast(editingUserId?'User updated!':'User created!','success');
+  closeModal('userModal');
+  await loadUsers();
+}
+
+async function deleteUser(id) {
+  if(!confirm('Delete this user? Their requests will remain.'))return;
+  showLoader(true);
+  const{error}=await db.from('users').delete().eq('id',id);
+  showLoader(false);
+  if(error){showToast('Delete failed: '+error.message,'error');return;}
+  showToast('User deleted','success');
+  await loadUsers();
+}
+
+function exportCSV() {
+  const headers=['PR#','Project','Category','Phase','Department','Order Type','Submitted'];
+  const rows=allRequests.map(r=>[
+    `PR-${String(r.request_number).padStart(4,'0')}`,
+    r.project_name,r.request_category,
+    PHASES[r.phase]?.label||r.phase,
+    DEPARTMENTS[r.department]||r.department,
+    ORDER_TYPES[r.order_type]||r.order_type,
+    formatDate(r.created_at)
+  ]);
+  const csv=[headers,...rows].map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv,'+encodeURIComponent(csv);
+  a.download=`procurement_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+init();
+</script>
+</body>
+</html>
