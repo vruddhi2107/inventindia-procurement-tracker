@@ -1,315 +1,542 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>ProcureOps — Procurement Manager</title>
-  <link rel="stylesheet" href="../css/styles.css"/>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>ProcureOps — Procurement</title>
+<link rel="stylesheet" href="../css/styles.css"/>
 </head>
 <body>
 <div id="navbarMount"></div>
-<div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div><span style="font-family:var(--font-mono);font-size:0.8rem;color:var(--gray-4)">Loading...</span></div>
+<div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div></div>
 
 <main class="page-container">
   <div class="page-header">
-    <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:16px">
-      <div>
-        <h1 class="page-title">Procurement <span>Manager</span></h1>
-        <p class="page-sub">Manage quotations, approvals, and order placements</p>
-      </div>
-      <button class="btn btn-secondary" onclick="loadRequests()">↻ Refresh</button>
-    </div>
+    <h1 class="page-title">Procurement <span>Manager</span></h1>
+    <p class="page-sub">Manage vendors, upload quotations, place orders and rate vendor performance</p>
   </div>
 
-  <!-- STATS -->
   <div class="stats-grid">
-    <div class="stat-card"><div class="stat-card-value" id="statNew">—</div><div class="stat-card-label">New Requests</div><div class="stat-card-icon">📬</div></div>
-    <div class="stat-card" style="--accent:#f59e0b"><div class="stat-card-value" id="statQuoted">—</div><div class="stat-card-label">Awaiting Review</div><div class="stat-card-icon">📎</div></div>
-    <div class="stat-card" style="--accent:#22c55e"><div class="stat-card-value" id="statApproved">—</div><div class="stat-card-label">Approved to Order</div><div class="stat-card-icon">✅</div></div>
-    <div class="stat-card" style="--accent:#3b82f6"><div class="stat-card-value" id="statOrdered">—</div><div class="stat-card-label">Orders Placed</div><div class="stat-card-icon">🛒</div></div>
-    <div class="stat-card" style="--accent:#f97316"><div class="stat-card-value" id="statGRN">—</div><div class="stat-card-label">GRN Pending</div><div class="stat-card-icon">📦</div></div>
-    <div class="stat-card" style="--accent:#22c55e"><div class="stat-card-value" id="statClosed">—</div><div class="stat-card-label">Closed</div><div class="stat-card-icon">✔</div></div>
+    <div class="stat-card"><div class="stat-card-value" id="sActive">—</div><div class="stat-card-label">Active</div><div class="stat-card-icon">⚙️</div></div>
+    <div class="stat-card" style="--accent:#f97316"><div class="stat-card-value" id="sOrders">—</div><div class="stat-card-label">To Order</div><div class="stat-card-icon">🛒</div></div>
+    <div class="stat-card" style="--accent:#f59e0b"><div class="stat-card-value" id="sGRN">—</div><div class="stat-card-label">GRN Pending</div><div class="stat-card-icon">📦</div></div>
+    <div class="stat-card" style="--accent:#22c55e"><div class="stat-card-value" id="sVendors">—</div><div class="stat-card-label">Active Vendors</div><div class="stat-card-icon">🏢</div></div>
   </div>
 
-  <!-- TABS -->
   <div class="tabs">
-    <button class="tab-btn active" onclick="switchTab('inbox')">📬 Inbox</button>
-    <button class="tab-btn" onclick="switchTab('action')">🔔 Needs Action</button>
+    <button class="tab-btn active" onclick="switchTab('active')">🔔 Action Needed</button>
     <button class="tab-btn" onclick="switchTab('all')">All Requests</button>
+    <button class="tab-btn" onclick="switchTab('vendors')">🏢 Vendor DB</button>
   </div>
 
-  <div class="filter-bar">
-    <input type="text" id="searchInput" placeholder="Search requests..." oninput="filterRequests()"/>
-    <select id="filterPhase" onchange="filterRequests()">
-      <option value="">All Phases</option>
-      <option value="submitted">New — Submitted</option>
-      <option value="quotation_attached">Quotation Attached</option>
-      <option value="approved">Approved — Place Order</option>
-      <option value="order_placed">Order Placed</option>
-      <option value="grn_pending">GRN Pending</option>
-      <option value="accepted">Accepted</option>
-      <option value="rejected">Rejected</option>
-    </select>
-    <select id="filterDept" onchange="filterRequests()">
-      <option value="">All Departments</option>
-      <option value="mech">Mechanical</option>
-      <option value="id">Industrial Design</option>
-      <option value="electronics">Electronics</option>
-    </select>
-    <button class="btn btn-ghost btn-sm" onclick="clearFilters()">✕ Clear</button>
-  </div>
-
-  <div class="card">
-    <div class="table-wrap">
-      <table class="data-table">
-        <thead>
-          <tr><th>PR #</th><th>Project / Phase</th><th>Dept</th><th>Category</th><th>Order Type</th><th>Phase</th><th>Submitted</th><th>Requester</th><th>Actions</th></tr>
-        </thead>
-        <tbody id="requestsBody"><tr><td colspan="9" style="text-align:center;padding:40px;color:var(--gray-4)">Loading...</td></tr></tbody>
-      </table>
+  <div id="tabRequests">
+    <div class="filter-bar">
+      <input type="text" id="searchInput" placeholder="Search by project or PR #..." oninput="filterTable()"/>
+      <select id="filterPhase" onchange="filterTable()">
+        <option value="">All Phases</option>
+        <option value="procurement_active">Procurement Active</option>
+        <option value="approved">Approved — to Order</option>
+        <option value="order_placed">Order Placed</option>
+        <option value="grn_pending">GRN Pending</option>
+        <option value="accepted">Accepted</option>
+        <option value="rejected">Rejected</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" onclick="clearFilters()">✕</button>
     </div>
+    <div class="card">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>PR #</th><th>Project</th><th>Type</th><th>Phase</th><th>PM</th><th>Engineer</th><th>Updated</th><th></th></tr></thead>
+          <tbody id="requestsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div id="tabVendors" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:14px">
+      <input type="text" id="vendorSearch" class="form-control" placeholder="Search vendors by name or specialization..." style="max-width:320px"/>
+      <button class="btn btn-primary" onclick="openVendorModal()">+ Add Vendor</button>
+    </div>
+    <div class="vendor-grid" id="vendorGrid"></div>
   </div>
 </main>
 
-<!-- PR ACTION MODAL -->
+<!-- PR DETAIL / ACTION MODAL -->
 <div class="modal-overlay" id="prModal">
-  <div class="modal" style="max-width:800px">
+  <div class="modal" style="max-width:860px">
     <div class="modal-header">
-      <div><div class="modal-title" id="prModalTitle">Request Details</div><div class="modal-title-sub" id="prModalSub"></div></div>
+      <div><div class="modal-title" id="prModalTitle">Request</div><div class="modal-title-sub" id="prModalSub"></div></div>
       <button class="modal-close" onclick="closeModal('prModal')">✕</button>
     </div>
-    <div class="modal-body" id="prModalBody" style="max-height:74vh;overflow-y:auto"></div>
+    <div class="modal-body" id="prModalBody" style="max-height:78vh;overflow-y:auto"></div>
     <div class="modal-footer" id="prModalFooter"><button class="btn btn-secondary" onclick="closeModal('prModal')">Close</button></div>
+  </div>
+</div>
+
+<!-- VENDOR ADD/EDIT MODAL -->
+<div class="modal-overlay" id="vendorModal">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-header">
+      <div class="modal-title" id="vendorModalTitle">Add Vendor</div>
+      <button class="modal-close" onclick="closeModal('vendorModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="vId"/>
+      <div class="form-grid">
+        <div class="form-group full"><label class="form-label">Vendor Name *</label><input class="form-control" id="vName" placeholder="Company name"/></div>
+        <div class="form-group"><label class="form-label">Contact Person</label><input class="form-control" id="vContact" placeholder="Full name"/></div>
+        <div class="form-group"><label class="form-label">Email</label><input class="form-control" id="vEmail" type="email" placeholder="vendor@email.com"/></div>
+        <div class="form-group"><label class="form-label">Phone</label><input class="form-control" id="vPhone" placeholder="+971 ..."/></div>
+        <div class="form-group"><label class="form-label">Specialization</label><input class="form-control" id="vSpec" placeholder="Electronics, Mechanical, 3D Printing..."/></div>
+        <div class="form-group full"><label class="form-label">Address</label><input class="form-control" id="vAddress" placeholder="Office / warehouse address"/></div>
+        <div class="form-group full"><label class="form-label">Internal Notes</label><textarea class="form-control" id="vNotes" placeholder="Lead times, payment terms, quality notes..."></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('vendorModal')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveVendor()">Save Vendor</button>
+    </div>
+  </div>
+</div>
+
+<!-- RATE VENDOR MODAL -->
+<!-- FIX: removed stray </div> that was closing modal-body before the Comments field -->
+<div class="modal-overlay" id="rateModal">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-header">
+      <div class="modal-title" id="rateModalTitle">Rate Vendor</div>
+      <button class="modal-close" onclick="closeModal('rateModal')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:0.82rem;color:var(--gray-3);margin-bottom:16px">Rate vendor performance based on this order's outcome.</p>
+      <div class="form-group" style="margin-bottom:14px">
+        <label class="form-label" style="margin-bottom:8px">Rating *</label>
+        <div class="star-input" id="rateStars" data-rating="0"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Comments</label>
+        <textarea class="form-control" id="rateComment" placeholder="Quality, delivery time, communication..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal('rateModal')">Skip</button>
+      <button class="btn btn-primary" onclick="submitVendorRating()">Submit Rating</button>
+    </div>
   </div>
 </div>
 
 <div id="toast-container"></div>
 <div id="footerMount"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="../js/supabase-config.js"></script>
 <script src="../js/shared.js"></script>
 <script>
-let currentUser, allRequests = [], activeTab = 'inbox', currentPR = null;
+let currentUser, allRequests=[], allVendors=[], activeTab='active', currentPR=null;
+let pendingRatePRId=null, pendingRateVendorId=null;
+let uploadedFiles=[], uploadedQuotations=[];
 
 async function init() {
-  currentUser = Session.require(['procurement_manager']);
-  if (!currentUser) return;
-  document.getElementById('navbarMount').innerHTML = buildNavbar(currentUser);
-  document.getElementById('footerMount').innerHTML = buildFooter();
+  currentUser=Session.require(['procurement_manager']); if(!currentUser) return;
+  document.getElementById('navbarMount').innerHTML=buildNavbar(currentUser);
+  document.getElementById('footerMount').innerHTML=buildFooter();
   initNavbar(currentUser);
   showLoader(true);
-  await loadRequests();
+  await Promise.all([loadRequests(), loadVendors()]);
   showLoader(false);
 }
 
 async function loadRequests() {
-  const { data } = await db.from('procurement_requests')
-    .select('*, users!procurement_requests_created_by_fkey(name,email)')
-    .order('created_at', { ascending: false });
-  allRequests = data || [];
-  updateStats();
-  filterRequests();
+  const{data}=await db.from('procurement_requests')
+    .select('*, users!procurement_requests_created_by_fkey(name)')
+    .order('updated_at',{ascending:false});
+  allRequests=data||[];
+  updateStats(); filterTable();
+}
+
+async function loadVendors() {
+  const{data}=await db.from('vendors').select('*').order('name');
+  allVendors=data||[];
+  document.getElementById('sVendors').textContent=allVendors.filter(v=>v.is_active).length;
 }
 
 function updateStats() {
-  document.getElementById('statNew').textContent = allRequests.filter(r=>r.phase==='submitted').length;
-  document.getElementById('statQuoted').textContent = allRequests.filter(r=>r.phase==='engineer_review').length;
-  document.getElementById('statApproved').textContent = allRequests.filter(r=>r.phase==='approved').length;
-  document.getElementById('statOrdered').textContent = allRequests.filter(r=>r.phase==='order_placed').length;
-  document.getElementById('statGRN').textContent = allRequests.filter(r=>r.phase==='grn_pending').length;
-  document.getElementById('statClosed').textContent = allRequests.filter(r=>['accepted','rejected'].includes(r.phase)).length;
+  document.getElementById('sActive').textContent=allRequests.filter(r=>r.phase==='procurement_active').length;
+  document.getElementById('sOrders').textContent=allRequests.filter(r=>r.phase==='approved').length;
+  document.getElementById('sGRN').textContent=allRequests.filter(r=>r.phase==='grn_pending').length;
 }
 
-const INBOX_PHASES = ['submitted'];
-const ACTION_PHASES = ['approved']; // Can also place order or invoke GRN
-
-function switchTab(tab) {
-  activeTab = tab;
-  document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',['inbox','action','all'][i]===tab));
-  filterRequests();
+function switchTab(t) {
+  activeTab=t;
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',['active','all','vendors'][i]===t));
+  document.getElementById('tabRequests').style.display=t==='vendors'?'none':'block';
+  document.getElementById('tabVendors').style.display=t==='vendors'?'block':'none';
+  if(t==='vendors') renderVendorCards(allVendors,'vendorGrid',true);
+  else filterTable();
 }
 
-function clearFilters() {
-  document.getElementById('searchInput').value='';
-  document.getElementById('filterPhase').value='';
-  document.getElementById('filterDept').value='';
-  filterRequests();
+function clearFilters(){document.getElementById('searchInput').value='';document.getElementById('filterPhase').value='';filterTable();}
+
+function filterTable(){
+  const s=document.getElementById('searchInput').value.toLowerCase();
+  const ph=document.getElementById('filterPhase').value;
+  const actionPhases=['procurement_active','approved','grn_pending'];
+  let reqs=allRequests;
+  if(activeTab==='active') reqs=reqs.filter(r=>actionPhases.includes(r.phase));
+  if(s) reqs=reqs.filter(r=>r.project_name.toLowerCase().includes(s)||String(r.request_number).includes(s));
+  if(ph) reqs=reqs.filter(r=>r.phase===ph);
+  renderTable(reqs);
 }
 
-function filterRequests() {
-  const s = document.getElementById('searchInput').value.toLowerCase();
-  const ph = document.getElementById('filterPhase').value;
-  const dp = document.getElementById('filterDept').value;
-  let reqs = allRequests;
-  if (activeTab==='inbox') reqs = reqs.filter(r=>INBOX_PHASES.includes(r.phase));
-  if (activeTab==='action') reqs = reqs.filter(r=>['approved'].includes(r.phase));
-  if (s) reqs = reqs.filter(r=>r.project_name.toLowerCase().includes(s)||String(r.request_number).includes(s)||(r.users?.name||'').toLowerCase().includes(s));
-  if (ph) reqs = reqs.filter(r=>r.phase===ph);
-  if (dp) reqs = reqs.filter(r=>r.department===dp);
-  renderRequests(reqs);
-}
-
-function renderRequests(reqs) {
-  const tbody = document.getElementById('requestsBody');
-  if (!reqs.length) {
-    tbody.innerHTML = `<tr><td colspan="9"><div class="empty-state"><div class="empty-state-icon">${activeTab==='inbox'?'📭':'🎉'}</div><h3>${activeTab==='inbox'?'No new requests':'No actions pending'}</h3><p>${activeTab==='inbox'?'All requests have been processed.':'All approved requests have been ordered!'}</p></div></td></tr>`;
-    return;
-  }
-  tbody.innerHTML = reqs.map(r => {
-    const isNew = r.phase==='submitted';
-    const isAction = r.phase==='approved';
-    return `<tr style="${isNew||isAction?'background:rgba(224,32,32,0.02)':''}">
-      <td><span class="pr-number">PR-${String(r.request_number).padStart(4,'0')}</span>${isNew?'<span style="margin-left:6px;font-size:0.65rem;background:#3b82f6;color:white;padding:1px 6px;border-radius:3px;font-family:var(--font-mono)">NEW</span>':''}</td>
-      <td><strong>${r.project_name}</strong><br/><span style="font-size:0.75rem;color:var(--gray-4)">${r.project_phase}</span></td>
-      <td style="font-size:0.82rem">${DEPARTMENTS[r.department]||r.department}</td>
-      <td class="mono">${r.request_category}</td>
-      <td style="font-size:0.78rem;max-width:120px">${ORDER_TYPES[r.order_type]||r.order_type}</td>
+function renderTable(reqs) {
+  const tbody=document.getElementById('requestsBody');
+  if(!reqs.length){tbody.innerHTML=`<tr><td colspan="8"><div class="empty-state"><div class="empty-state-icon">📭</div><h3>${activeTab==='active'?'All caught up!':'No requests'}</h3><p>${activeTab==='active'?'No actions needed right now.':'No requests found.'}</p></div></td></tr>`;return;}
+  tbody.innerHTML=reqs.map(r=>{
+    const needsAction=['procurement_active','approved','grn_pending'].includes(r.phase);
+    const lbl={procurement_active:'Work on it',approved:'Place Order',grn_pending:'Invoke GRN'}[r.phase]||'View';
+    return `<tr style="${needsAction?'background:rgba(214,43,43,0.025)':''}">
+      <td><span class="pr-number${r.is_modification?' modified':''}">${r.is_modification?'↺ ':''} PR-${String(r.request_number).padStart(4,'0')}</span></td>
+      <td><div style="font-weight:600;font-size:0.82rem">${r.project_name}</div><div style="font-size:0.72rem;color:var(--gray-4)">${r.project_phase||''}</div></td>
+      <td><span style="font-size:0.72rem;background:var(--off-white);border:1px solid var(--border);padding:1px 7px;border-radius:3px">${r.request_category==='vendor_info'?'Vendor Info':'RFQ'}</span></td>
       <td>${getPhaseBadge(r.phase)}</td>
-      <td class="mono" style="font-size:0.78rem">${formatDate(r.created_at)}</td>
-      <td style="font-size:0.82rem">${r.users?.name||'—'}</td>
-      <td><button class="btn ${isNew||isAction?'btn-primary':'btn-ghost'} btn-sm" onclick='openPR("${r.id}")'>${isNew?'Process':'View'}</button></td>
+      <td style="font-size:0.78rem">${r.project_manager_name||'—'}</td>
+      <td style="font-size:0.78rem">${r.users?.name||'—'}</td>
+      <td style="font-family:var(--font-mono);font-size:0.72rem;color:var(--gray-4)">${fmtDate(r.updated_at||r.created_at)}</td>
+      <td><button class="btn ${needsAction?'btn-primary':'btn-ghost'} btn-sm" onclick='openPR("${r.id}")'>${lbl}</button></td>
     </tr>`;
   }).join('');
 }
 
+// ── VENDOR DB ───────────────────────────────────────────────
+async function refreshVendors(){
+  await loadVendors();
+  renderVendorCards(allVendors,'vendorGrid',true);
+  const search=document.getElementById('vendorSearch')?.value.toLowerCase()||'';
+  if(search) renderVendorCards(allVendors.filter(v=>v.name.toLowerCase().includes(search)||(v.specialization||'').toLowerCase().includes(search)),'vendorGrid',true);
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  document.getElementById('vendorSearch')?.addEventListener('input',e=>{
+    const s=e.target.value.toLowerCase();
+    renderVendorCards(allVendors.filter(v=>!s||v.name.toLowerCase().includes(s)||(v.specialization||'').toLowerCase().includes(s)),'vendorGrid',true);
+  });
+});
+
+function openVendorModal(vendor=null){
+  document.getElementById('vendorModalTitle').textContent=vendor?'Edit Vendor':'Add Vendor';
+  ['vId','vName','vContact','vEmail','vPhone','vSpec','vAddress','vNotes'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  if(vendor){
+    document.getElementById('vId').value=vendor.id;
+    document.getElementById('vName').value=vendor.name||'';
+    document.getElementById('vContact').value=vendor.contact_person||'';
+    document.getElementById('vEmail').value=vendor.email||'';
+    document.getElementById('vPhone').value=vendor.phone||'';
+    document.getElementById('vSpec').value=vendor.specialization||'';
+    document.getElementById('vAddress').value=vendor.address||'';
+    document.getElementById('vNotes').value=vendor.notes||'';
+  }
+  openModal('vendorModal');
+}
+
+function editVendor(id){const v=allVendors.find(x=>x.id===id);if(v)openVendorModal(v);}
+
+async function saveVendor(){
+  const name=document.getElementById('vName').value.trim();
+  if(!name){showToast('Vendor name is required','error');return;}
+  const id=document.getElementById('vId').value;
+  const vals={name,contact_person:document.getElementById('vContact').value.trim()||null,email:document.getElementById('vEmail').value.trim()||null,phone:document.getElementById('vPhone').value.trim()||null,specialization:document.getElementById('vSpec').value.trim()||null,address:document.getElementById('vAddress').value.trim()||null,notes:document.getElementById('vNotes').value.trim()||null,added_by:currentUser.id};
+  showLoader(true);
+  const{error}=id?await db.from('vendors').update(vals).eq('id',id):await db.from('vendors').insert(vals);
+  showLoader(false);
+  if(error){showToast('Error: '+error.message,'error');return;}
+  showToast(id?'Vendor updated.':'Vendor added!','success');
+  closeModal('vendorModal'); await refreshVendors();
+}
+
+async function toggleVendorActive(id,current){
+  const{error}=await db.from('vendors').update({is_active:!current}).eq('id',id);
+  if(error){showToast('Error: '+error.message,'error');return;}
+  showToast(`Vendor ${current?'deactivated':'activated'}.`,'success');
+  await refreshVendors();
+}
+
+// ── PR DETAIL MODAL ─────────────────────────────────────────
 async function openPR(id) {
-  currentPR = allRequests.find(r=>r.id===id);
-  if (!currentPR) return;
-  document.getElementById('prModalTitle').textContent = `PR-${String(currentPR.request_number).padStart(4,'0')} — ${currentPR.project_name}`;
-  document.getElementById('prModalSub').textContent = `${currentPR.request_category} · ${DEPARTMENTS[currentPR.department]} · Submitted by ${currentPR.users?.name||'—'}`;
+  currentPR=allRequests.find(r=>r.id===id); if(!currentPR) return;
+  uploadedFiles=[]; uploadedQuotations=[];
+  document.getElementById('prModalTitle').textContent=`PR-${String(currentPR.request_number).padStart(4,'0')} — ${currentPR.project_name}`;
+  document.getElementById('prModalSub').textContent=`${currentPR.request_category==='vendor_info'?'Vendor Info':'RFQ'} · ${DEPARTMENTS[currentPR.department]} · ${currentPR.users?.name||''}`;
+  showLoader(true);
+  const[comments,quotations,vd]=await Promise.all([
+    loadComments(id),
+    db.from('pr_quotations').select('*').eq('pr_id',id).order('created_at').then(r=>r.data||[]),
+    currentPR.assigned_vendor_id?db.from('vendors').select('name').eq('id',currentPR.assigned_vendor_id).single():Promise.resolve({data:null})
+  ]);
+  showLoader(false);
 
-  const comments = await loadComments(id);
-  let actionSection = '';
-  const footer = document.getElementById('prModalFooter');
-  footer.innerHTML = `<button class="btn btn-secondary" onclick="closeModal('prModal')">Close</button>`;
+  const footer=document.getElementById('prModalFooter');
+  footer.innerHTML=`<button class="btn btn-secondary" onclick="closeModal('prModal')">Close</button>`;
+  let actionSection='';
 
-  // SUBMITTED: Attach quotation
-  if (currentPR.phase === 'submitted') {
-    actionSection = `
-      <div class="action-section">
-        <div class="action-section-title">📎 Attach Quotation <span class="action-badge">ACTION REQUIRED</span></div>
-        <p style="font-size:0.85rem;color:var(--gray-3);margin-bottom:14px">Review the request and attach the vendor quotation. This will be sent to the engineer for review.</p>
-        <div class="form-group" style="margin-bottom:12px">
-          <label class="form-label">Quotation File URL *</label>
-          <input class="form-control" id="quotationUrl" placeholder="https://... (link to quotation PDF or doc)"/>
-          <div class="form-hint" style="margin-top:4px">Upload to storage and paste the URL, or use a shared drive link</div>
-        </div>
-        <div class="form-group" style="margin-bottom:12px">
-          <label class="form-label">Quotation Notes</label>
-          <textarea class="form-control" id="quotationNotes" placeholder="Summary of quotation, pricing, lead times, vendor comments..."></textarea>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Comment for Engineer</label>
-          <textarea class="form-control" id="procNote" placeholder="Instructions or notes for the engineer reviewing this quotation..."></textarea>
-        </div>
-      </div>`;
-    footer.innerHTML = `
-      <button class="btn btn-secondary" onclick="closeModal('prModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="attachQuotation()">Attach & Send to Engineer →</button>`;
+  // ── VENDOR INFO: procurement fills vendor details ──
+  if(currentPR.phase==='procurement_active' && currentPR.request_category==='vendor_info') {
+    actionSection=`<div class="action-section">
+      <div class="action-section-title">🏢 Provide Vendor Information <span class="action-badge">ACTION REQUIRED</span></div>
+      <p style="font-size:0.82rem;color:var(--gray-3);margin-bottom:12px">The engineer is requesting vendor information. Research and provide relevant vendor details below.</p>
+      <div class="form-group">
+        <label class="form-label">Vendor Details *</label>
+        <textarea class="form-control" id="vendorInfoDetails" placeholder="Vendor name, contact, email, phone, specialization, lead times, pricing range..." style="min-height:120px"></textarea>
+      </div>
+      <div style="margin-top:12px">
+        <button class="btn btn-primary" onclick="submitVendorInfo()">Send to Engineer →</button>
+      </div>
+    </div>`;
   }
 
-  // APPROVED: Place order
-  if (currentPR.phase === 'approved') {
-    actionSection = `
-      <div class="action-section">
-        <div class="action-section-title">🛒 Place Order <span class="action-badge">ACTION REQUIRED</span></div>
-        <p style="font-size:0.85rem;color:var(--gray-3);margin-bottom:14px">This request has been approved. Place the order with the vendor and record the details below.</p>
+  // ── RFQ: assign vendor + upload quotations ──
+  if(currentPR.phase==='procurement_active' && currentPR.request_category==='RFQ') {
+    const activeV=allVendors.filter(v=>v.is_active);
+    actionSection=`<div class="action-section">
+      <div class="action-section-title">⚙️ Assign Vendor & Upload Quotations <span class="action-badge">ACTION REQUIRED</span></div>
+      <p style="font-size:0.82rem;color:var(--gray-3);margin-bottom:14px">Assign a vendor, upload all quotation files, then share with the engineer.</p>
+      <div class="form-grid" style="margin-bottom:14px">
         <div class="form-group">
-          <label class="form-label">Order Confirmation Notes *</label>
-          <textarea class="form-control" id="orderNotes" placeholder="Vendor PO number, order date, expected delivery, tracking info..."></textarea>
+          <label class="form-label">Assign Vendor</label>
+          <select class="form-control" id="assignVendor">
+            <option value="">Select from DB</option>
+            ${activeV.map(v=>`<option value="${v.id}" ${currentPR.assigned_vendor_id===v.id?'selected':''}>${v.name}</option>`).join('')}
+          </select>
         </div>
-      </div>`;
-    footer.innerHTML = `
-      <button class="btn btn-secondary" onclick="closeModal('prModal')">Cancel</button>
-      <button class="btn btn-success" onclick="placeOrder()">✅ Confirm Order Placed →</button>`;
+        <div class="form-group">
+          <label class="form-label">Custom Vendor Name <span style="color:var(--gray-4);font-weight:400">(if not in DB)</span></label>
+          <input class="form-control" id="customVendorName" placeholder="e.g. New Supplier LLC"/>
+        </div>
+      </div>
+      ${quotations.length?`<div style="margin-bottom:12px"><div class="detail-key" style="margin-bottom:8px">Existing Quotations</div><div style="display:flex;flex-direction:column;gap:6px">${quotations.map(q=>renderQuotationCard(q,false)).join('')}</div></div>`:''}
+      <div class="form-label" style="margin-bottom:6px">Upload Quotations (PNG, JPG, PDF)</div>
+      <div class="drop-zone" id="quoteDZ" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleDrop(event)">
+        <input type="file" id="quoteFileInput" accept=".png,.jpg,.jpeg,.pdf" multiple onchange="handleQuoteFiles(event)"/>
+        <div class="drop-zone-icon">📎</div>
+        <div class="drop-zone-label">Drag & drop or click to upload</div>
+        <div class="drop-zone-hint">PNG, JPG or PDF — max 5MB each</div>
+      </div>
+      <div id="quoteUploadList" class="upload-list"></div>
+      ${buildQuoteFieldsHTML()}
+      <div style="margin-top:14px">
+        <button class="btn btn-primary" onclick="shareQuotations()">Share Quotations with Engineer →</button>
+      </div>
+    </div>`;
   }
 
-  // ORDER_PLACED: Invoke GRN (parts received)
-  if (currentPR.phase === 'order_placed') {
-    actionSection = `
-      <div class="action-section">
-        <div class="action-section-title">📦 Goods Received — Invoke GRN</div>
-        <p style="font-size:0.85rem;color:var(--gray-3);margin-bottom:14px">Have the parts arrived? Invoke the GRN process to trigger engineer quality check.</p>
-        <div class="form-group">
-          <label class="form-label">GRN Notes</label>
-          <textarea class="form-control" id="grnNotes" placeholder="Delivery date, quantities received, any discrepancies..."></textarea>
-        </div>
-      </div>`;
-    footer.innerHTML = `
-      <button class="btn btn-secondary" onclick="closeModal('prModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="invokeGRN()">📦 Invoke GRN →</button>`;
+  // ── APPROVED: place order ──
+  if(currentPR.phase==='approved') {
+    actionSection=`<div class="action-section">
+      <div class="action-section-title">🛒 Place Order <span class="action-badge">ACTION REQUIRED</span></div>
+      <p style="font-size:0.82rem;color:var(--gray-3);margin-bottom:12px">Approval received. Place the order with the vendor and confirm below.</p>
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">Order Notes</label>
+        <textarea class="form-control" id="orderNotes" placeholder="PO number, order confirmation details, expected delivery..."></textarea>
+      </div>
+      <button class="btn btn-primary" onclick="placeOrder()">Confirm Order Placed →</button>
+    </div>`;
   }
 
-  document.getElementById('prModalBody').innerHTML = buildPRDetailHTML(currentPR) + actionSection +
-    `<div style="margin-top:24px;border-top:1.5px solid var(--border);padding-top:18px">
-      <div class="section-title" style="margin-bottom:12px">💬 Comments</div>
+  // ── ORDER PLACED: invoke GRN ──
+  if(currentPR.phase==='order_placed') {
+    actionSection=`<div class="action-section">
+      <div class="action-section-title">📦 Invoke GRN <span class="action-badge">ACTION REQUIRED</span></div>
+      <p style="font-size:0.82rem;color:var(--gray-3);margin-bottom:12px">Once goods have arrived at the warehouse, invoke GRN to notify the engineer to perform QC.</p>
+      <button class="btn btn-primary" onclick="invokeGRN()">Goods Received — Notify Engineer for QC →</button>
+    </div>`;
+  }
+
+  // ── GRN PENDING: rate vendor after QC ──
+  if(currentPR.phase==='grn_pending' && currentPR.assigned_vendor_id) {
+    actionSection=`<div class="action-section">
+      <div class="action-section-title">📦 GRN in Progress</div>
+      <p style="font-size:0.82rem;color:var(--gray-3)">Waiting for engineer to complete QC. You may rate the vendor now.</p>
+      <button class="btn btn-secondary btn-sm" style="margin-top:10px" onclick="openRateModal('${currentPR.id}','${currentPR.assigned_vendor_id}')">⭐ Rate Vendor</button>
+    </div>`;
+  }
+
+  // ── ACCEPTED/REJECTED: option to rate ──
+  if((currentPR.phase==='accepted'||currentPR.phase==='rejected') && currentPR.assigned_vendor_id) {
+    actionSection=`<div style="margin-top:16px;padding:12px;background:var(--off-white);border:1px solid var(--border);border-radius:var(--radius)">
+      <span style="font-size:0.82rem;color:var(--gray-3)">Want to rate this vendor?</span>
+      <button class="btn btn-secondary btn-sm" style="margin-left:10px" onclick="openRateModal('${currentPR.id}','${currentPR.assigned_vendor_id}')">⭐ Rate Vendor</button>
+    </div>`;
+  }
+
+  document.getElementById('prModalBody').innerHTML=
+    buildPRDetailHTML(currentPR,quotations,vd?.data?.name||'',currentPR.project_manager_name||'')
+    +actionSection+
+    `<div style="margin-top:22px;border-top:1px solid var(--border);padding-top:16px">
+      <div class="section-title" style="margin-bottom:10px">💬 Comments</div>
       <div id="commentsList">${renderComments(comments)}</div>
-      <div style="display:flex;gap:10px;margin-top:12px">
+      <div style="display:flex;gap:8px;margin-top:10px">
         <input class="form-control" id="commentInput" placeholder="Add a comment..." style="flex:1" onkeydown="if(event.key==='Enter')addComment()"/>
-        <button class="btn btn-secondary" onclick="addComment()">Post</button>
+        <button class="btn btn-secondary btn-sm" onclick="addComment()">Post</button>
       </div>
     </div>`;
   openModal('prModal');
 }
 
-async function attachQuotation() {
-  const url = document.getElementById('quotationUrl').value.trim();
-  const notes = document.getElementById('quotationNotes').value.trim();
-  const comment = document.getElementById('procNote').value.trim();
-  if (!url) { showToast('Please provide quotation URL','error'); return; }
+// ── VENDOR INFO RESPONSE ────────────────────────────────────
+async function submitVendorInfo() {
+  const details=document.getElementById('vendorInfoDetails').value.trim();
+  if(!details){showToast('Please enter vendor details','error');return;}
   showLoader(true);
-  const { error } = await db.from('procurement_requests').update({
-    phase: 'engineer_review', quotation_url: url, quotation_notes: notes||null,
-    assigned_procurement_manager: currentUser.id, updated_at: new Date().toISOString()
-  }).eq('id', currentPR.id);
-  if (!error && comment) await postComment(currentPR.id, currentUser.id, comment);
+  const{error}=await db.from('procurement_requests').update({
+    phase:'vendor_info_shared',vendor_info_details:details,updated_at:new Date().toISOString()
+  }).eq('id',currentPR.id);
+  if(!error) await postComment(currentPR.id,currentUser.id,'🏢 Vendor information provided to engineer.');
   showLoader(false);
-  if (error) { showToast('Error: '+error.message,'error'); return; }
-  showToast('Quotation attached! Engineer notified for review.','success');
-  closeModal('prModal');
-  await loadRequests();
+  if(error){showToast('Error: '+error.message,'error');return;}
+  showToast('Vendor info sent to engineer!','success');
+  closeModal('prModal'); await loadRequests();
+}
+
+// ── QUOTATION UPLOAD ────────────────────────────────────────
+function buildQuoteFieldsHTML() {
+  if(!uploadedFiles.length) return '<div id="quoteFieldsContainer"></div>';
+  return `<div id="quoteFieldsContainer" style="margin-top:14px">
+    <div class="form-label" style="margin-bottom:8px">Add details per quotation (optional)</div>
+    ${uploadedFiles.map((f,i)=>`
+      <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px">
+        <div style="font-weight:600;font-size:0.8rem;margin-bottom:8px">📎 ${f.name}</div>
+        <div class="form-grid">
+          <div class="form-group"><label class="form-label">Amount (AED)</label><input class="form-control" id="qamt-${i}" type="number" placeholder="0.00"/></div>
+          <div class="form-group"><label class="form-label">Lead Time (days)</label><input class="form-control" id="qlt-${i}" type="number" placeholder="7"/></div>
+          <div class="form-group full"><label class="form-label">Notes</label><input class="form-control" id="qnote-${i}" placeholder="Any notes..."/></div>
+        </div>
+      </div>`).join('')}
+  </div>`;
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('quoteDZ').classList.remove('dragover');
+  handleQuoteFiles({target:{files:e.dataTransfer.files}});
+}
+
+async function handleQuoteFiles(e) {
+  const files=[...e.target.files];
+  for(const file of files){
+    if(file.size>5*1024*1024){showToast(`${file.name} too large (max 5MB)`,'error');continue;}
+    const allowed=['image/png','image/jpeg','image/jpg','application/pdf'];
+    if(!allowed.includes(file.type)){showToast(`${file.name} — unsupported format`,'error');continue;}
+    const b64=await fileToBase64(file);
+    uploadedFiles.push({name:file.name,type:file.type,data:b64});
+  }
+  // Reset so the same file can be re-added after removal
+  document.getElementById('quoteFileInput').value='';
+  renderUploadList();
+  const qfc=document.getElementById('quoteFieldsContainer');
+  if(qfc) qfc.outerHTML=buildQuoteFieldsHTML();
+}
+
+function renderUploadList() {
+  const ul=document.getElementById('quoteUploadList'); if(!ul) return;
+  ul.innerHTML=uploadedFiles.map((f,i)=>`
+    <div class="upload-item">
+      <span style="font-size:1rem">${f.type.includes('pdf')?'📄':f.type.includes('image')?'🖼️':'📎'}</span>
+      <span class="upload-item-name">${f.name}</span>
+      <button class="btn btn-danger btn-sm" onclick="removeUpload(${i})">✕</button>
+    </div>`).join('');
+}
+
+function removeUpload(i){
+  uploadedFiles.splice(i,1);
+  renderUploadList();
+  const qfc=document.getElementById('quoteFieldsContainer');
+  if(qfc) qfc.outerHTML=buildQuoteFieldsHTML();
+}
+
+async function shareQuotations() {
+  if(!uploadedFiles.length){showToast('Upload at least one quotation file','error');return;}
+  const vendorId=document.getElementById('assignVendor').value||null;
+  const customVendorName=document.getElementById('customVendorName').value.trim()||null;
+  const vendorName=vendorId?allVendors.find(v=>v.id===vendorId)?.name:customVendorName;
+  showLoader(true);
+  if(vendorId){await db.from('procurement_requests').update({assigned_vendor_id:vendorId}).eq('id',currentPR.id);}
+  for(let i=0;i<uploadedFiles.length;i++){
+    const f=uploadedFiles[i];
+    const amt=parseFloat(document.getElementById(`qamt-${i}`)?.value)||null;
+    const lt=parseInt(document.getElementById(`qlt-${i}`)?.value)||null;
+    const notes=document.getElementById(`qnote-${i}`)?.value.trim()||null;
+    await db.from('pr_quotations').insert({pr_id:currentPR.id,vendor_id:vendorId||null,vendor_name:vendorName||null,file_name:f.name,file_url:f.data,file_type:f.type,amount:amt,lead_time_days:lt,notes,uploaded_by:currentUser.id});
+  }
+  const{error}=await db.from('procurement_requests').update({phase:'quotations_shared',updated_at:new Date().toISOString()}).eq('id',currentPR.id);
+  if(!error) await postComment(currentPR.id,currentUser.id,`📎 ${uploadedFiles.length} quotation${uploadedFiles.length>1?'s':''} uploaded and shared with engineer.`);
+  showLoader(false);
+  if(error){showToast('Error: '+error.message,'error');return;}
+  showToast('Quotations shared with engineer!','success');
+  closeModal('prModal'); await loadRequests();
 }
 
 async function placeOrder() {
-  const notes = document.getElementById('orderNotes').value.trim();
-  if (!notes) { showToast('Please add order confirmation notes','error'); return; }
+  const notes=document.getElementById('orderNotes').value.trim()||null;
   showLoader(true);
-  const { error } = await db.from('procurement_requests').update({
-    phase: 'order_placed', updated_at: new Date().toISOString()
-  }).eq('id', currentPR.id);
-  if (!error) await postComment(currentPR.id, currentUser.id, '🛒 Order Placed: ' + notes);
+  const{error}=await db.from('procurement_requests').update({phase:'order_placed',order_notes:notes,updated_at:new Date().toISOString()}).eq('id',currentPR.id);
+  if(!error) await postComment(currentPR.id,currentUser.id,'🛒 Order placed with vendor.'+(notes?` Notes: ${notes}`:''));
   showLoader(false);
-  if (error) { showToast('Error: '+error.message,'error'); return; }
-  showToast('Order placed! Tracking order delivery.','success');
-  closeModal('prModal');
-  await loadRequests();
+  if(error){showToast('Error: '+error.message,'error');return;}
+  showToast('Order confirmed!','success');
+  closeModal('prModal'); await loadRequests();
 }
 
 async function invokeGRN() {
-  const notes = document.getElementById('grnNotes').value.trim();
   showLoader(true);
-  const { error } = await db.from('procurement_requests').update({
-    phase: 'grn_pending', grn_notes: notes||null, updated_at: new Date().toISOString()
-  }).eq('id', currentPR.id);
-  if (!error && notes) await postComment(currentPR.id, currentUser.id, '📦 GRN Invoked: ' + notes);
+  const{error}=await db.from('procurement_requests').update({phase:'grn_pending',updated_at:new Date().toISOString()}).eq('id',currentPR.id);
+  if(!error) await postComment(currentPR.id,currentUser.id,'📦 Goods received — engineer notified for QC.');
   showLoader(false);
-  if (error) { showToast('Error: '+error.message,'error'); return; }
-  showToast('GRN invoked! Engineer notified for quality check.','success');
-  closeModal('prModal');
-  await loadRequests();
+  if(error){showToast('Error: '+error.message,'error');return;}
+  showToast('GRN invoked — engineer notified!','success');
+  closeModal('prModal'); await loadRequests();
+}
+
+// ── VENDOR RATING ───────────────────────────────────────────
+function openRateModal(prId, vendorId) {
+  pendingRatePRId=prId;
+  pendingRateVendorId=vendorId;
+  const v=allVendors.find(x=>x.id===vendorId);
+  document.getElementById('rateModalTitle').textContent=`Rate Vendor — ${v?.name||''}`;
+  // Rebuild stars fresh to avoid stale state
+  const stars=document.getElementById('rateStars');
+  stars.dataset.rating='0';
+  stars.innerHTML=[1,2,3,4,5].map(n=>`<span onclick="setRating(${n})" data-val="${n}">★</span>`).join('');
+  document.getElementById('rateComment').value='';
+  openModal('rateModal');
+}
+
+function setRating(n) {
+  const c=document.getElementById('rateStars'); if(!c) return;
+  c.dataset.rating=n;
+  c.querySelectorAll('span').forEach((s,i)=>s.classList.toggle('active',i<n));
+}
+
+async function submitVendorRating() {
+  const rating=parseInt(document.getElementById('rateStars').dataset.rating||'0');
+  if(!rating){showToast('Please select a rating','error');return;}
+  const comment=document.getElementById('rateComment').value.trim()||null;
+  showLoader(true);
+  await db.from('vendor_ratings').insert({vendor_id:pendingRateVendorId,pr_id:pendingRatePRId,rated_by:currentUser.id,rating,comment});
+  const{data:ratings}=await db.from('vendor_ratings').select('rating').eq('vendor_id',pendingRateVendorId);
+  if(ratings?.length){
+    const avg=ratings.reduce((s,r)=>s+r.rating,0)/ratings.length;
+    await db.from('vendors').update({avg_rating:Math.round(avg*100)/100,rating_count:ratings.length}).eq('id',pendingRateVendorId);
+  }
+  showLoader(false);
+  showToast('Vendor rated — thank you!','success');
+  closeModal('rateModal'); await loadVendors();
 }
 
 async function addComment() {
-  const input = document.getElementById('commentInput');
-  const text = input?.value.trim();
-  if (!text || !currentPR) return;
-  try {
-    await postComment(currentPR.id, currentUser.id, text);
-    input.value = '';
-    const comments = await loadComments(currentPR.id);
-    document.getElementById('commentsList').innerHTML = renderComments(comments);
-  } catch(e) { showToast('Comment failed','error'); }
+  const input=document.getElementById('commentInput'),text=input?.value.trim();
+  if(!text||!currentPR) return;
+  try{await postComment(currentPR.id,currentUser.id,text);input.value='';
+    const c=await loadComments(currentPR.id);document.getElementById('commentsList').innerHTML=renderComments(c);
+  }catch(e){showToast('Comment failed','error');}
 }
 
 init();
