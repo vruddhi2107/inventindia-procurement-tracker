@@ -56,9 +56,17 @@ const DEPARTMENTS = { mech: 'Mechanical', id: 'Industrial Design', electronics: 
 
 // Ordered for workflow timeline
 const PHASE_ORDER = [
-  'submitted','pending_initial_pm_approval','procurement_active',
-  'quotations_shared','pending_client_approval','pending_pm_final_approval',
-  'approved','order_placed','grn_pending','accepted','rejected'
+  'submitted',
+  'pending_initial_pm_approval',
+  'procurement_active',
+  'quotations_shared',
+  'pending_pm_final_approval',
+  'approved',
+  'order_placed',
+  'grn_pending',
+  'qc_passed',
+  'payment_requested',
+  'accepted' 
 ];
 
 function formatDate(d) {
