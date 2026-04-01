@@ -11,6 +11,7 @@
         :root {
             --primary: #e60023;
             --primary-dark: #ad081b;
+            --brand:#be2c2c;
             --accent: #ff4d6d;
             --bg-dark: #0f1115;
             --glass-bg: rgba(255, 255, 255, 0.03);
@@ -68,6 +69,21 @@
             top: 0; left: 0; width: 100%; height: 100%;
             z-index: 1;
         }
+        .forgot-link {
+            display: block;
+            margin-top: 16px;
+            text-align: right;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--primary);
+            text-decoration: none;
+            transition: var(--transition);
+        }
+
+        .forgot-link:hover {
+            color: var(--primary-dark);
+            text-decoration: underline;
+        }
         .circle {
             position: absolute;
             border-radius: 50%;
@@ -95,7 +111,7 @@
             font-weight: 800;
             letter-spacing: -0.5px;
         }
-        .brand-title span { color: var(--primary); }
+        .brand-title span { color: var(--brand); }
 
         .brand-headline {
             z-index: 10;
@@ -266,7 +282,7 @@
 
         <div class="login-brand-logo">
             <img src="ii favicon.png" alt="Logo" class="logo-img">
-            <div class="brand-title">Procure<span>Ops</span></div>
+            <div class="brand-title">Procure<span>X</span></div>
         </div>
 
         <div class="login-brand-content">
@@ -312,7 +328,7 @@
                     <i class="fas fa-arrow-right"></i>
                 </button>
             </form>
-        </div>
+        <a href="pages/change-password.html" class="forgot-link">Having trouble signing in?</a>        </div>
     </div>
 </div>
 <div id="toast-container"></div>
@@ -372,7 +388,7 @@
       procurement_manager: 'pages/procurement.html',
       engineer: 'pages/engineer.html',
       project_manager: 'pages/pm.html',
-      accounts: 'pages/accounts.html'      // ← ADDED
+      accounts: 'pages/accounts.html'     
     };
     window.location.href = routes[role] || 'pages/engineer.html';
   }

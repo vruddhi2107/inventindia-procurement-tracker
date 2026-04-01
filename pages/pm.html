@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>ProcureOps — Project Manager</title>
+<title>ProcureX — Project Manager</title>
 <link rel="stylesheet" href="../css/styles.css"/>
 </head>
 <body>
@@ -19,8 +19,8 @@
   <div class="stats-grid">
     <div class="stat-card"><div class="stat-card-value" id="sClearance">—</div><div class="stat-card-label">Needs Clearance</div><div class="stat-card-icon">🔐</div></div>
     <div class="stat-card" style="--accent:#f97316"><div class="stat-card-value" id="sFinal">—</div><div class="stat-card-label">Pending Final</div><div class="stat-card-icon">✍️</div></div>
-    <div class="stat-card" style="--accent:#22c55e"><div class="stat-card-value" id="sApproved">—</div><div class="stat-card-label">Approved</div><div class="stat-card-icon">✅</div></div>
-    <div class="stat-card" style="--accent:#dc2626"><div class="stat-card-value" id="sRejected">—</div><div class="stat-card-label">Rejected</div><div class="stat-card-icon">❌</div></div>
+    <div class="stat-card" style="--accent:#22c55e"><div class="stat-card-value" id="sApproved">—</div><div class="stat-card-label">Approved</div><div class="stat-card-icon"></div></div>
+    <div class="stat-card" style="--accent:#dc2626"><div class="stat-card-value" id="sRejected">—</div><div class="stat-card-label">Rejected</div><div class="stat-card-icon"></div></div>
   </div>
 
   <div id="pendingBanner" style="display:none;margin-bottom:16px"></div>
@@ -185,7 +185,7 @@ async function openPR(id) {
         <textarea class="form-control" id="clearanceNotes" placeholder="State your rationale, conditions, or reason for denial..."></textarea>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn btn-success" onclick="grantClearance('approved')" style="flex:1">✅ Grant Clearance</button>
+        <button class="btn btn-success" onclick="grantClearance('approved')" style="flex:1"> Grant Clearance</button>
         <button class="btn btn-danger" onclick="grantClearance('rejected')" style="flex:1">✗ Deny</button>
       </div>
     </div>`;
@@ -212,7 +212,7 @@ async function openPR(id) {
         </div>
         ${rejectOptionsHTML()}
         <div style="display:flex;gap:10px;flex-wrap:wrap">
-          <button class="btn btn-success" onclick="finalDecision('approved')" style="flex:1">✅ Approve — Allow Order</button>
+          <button class="btn btn-success" onclick="finalDecision('approved')" style="flex:1"> Approve — Allow Order</button>
           <button class="btn btn-danger" onclick="showRejectionOptions()" style="flex:1">✗ Reject</button>
         </div>
       </div>`;
@@ -233,7 +233,7 @@ async function openPR(id) {
         </div>
         ${rejectOptionsHTML()}
         <div style="display:flex;gap:10px;flex-wrap:wrap">
-          <button class="btn btn-success" onclick="finalDecision('approved')" style="flex:1">✅ Approve — Allow Order</button>
+          <button class="btn btn-success" onclick="finalDecision('approved')" style="flex:1"> Approve — Allow Order</button>
           <button class="btn btn-danger" onclick="showRejectionOptions()" style="flex:1">✗ Reject</button>
         </div>
       </div>`;
@@ -300,7 +300,7 @@ async function grantClearance(decision) {
     rejection_reason:approved?null:notes,
     updated_at:new Date().toISOString()
   }).eq('id',currentPR.id);
-  if(!error) await postComment(currentPR.id,currentUser.id,`${approved?'✅':'❌'} PM Clearance ${approved?'Granted':'Denied'}: ${notes}`);
+  if(!error) await postComment(currentPR.id,currentUser.id,`${approved?'':''} PM Clearance ${approved?'Granted':'Denied'}: ${notes}`);
   showLoader(false);
   if(error){showToast('Error: '+error.message,'error');return;}
   showToast(approved?'Clearance granted — procurement can begin.':'Requirement denied.', approved?'success':'error');
@@ -332,10 +332,10 @@ async function finalDecision(decision) {
     needs_more_vendors:needsMoreVendors,
     updated_at:new Date().toISOString()
   }).eq('id',currentPR.id);
-  if(!error) await postComment(currentPR.id,currentUser.id,`${decision==='approved'?'✅':'❌'} PM Final ${decision==='approved'?'Approved':'Rejected'}: ${notes}${needsMoreVendors?' — more vendors requested.':''}`);
+  if(!error) await postComment(currentPR.id,currentUser.id,`${decision==='approved'?'':''} PM Final ${decision==='approved'?'Approved':'Rejected'}: ${notes}${needsMoreVendors?' — more vendors requested.':''}`);
   showLoader(false);
   if(error){showToast('Error: '+error.message,'error');return;}
-  showToast(decision==='approved'?'✅ Approved! Procurement may now place the order.':needsMoreVendors?'Rejected — Procurement will find more vendors.':'Rejected — request closed.',decision==='approved'?'success':'error');
+  showToast(decision==='approved'?' Approved! Procurement may now place the order.':needsMoreVendors?'Rejected — Procurement will find more vendors.':'Rejected — request closed.',decision==='approved'?'success':'error');
   closeModal('prModal'); await loadRequests();
 }
 

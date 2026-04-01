@@ -1,5 +1,4 @@
 // ── DOUBLE-LOAD GUARD ───────────────────────────────────────
-// Prevents SyntaxError if browser loads shared.js twice (e.g. caching + new file)
 if (!window._procureSharedLoaded) {
 window._procureSharedLoaded = true;
 
@@ -15,8 +14,6 @@ function openModal(id){ const m=document.getElementById(id); if(m){m.classList.a
 function closeModal(id){ const m=document.getElementById(id); if(m){m.classList.remove('active');document.body.style.overflow='';} }
 
 // ── CONSTANTS ────────────────────────────────────────────────
-// NOTE: DEPARTMENTS, ORDER_TYPES, PHASE_ORDER are defined in supabase-config.js
-// Only define here what is NOT already in supabase-config.js
 var CURRENCIES = typeof CURRENCIES !== 'undefined' ? CURRENCIES : ['AED','USD','EUR','GBP','INR','SAR','OMR','KWD','QAR','BHD'];
 var SOURCING_OPTIONS = typeof SOURCING_OPTIONS !== 'undefined' ? SOURCING_OPTIONS : [{value:'domestic',label:'🏠 Domestic'},{value:'international',label:'🌍 International'}];
 var PAYMENT_TERMS_OPTIONS = typeof PAYMENT_TERMS_OPTIONS !== 'undefined' ? PAYMENT_TERMS_OPTIONS : [
@@ -27,16 +24,12 @@ var PAYMENT_TERMS_OPTIONS = typeof PAYMENT_TERMS_OPTIONS !== 'undefined' ? PAYME
   {value:'no_advance',label:'No Advance (Net 30/60/90)'},
   {value:'custom',label:'Custom Terms'}
 ];
-// Extend PHASE_ORDER from supabase-config.js to include new phases
 if (typeof PHASE_ORDER !== 'undefined' && !PHASE_ORDER.includes('qc_passed')) {
   PHASE_ORDER.splice(PHASE_ORDER.indexOf('accepted'), 0, 'qc_passed', 'payment_requested');
 }
-// Add advance_requested between approved and order_placed if not present
 if (typeof PHASE_ORDER !== 'undefined' && !PHASE_ORDER.includes('advance_requested')) {
-  PHASE_ORDER.splice(PHASE_ORDER.indexOf('order_placed'), 0, 'advance_requested');
+  PHASE_ORDER.splice(PHASE_ORDER.indexOf('order_placed') + 1, 0, 'advance_requested');
 }
-
-
 
 function getPhaseBadge(phase){
   const map={
@@ -68,9 +61,26 @@ function initNavbar(user) {
   if(g('navUserDept')) g('navUserDept').textContent=user.department?DEPARTMENTS[user.department]:roleLabel(user.role);
   if(g('navUserAvatar')) g('navUserAvatar').textContent=user.name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase();
   if(g('navRoleBadge')) g('navRoleBadge').textContent=roleLabel(user.role);
+  // Inject shared modals (password change, etc.)
+  injectSharedModals();
+  // Close user menu on outside click
+  document.addEventListener('click', e => {
+    const menu = document.getElementById('userNavMenu');
+    const wrap = document.getElementById('navUserWrap');
+    if (menu && wrap && !wrap.contains(e.target)) {
+      menu.style.display = 'none';
+    }
+  });
 }
 function roleLabel(r){return{master:'Master Admin',procurement_manager:'Procurement',engineer:'Engineer',project_manager:'Project Manager',accounts:'Accounts'}[r]||r;}
 function logout(){Session.clear();window.location.href='../index.html';}
+
+function toggleUserMenu(e) {
+  e.stopPropagation();
+  const menu = document.getElementById('userNavMenu');
+  if (!menu) return;
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
 
 function buildNavbar(user) {
   const navLinks = {
@@ -96,22 +106,43 @@ function buildNavbar(user) {
   const links = navLinks[user.role]||[];
   return `<nav class="navbar">
     <a class="nav-logo" href="#">
-      <div class="nav-logo-mark"><svg width="14" height="14" viewBox="0 0 18 18" fill="none"><rect x="1" y="1" width="6" height="6" rx="1.5" fill="white" opacity="0.9"/><rect x="10" y="1" width="6" height="6" rx="1.5" fill="white" opacity="0.5"/><rect x="1" y="10" width="6" height="6" rx="1.5" fill="white" opacity="0.5"/><rect x="10" y="10" width="6" height="6" rx="1.5" fill="white" opacity="0.9"/></svg></div>
-      <div><div class="nav-logo-text">Procure<span>Ops</span></div></div>
+<div class="nav-logo-mark">
+  <img src="../Inventindia_logo-2.png" alt="Logo" width="50" height="20">
+</div>
+      <div><div class="nav-logo-text">Procure<span>X</span></div></div>
     </a>
     <div class="nav-links" style="display:flex;gap:4px;margin-left:18px">
       ${links.map(l=>`<a href="${l.href}" class="nav-link ${window.location.pathname.includes(l.href)?'active':''}" style="font-size:0.78rem;padding:5px 12px;border-radius:5px;color:rgba(255,255,255,0.8);text-decoration:none;transition:background 0.15s;${window.location.pathname.includes(l.href)?'background:rgba(255,255,255,0.15);color:white':''}" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='${window.location.pathname.includes(l.href)?'rgba(255,255,255,0.15)':'transparent'}'">${l.label}</a>`).join('')}
     </div>
     <div class="nav-spacer"></div>
     <span class="nav-role-badge" id="navRoleBadge"></span>
-    <div class="nav-user">
-      <div class="nav-user-avatar" id="navUserAvatar"></div>
-      <div><div class="nav-user-name" id="navUserName"></div><div class="nav-user-dept" id="navUserDept"></div></div>
+
+    <!-- User Menu Wrap -->
+    <div id="navUserWrap" style="position:relative">
+      <div class="nav-user" style="cursor:pointer;user-select:none" onclick="toggleUserMenu(event)" title="Account options">
+        <div class="nav-user-avatar" id="navUserAvatar"></div>
+        <div>
+          <div class="nav-user-name" id="navUserName"></div>
+          <div class="nav-user-dept" id="navUserDept"></div>
+        </div>
+        <svg width="10" height="6" viewBox="0 0 10 6" fill="none" style="margin-left:6px;opacity:0.6;flex-shrink:0"><path d="M1 1l4 4 4-4" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <!-- Dropdown -->
+      <div id="userNavMenu" style="display:none;position:absolute;top:calc(100% + 8px);right:0;background:white;border:1px solid #e5e7eb;border-radius:10px;padding:6px;min-width:190px;z-index:9999;box-shadow:0 8px 24px rgba(0,0,0,0.14)">
+        <div style="padding:8px 10px 10px;border-bottom:1px solid #f3f4f6;margin-bottom:4px">
+          <div style="font-weight:700;font-size:0.82rem;color:#111">${user.name}</div>
+          <div style="font-size:0.72rem;color:#6b7280">${roleLabel(user.role)}</div>
+        </div>
+        <button onclick="openChangePasswordModal()" style="width:100%;text-align:left;padding:8px 10px;border:none;background:none;cursor:pointer;font-size:0.8rem;color:#374151;border-radius:6px;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='none'">
+          🔑 <span>Change Password</span>
+        </button>
+        <div style="height:1px;background:#f3f4f6;margin:4px 0"></div>
+        <button onclick="logout()" style="width:100%;text-align:left;padding:8px 10px;border:none;background:none;cursor:pointer;font-size:0.8rem;color:#dc2626;border-radius:6px;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='none'">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          <span>Logout</span>
+        </button>
+      </div>
     </div>
-    <button class="btn-logout" onclick="logout()">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-      Logout
-    </button>
   </nav>`;
 }
 
@@ -126,6 +157,89 @@ function buildFooter() {
   </footer>`;
 }
 
+// ── PASSWORD CHANGE MODAL (injected once per page) ───────────
+function injectSharedModals() {
+  if (document.getElementById('_sharedChangePasswordModal')) return;
+  const el = document.createElement('div');
+  el.innerHTML = `
+    <div class="modal-overlay" id="_sharedChangePasswordModal" onclick="event.target===this&&closeChangePasswordModal()">
+      <div class="modal" style="max-width:420px">
+        <div class="modal-header">
+          <div><div class="modal-title">🔑 Change Password</div><div class="modal-title-sub">Update your account password</div></div>
+          <button class="modal-close" onclick="closeChangePasswordModal()">✕</button>
+        </div>
+        <div class="modal-body">
+          <div id="_cpError" style="display:none;padding:9px 12px;background:rgba(214,43,43,0.08);border:1px solid rgba(214,43,43,0.22);border-radius:6px;color:var(--red);font-size:0.8rem;margin-bottom:14px"></div>
+          <div class="form-group" style="margin-bottom:14px">
+            <label class="form-label">Current Password *</label>
+            <input class="form-control" id="_cpOld" type="password" placeholder="Enter your current password" autocomplete="current-password"/>
+          </div>
+          <div class="form-group" style="margin-bottom:14px">
+            <label class="form-label">New Password *</label>
+            <input class="form-control" id="_cpNew" type="password" placeholder="At least 6 characters" autocomplete="new-password"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Confirm New Password *</label>
+            <input class="form-control" id="_cpConfirm" type="password" placeholder="Repeat new password" autocomplete="new-password" onkeydown="if(event.key==='Enter')submitPasswordChange()"/>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeChangePasswordModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="submitPasswordChange()">Update Password</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(el.firstElementChild);
+}
+
+function openChangePasswordModal() {
+  const menu = document.getElementById('userNavMenu');
+  if (menu) menu.style.display = 'none';
+  const m = document.getElementById('_sharedChangePasswordModal');
+  if (!m) { injectSharedModals(); }
+  ['_cpOld','_cpNew','_cpConfirm'].forEach(id => { const e=document.getElementById(id); if(e) e.value=''; });
+  const err = document.getElementById('_cpError');
+  if (err) { err.style.display='none'; err.textContent=''; }
+  const modal = document.getElementById('_sharedChangePasswordModal');
+  if (modal) { modal.classList.add('active'); document.body.style.overflow='hidden'; }
+}
+
+function closeChangePasswordModal() {
+  const m = document.getElementById('_sharedChangePasswordModal');
+  if (m) { m.classList.remove('active'); document.body.style.overflow=''; }
+}
+
+async function submitPasswordChange() {
+  const oldPw = document.getElementById('_cpOld')?.value || '';
+  const newPw = document.getElementById('_cpNew')?.value || '';
+  const confirmPw = document.getElementById('_cpConfirm')?.value || '';
+  const errEl = document.getElementById('_cpError');
+
+  const showErr = msg => { if(errEl){errEl.textContent=msg;errEl.style.display='block';} };
+  errEl.style.display = 'none';
+
+  if (!oldPw || !newPw || !confirmPw) { showErr('All fields are required.'); return; }
+  if (newPw.length < 6) { showErr('New password must be at least 6 characters.'); return; }
+  if (newPw !== confirmPw) { showErr('New passwords do not match.'); return; }
+
+  const user = Session.get();
+  if (!user) { showErr('Session expired. Please log in again.'); return; }
+
+  showLoader(true);
+  // Verify current password
+  const { data: userRec, error: fetchErr } = await db.from('users').select('id,password').eq('id', user.id).single();
+  if (fetchErr || !userRec) { showLoader(false); showErr('Could not verify identity. Try logging out and in.'); return; }
+  if (userRec.password !== oldPw) { showLoader(false); showErr('Current password is incorrect.'); return; }
+
+  // Update password
+  const { error: updateErr } = await db.from('users').update({ password: newPw }).eq('id', user.id);
+  showLoader(false);
+  if (updateErr) { showErr('Update failed: ' + updateErr.message); return; }
+
+  closeChangePasswordModal();
+  showToast('Password updated successfully!', 'success');
+}
+
 // ── WORKFLOW TRACK ──────────────────────────────────────────
 const WF_STEPS = [
   {key:'submitted',label:'Submitted'},
@@ -134,8 +248,8 @@ const WF_STEPS = [
   {key:'quotations_shared',label:'Quotations'},
   {key:'pending_pm_final_approval',label:'PM Approval'},
   {key:'approved',label:'PM Approved'},
-  {key:'advance_requested',label:'Advance Pay'},
   {key:'order_placed',label:'Ordered'},
+  {key:'advance_requested',label:'Advance Pay'},
   {key:'grn_pending',label:'GRN/QC'},
   {key:'qc_passed',label:'QC Passed'},
   {key:'payment_requested',label:'Payment'}
@@ -219,7 +333,7 @@ function buildPRDetailHTML(pr, quotations=[], vendorName='', pmName='') {
 
     ${(pr.phase==='advance_requested'||pr.phase==='advance_approved'||pr.phase==='advance_rejected')?`<div style="margin-top:14px;padding:12px 14px;background:${pr.phase==='advance_approved'?'rgba(22,163,74,0.06)':pr.phase==='advance_rejected'?'rgba(214,43,43,0.06)':'rgba(245,158,11,0.06)'};border:1px solid ${pr.phase==='advance_approved'?'rgba(22,163,74,0.25)':pr.phase==='advance_rejected'?'rgba(214,43,43,0.25)':'rgba(245,158,11,0.25)'};border-radius:var(--radius)">
       <div class="detail-key" style="color:${pr.phase==='advance_approved'?'#16a34a':pr.phase==='advance_rejected'?'var(--red)':'#b45309'};margin-bottom:6px">
-        ${{advance_approved:'✅ Advance Payment Approved',advance_rejected:'❌ Advance Payment Rejected',advance_requested:'⏳ Advance Payment Pending'}[pr.phase]||'💳 Advance Payment'}
+        ${{advance_approved:' Advance Payment Approved',advance_rejected:' Advance Payment Rejected',advance_requested:'⏳ Advance Payment Pending'}[pr.phase]||'💳 Advance Payment'}
       </div>
     </div>`:''}
     ${quotations.length?`<div style="margin-top:14px">
@@ -443,28 +557,14 @@ function openVendorEnquiry(vendor) {
 
 // ── COMMENTS ────────────────────────────────────────────────
 window.loadComments = async function (prId) {
-  const { data, error } = await db
-    .from('pr_comments')
-    .select('*,users(name)')
-    .eq('pr_id', prId)
-    .order('created_at');
-
-  if (error) {
-    console.error("Load comments error:", error);
-    return [];
-  }
-
+  const { data, error } = await db.from('pr_comments').select('*,users(name)').eq('pr_id', prId).order('created_at');
+  if (error) { console.error("Load comments error:", error); return []; }
   return data || [];
 };
 
-// FIX: expose postComment on window so all pages can access it reliably
 window.postComment = async function(prId, userId, text) {
   if (!text?.trim()) return;
-  const { error } = await db.from('pr_comments').insert({
-    pr_id: prId,
-    user_id: userId,
-    comment: text.trim()
-  });
+  const { error } = await db.from('pr_comments').insert({ pr_id: prId, user_id: userId, comment: text.trim() });
   if (error) throw error;
 };
 
@@ -481,11 +581,10 @@ function renderComments(comments) {
 }
 
 // ── BOM PARSER ───────────────────────────────────────────────
-async function parseBOMFile(file) {
+function parseBOMFile(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     const isCSV = file.name.endsWith('.csv') || file.type === 'text/csv';
-
     if (isCSV) {
       reader.onload = (e) => {
         try {
@@ -568,4 +667,4 @@ function getPartsFromEditor() {
   return _partsEditorRows.filter(r=>r.name).map(({name,qty,spec})=>({name,qty:qty||1,spec:spec||''}));
 }
 
-} // end _procureSharedLoaded guard
+} 

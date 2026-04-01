@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>ProcureOps — Procurement</title>
+<title>ProcureX — Procurement</title>
 <link rel="stylesheet" href="../css/styles.css"/>
 <style>
 .currency-amount-wrap{display:flex;gap:0}
@@ -19,6 +19,198 @@
 .advance-option:hover{border-color:var(--red)}
 .advance-option.selected{border-color:var(--red);background:rgba(214,43,43,0.04)}
 .payment-req-form .form-group{margin-bottom:12px}
+
+/* ── PO PAPER STYLES ── */
+#poPreviewBox {
+  background: #fff;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: #111;
+  border: 1px solid #ccc;
+}
+.po-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px 10px;
+  border-bottom: 2.5px solid #111;
+}
+.po-paper-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-align: center;
+  flex: 1;
+  text-transform: uppercase;
+}
+.po-logo-img {
+  height: 52px;
+  max-width: 130px;
+  object-fit: contain;
+}
+.po-addr-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-bottom: 1px solid #999;
+}
+.po-addr-cell {
+  padding: 10px 14px;
+  font-size: 0.74rem;
+  line-height: 1.55;
+}
+.po-addr-cell:first-child { border-right: 1px solid #999; }
+.po-addr-cell .cell-head {
+  font-weight: 700;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+  color: #444;
+}
+.po-addr-cell .company-name {
+  font-weight: 700;
+  font-size: 0.82rem;
+  margin-bottom: 2px;
+}
+.po-addr-cell table td { padding: 1px 3px 1px 0; vertical-align: top; }
+.po-addr-cell table td:first-child { font-weight: 600; white-space: nowrap; padding-right: 6px; }
+.po-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.73rem;
+}
+.po-items-table th {
+  background: #f0f0f0;
+  border: 1px solid #999;
+  padding: 6px 8px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.7rem;
+}
+.po-items-table td {
+  border: 1px solid #999;
+  padding: 6px 8px;
+  vertical-align: top;
+}
+.po-items-table td.center { text-align: center; }
+.po-items-table td.right { text-align: right; }
+.item-desc-main { font-weight: 700; }
+.item-desc-sub { font-size: 0.67rem; color: #555; margin-top: 2px; }
+.po-bottom-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-top: 1px solid #999;
+}
+.po-left-bottom { border-right: 1px solid #999; }
+.bank-section {
+  padding: 9px 12px;
+  border-bottom: 1px solid #ccc;
+  font-size: 0.71rem;
+}
+.bank-section table td { padding: 1.5px 3px 1.5px 0; vertical-align: top; }
+.bank-section table td:first-child { font-weight: 600; white-space: nowrap; padding-right: 6px; width: 115px; }
+.po-terms-section {
+  padding: 9px 12px;
+  font-size: 0.68rem;
+  line-height: 1.55;
+  color: #333;
+}
+.po-terms-section .terms-head {
+  font-weight: 700;
+  font-size: 0.7rem;
+  margin-bottom: 5px;
+}
+.po-terms-section p { margin-bottom: 4px; }
+.po-amount-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+.po-amount-table tr td {
+  padding: 5px 12px;
+  border-bottom: 1px solid #eee;
+}
+.po-amount-table tr td:last-child {
+  text-align: right;
+  font-weight: 600;
+}
+.po-amount-table tr.net-row {
+  background: #f7f7f7;
+}
+.po-amount-table tr.net-row td {
+  font-weight: 800;
+  font-size: 0.88rem;
+  border-bottom: none;
+  padding: 7px 12px;
+}
+.po-amount-table tr.words-row td {
+  font-size: 0.68rem;
+  font-style: italic;
+  color: #444;
+  border-bottom: none;
+  padding: 5px 12px 9px;
+  white-space: normal;
+  line-height: 1.4;
+}
+.po-sig-section {
+  padding: 12px;
+  text-align: center;
+  border-top: 1px solid #ccc;
+}
+.po-sig-img-wrap {
+  height: 62px;
+  border-bottom: 1px solid #999;
+  width: 75%;
+  margin: 0 auto 5px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.po-sig-img-wrap img {
+  max-height: 68px;
+  max-width: 100%;
+  object-fit: contain;
+}
+.po-sig-label { font-size: 0.7rem; color: #333; }
+.po-doc-footer {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 14px;
+  border-top: 2px solid #111;
+  font-size: 0.64rem;
+  color: #555;
+}
+/* inline editable inputs in PO preview */
+.po-meta-input {
+  border: none;
+  border-bottom: 1px dashed #aaa;
+  outline: none;
+  background: transparent;
+  font-size: inherit;
+  font-family: inherit;
+  color: inherit;
+  width: 100%;
+  padding: 0;
+}
+.po-meta-input:focus { border-bottom-color: #4d7cfa; background: rgba(77,124,250,0.04); }
+.po-tax-input {
+  width: 36px;
+  border: 1px solid #ccc;
+  padding: 1px 3px;
+  font-size: 0.72rem;
+  border-radius: 3px;
+}
+.po-terms-editable {
+  min-height: 100px;
+  border: 1px dashed #aaa;
+  padding: 8px;
+  border-radius: 4px;
+  outline: none;
+  white-space: pre-wrap;
+  font-size: 0.68rem;
+  line-height: 1.55;
+}
+.po-terms-editable:focus { box-shadow: inset 0 0 0 1px #4d7cfa; }
 </style>
 </head>
 <body>
@@ -196,16 +388,17 @@
   </div>
 </div>
 
-
+<!-- PO MODAL -->
 <div class="modal-overlay" id="poModal">
-  <div class="modal" style="max-width:760px">
+  <div class="modal" style="max-width:900px">
     <div class="modal-header">
       <div><div class="modal-title">📄 Generate Purchase Order</div><div class="modal-title-sub" id="poModalSub"></div></div>
       <button class="modal-close" onclick="closeModal('poModal')">✕</button>
     </div>
-    <div class="modal-body" id="poModalBody" style="max-height:78vh;overflow-y:auto"></div>
+    <div class="modal-body" id="poModalBody" style="max-height:82vh;overflow-y:auto;padding:16px"></div>
     <div class="modal-footer">
       <button class="btn btn-ghost btn-sm" onclick="openPOBranding()" style="margin-right:auto">🖼 Logo &amp; Signature</button>
+      <button class="btn btn-secondary" onclick="downloadPO()">⬇ Download PDF</button>
       <button class="btn btn-secondary" onclick="closeModal('poModal')">Cancel</button>
       <button class="btn btn-primary" onclick="confirmGeneratePO()">✓ Generate &amp; Save PO</button>
     </div>
@@ -252,6 +445,72 @@ async function init() {
   showLoader(true);
   await Promise.all([loadRequests(), loadVendors()]);
   showLoader(false);
+}
+
+async function openVendorHistory(vendorId) {
+  let ov=document.getElementById('_vendorHistoryModal');
+  if(!ov){
+    ov=document.createElement('div');ov.id='_vendorHistoryModal';ov.className='modal-overlay';
+    ov.onclick=e=>{if(e.target===ov)ov.classList.remove('active');};
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML=`<div class="modal" style="max-width:960px"><div class="modal-header"><div class="modal-title">Vendor History</div><button class="modal-close" onclick="document.getElementById('_vendorHistoryModal').classList.remove('active')">✕</button></div><div class="modal-body" id="_vhBody"><div style="text-align:center;padding:24px;color:var(--gray-4)">Loading...</div></div><div class="modal-footer"><button class="btn btn-secondary" onclick="document.getElementById('_vendorHistoryModal').classList.remove('active')">Close</button></div></div>`;
+  ov.classList.add('active');
+
+  const [vendorRes, ratingsRes, ordersRes] = await Promise.all([
+    db.from('vendors').select('*').eq('id',vendorId).single(),
+    db.from('vendor_ratings').select('*,users(name),procurement_requests(project_name,request_number)').eq('vendor_id',vendorId).order('created_at',{ascending:false}),
+    db.from('procurement_requests').select('*').eq('assigned_vendor_id',vendorId).order('created_at',{ascending:false})
+  ]);
+
+  const v = vendorRes.data||{};
+  const ratings = ratingsRes.data||[];
+  const orders = ordersRes.data||[];
+  const pt = PAYMENT_TERMS_OPTIONS.find(p=>p.value===v.payment_terms);
+
+  document.getElementById('_vhBody').innerHTML=`
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border)">
+      <div style="width:48px;height:48px;border-radius:10px;background:var(--off-white);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:1.4rem">🏢</div>
+      <div>
+        <div style="font-weight:700;font-size:1rem">${v.name}</div>
+        <div style="font-size:0.78rem;color:var(--gray-3)">${v.specialization||''}</div>
+        <div style="margin-top:3px">${starRating(v.avg_rating,v.rating_count)}</div>
+      </div>
+      ${v.email?`<div style="font-size:0.76rem;color:var(--gray-3);margin-left:8px">${v.email}${v.phone?' · '+v.phone:''}</div>`:''}
+      ${pt?`<div style="margin-left:auto;font-size:0.72rem;padding:4px 10px;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.18);border-radius:5px;color:#6366f1;white-space:nowrap">💳 ${pt.label}</div>`:''}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+      <div>
+        <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--gray-4);margin-bottom:10px;display:flex;align-items:center;gap:6px">
+          📦 Orders <span style="background:var(--off-white);border:1px solid var(--border);border-radius:10px;padding:1px 7px;font-size:0.68rem">${orders.length}</span>
+        </div>
+        ${orders.length?`<div style="display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto">
+          ${orders.map(o=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--off-white);border:1px solid var(--border);border-radius:6px">
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;font-size:0.78rem">PR-${String(o.request_number).padStart(4,'0')}</div>
+              <div style="font-size:0.7rem;color:var(--gray-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.project_name}</div>
+              <div style="font-size:0.65rem;color:var(--gray-4)">${fmtDate(o.created_at)}</div>
+            </div>
+            ${getPhaseBadge(o.phase)}
+          </div>`).join('')}
+        </div>`:`<div style="padding:20px;text-align:center;background:var(--off-white);border:1px solid var(--border);border-radius:6px"><div style="font-size:1.5rem;margin-bottom:4px">📭</div><p style="color:var(--gray-4);font-size:0.78rem">No orders yet</p></div>`}
+      </div>
+      <div>
+        <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--gray-4);margin-bottom:10px;display:flex;align-items:center;gap:6px">
+          ⭐ Ratings <span style="background:var(--off-white);border:1px solid var(--border);border-radius:10px;padding:1px 7px;font-size:0.68rem">${ratings.length}</span>
+        </div>
+        ${ratings.length?`<div style="display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto">
+          ${ratings.map(r=>`<div style="padding:9px 10px;background:var(--off-white);border:1px solid var(--border);border-radius:6px">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:3px">
+              <span style="color:#f59e0b;letter-spacing:1px;font-size:0.82rem">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}</span>
+              <span style="font-size:0.65rem;color:var(--gray-4)">${fmtDate(r.created_at)}</span>
+            </div>
+            <div style="font-size:0.7rem;color:var(--gray-4);margin-bottom:3px">${r.users?.name||'Unknown'}${r.procurement_requests?.project_name?' · '+r.procurement_requests.project_name:''}</div>
+            ${r.comment?`<p style="font-size:0.76rem;color:var(--gray-3);line-height:1.4">${r.comment}</p>`:'<p style="font-size:0.7rem;color:var(--gray-4);font-style:italic">No comment</p>'}
+          </div>`).join('')}
+        </div>`:`<div style="padding:20px;text-align:center;background:var(--off-white);border:1px solid var(--border);border-radius:6px"><div style="font-size:1.5rem;margin-bottom:4px">⭐</div><p style="color:var(--gray-4);font-size:0.78rem">No ratings yet</p></div>`}
+      </div>
+    </div>`;
 }
 
 async function loadRequests() {
@@ -379,11 +638,14 @@ async function openPR(id) {
   document.getElementById('prModalTitle').textContent=`PR-${String(currentPR.request_number).padStart(4,'0')} — ${currentPR.project_name}`;
   document.getElementById('prModalSub').textContent=`${currentPR.request_category==='vendor_info'?'Vendor Info':'RFQ'} · ${DEPARTMENTS[currentPR.department]} · ${currentPR.users?.name||''}`;
   showLoader(true);
-  const[comments,quotations,vd]=await Promise.all([
+  await loadVendors();
+  const[comments,quotations,vd,poRes]=await Promise.all([
     loadComments(id),
     db.from('pr_quotations').select('*').eq('pr_id',id).order('created_at').then(r=>r.data||[]),
-    currentPR.assigned_vendor_id?db.from('vendors').select('*').eq('id',currentPR.assigned_vendor_id).single():Promise.resolve({data:null})
+    currentPR.assigned_vendor_id?db.from('vendors').select('*').eq('id',currentPR.assigned_vendor_id).single():Promise.resolve({data:null}),
+    db.from('purchase_orders').select('*').eq('pr_id',id).order('created_at',{ascending:false}).limit(1).maybeSingle()
   ]);
+  const existingPO = poRes.data || null;
   showLoader(false);
   const footer=document.getElementById('prModalFooter');
   footer.innerHTML=`<button class="btn btn-secondary" onclick="closeModal('prModal')">Close</button>`;
@@ -403,23 +665,20 @@ async function openPR(id) {
 
   // ── RFQ: assign vendor + upload quotations ──
   if(currentPR.phase==='procurement_active'&&currentPR.request_category==='RFQ') {
-    const activeV=allVendors.filter(v=>v.is_active);
+    const vendorList=allVendors;
     const selectedVendorObj=vd?.data;
     actionSection=`<div class="action-section">
       <div class="action-section-title">⚙️ Assign Vendor &amp; Upload Quotations <span class="action-badge">ACTION REQUIRED</span></div>
       ${currentPR.vendor_suggestion?`<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:12px;font-size:0.78rem">💡 Engineer suggested: <strong>${currentPR.vendor_suggestion}</strong></div>`:''}
-
       <div class="form-group" style="margin-bottom:14px">
         <label class="form-label">Assign Vendor * <span style="color:var(--gray-4);font-weight:400">(must be from vendor database)</span></label>
         <select class="form-control" id="assignVendor" onchange="onVendorSelect()">
           <option value="">— Select a vendor from DB —</option>
-          ${activeV.map(v=>`<option value="${v.id}" ${currentPR.assigned_vendor_id===v.id?'selected':''}>${v.name}${v.specialization?' ('+v.specialization+')':''}</option>`).join('')}
+          ${vendorList.map(v=>`<option value="${v.id}" ${currentPR.assigned_vendor_id===v.id?'selected':''}>${v.name}${v.specialization?' ('+v.specialization+')':''}</option>`).join('')}
         </select>
         <div id="selectedVendorInfo" style="margin-top:8px;display:none"></div>
       </div>
-
       ${quotations.length?`<div style="margin-bottom:12px"><div class="detail-key" style="margin-bottom:8px">Existing Quotations</div><div style="display:flex;flex-direction:column;gap:6px">${quotations.map(q=>renderQuotationCard(q,false)).join('')}</div></div>`:''}
-
       <div class="form-label" style="margin-bottom:6px">Upload Quotations (PNG, JPG, PDF)</div>
       <div class="drop-zone" id="quoteDZ" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleDrop(event)">
         <input type="file" id="quoteFileInput" accept=".png,.jpg,.jpeg,.pdf" multiple onchange="handleQuoteFiles(event)"/>
@@ -436,62 +695,13 @@ async function openPR(id) {
     }
   }
 
-  // ── APPROVED: advance payment options — PO/Place Order only shown after selecting advance option ──
+  // ── APPROVED: place order first, advance payment optional ──
   if(currentPR.phase==='approved') {
-    const selectedQ=quotations.find(q=>q.is_selected||q.id===currentPR.selected_quotation_id);
-    const vendorObj=vd?.data;
-    const pt=PAYMENT_TERMS_OPTIONS.find(p=>p.value===vendorObj?.payment_terms);
-    actionSection=`<div class="action-section">
-      <div class="action-section-title">🛒 Place Order <span class="action-badge">ACTION REQUIRED</span></div>
-      <p style="font-size:0.82rem;color:var(--gray-3);margin-bottom:12px">Approval received. Choose how to handle the advance payment, then place the order.</p>
-
-      ${selectedQ?`<div style="margin-bottom:14px;padding:10px 12px;background:var(--off-white);border:1px solid var(--border);border-radius:var(--radius-sm)">
-        <div class="detail-key" style="margin-bottom:4px">Selected Quote</div>
-        <div style="font-weight:600">${selectedQ.vendor_name||vendorObj?.name||'—'} — ${selectedQ.currency||'AED'} ${Number(selectedQ.amount||0).toLocaleString()}</div>
-        ${pt?`<div style="font-size:0.72rem;color:#6366f1;margin-top:3px">💳 Payment Terms: ${pt.label}</div>`:''}
-      </div>`:''}
-
-      <div style="margin-bottom:16px">
-        <div class="form-label" style="margin-bottom:8px">💳 Step 1 — Select Advance Payment Option</div>
-        <div class="advance-options">
-          <div class="advance-option" id="advOptNone" onclick="selectAdvanceOption('none')">
-            <div style="font-size:1.2rem;margin-bottom:4px">✓</div>
-            <div style="font-weight:600;font-size:0.8rem">No Advance Required</div>
-            <div style="font-size:0.72rem;color:var(--gray-4)">Pay on delivery — proceed to order</div>
-          </div>
-          <div class="advance-option" id="advOptReceived" onclick="selectAdvanceOption('received')">
-            <div style="font-size:1.2rem;margin-bottom:4px">💵</div>
-            <div style="font-weight:600;font-size:0.8rem">Advance Already Received</div>
-            <div style="font-size:0.72rem;color:var(--gray-4)">Mark as already paid — proceed to order</div>
-          </div>
-          <div class="advance-option" id="advOptRequest" onclick="selectAdvanceOption('request')">
-            <div style="font-size:1.2rem;margin-bottom:4px">📤</div>
-            <div style="font-weight:600;font-size:0.8rem">Request Advance from Accounts</div>
-            <div style="font-size:0.72rem;color:var(--gray-4)">Send request — order after accounts approves</div>
-          </div>
-        </div>
-        <div id="advRequestDetails" style="display:none;margin-top:10px;padding:12px;background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.18);border-radius:var(--radius-sm)">
-          <div class="form-grid">
-            <div class="form-group"><label class="form-label">Advance Amount (${selectedQ?.currency||'AED'})</label><input class="form-control" id="advanceAmt" type="number" placeholder="0.00"/></div>
-            <div class="form-group"><label class="form-label">Notes to Accounts</label><input class="form-control" id="advanceNote" placeholder="Reason, urgency..."/></div>
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="requestAdvance()">Send Request to Accounts →</button>
-        </div>
-      </div>
-
-      <!-- Step 2: PO + Place Order — only visible after selecting none/received, hidden when requesting advance -->
-      <div id="poPlaceOrderSection" style="display:none;border-top:1px solid var(--border);padding-top:14px;margin-top:4px">
-        <div class="form-label" style="margin-bottom:10px">📋 Step 2 — Generate PO &amp; Place Order</div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
-          <button class="btn btn-secondary" onclick="openPOModal('${id}')">📄 Preview &amp; Generate PO</button>
-        </div>
-        <div class="form-group" style="margin-bottom:12px">
-          <label class="form-label">Order Notes</label>
-          <textarea class="form-control" id="orderNotes" placeholder="PO number, confirmation, expected delivery..."></textarea>
-        </div>
-        <button class="btn btn-primary" onclick="placeOrder()">Confirm Order Placed →</button>
-      </div>
-    </div>`;
+    const selectedQ = quotations.find(q=>q.is_selected||q.id===currentPR.selected_quotation_id);
+    const vendorObj = vd?.data;
+    const pt = PAYMENT_TERMS_OPTIONS.find(p=>p.value===vendorObj?.payment_terms);
+    // Also fetch advRec for advance_requested
+    actionSection = buildApprovedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, existingPO);
   }
 
   // ── ADVANCE REQUESTED: waiting for accounts ──
@@ -499,7 +709,6 @@ async function openPR(id) {
     const selectedQ=quotations.find(q=>q.is_selected||q.id===currentPR.selected_quotation_id);
     const vendorObj=vd?.data;
     const pt=PAYMENT_TERMS_OPTIONS.find(p=>p.value===vendorObj?.payment_terms);
-    // Fetch the actual advance request record to show amount/notes
     const{data:advRec}=await db.from('advance_payment_requests')
       .select('*').eq('pr_id',currentPR.id).order('created_at',{ascending:false}).limit(1).single();
     actionSection=`<div class="action-section" style="border:1px solid rgba(245,158,11,0.25);background:rgba(245,158,11,0.04);border-radius:var(--radius);padding:14px">
@@ -519,59 +728,21 @@ async function openPR(id) {
     </div>`;
   }
 
-  // ── ADVANCE APPROVED by accounts: show PO + place order ──
+  // ── ADVANCE APPROVED by accounts ──
   if(currentPR.phase==='advance_approved') {
-    const selectedQ=quotations.find(q=>q.is_selected||q.id===currentPR.selected_quotation_id);
-    const vendorObj=vd?.data;
-    const pt=PAYMENT_TERMS_OPTIONS.find(p=>p.value===vendorObj?.payment_terms);
-    const{data:advRec}=await db.from('advance_payment_requests')
-      .select('*').eq('pr_id',currentPR.id).order('created_at',{ascending:false}).limit(1).single();
-    actionSection=`<div class="action-section" style="border:1px solid rgba(22,163,74,0.25);background:rgba(22,163,74,0.04);border-radius:var(--radius);padding:14px">
-      <div class="action-section-title" style="color:#16a34a">✅ Advance Approved — Ready to Place Order</div>
-      ${selectedQ?`<div style="margin:10px 0;padding:9px 12px;background:var(--off-white);border:1px solid var(--border);border-radius:var(--radius-sm)">
-        <div class="detail-key" style="margin-bottom:3px">Selected Quote</div>
-        <div style="font-weight:600;font-size:0.88rem">${selectedQ.vendor_name||vendorObj?.name||'—'} — ${selectedQ.currency||'INR'} ${Number(selectedQ.amount||0).toLocaleString()}</div>
-        ${pt?`<div style="font-size:0.72rem;color:#6366f1;margin-top:2px">💳 ${pt.label}</div>`:''}
-      </div>`:''}
-      ${advRec?`<div style="margin-bottom:14px;padding:9px 12px;background:rgba(22,163,74,0.08);border:1px solid rgba(22,163,74,0.2);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:0.88rem;color:#16a34a">
-        ✅ Advance of AED ${Number(advRec.amount||0).toLocaleString()} approved by accounts
-      </div>`:''}
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
-        <button class="btn btn-secondary" onclick="openPOModal('${id}')">📄 Preview &amp; Generate PO</button>
-      </div>
-      <div class="form-group" style="margin-bottom:12px">
-        <label class="form-label">Order Notes</label>
-        <textarea class="form-control" id="orderNotes" placeholder="PO number, confirmation, expected delivery..."></textarea>
-      </div>
-      <button class="btn btn-primary" onclick="placeOrder()">Confirm Order Placed →</button>
-    </div>`;
+    const selectedQ = quotations.find(q=>q.is_selected||q.id===currentPR.selected_quotation_id);
+    const vendorObj = vd?.data;
+    const pt = PAYMENT_TERMS_OPTIONS.find(p=>p.value===vendorObj?.payment_terms);
+    const{data:advRec} = await db.from('advance_payment_requests').select('*').eq('pr_id',currentPR.id).order('created_at',{ascending:false}).limit(1).single();
+    actionSection = buildAdvanceApprovedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, advRec, existingPO);
   }
 
   // ── ADVANCE REJECTED by accounts ──
-  if(currentPR.phase==='advance_rejected') {
-    const selectedQ=quotations.find(q=>q.is_selected||q.id===currentPR.selected_quotation_id);
-    const vendorObj=vd?.data;
-    const pt=PAYMENT_TERMS_OPTIONS.find(p=>p.value===vendorObj?.payment_terms);
-    actionSection=`<div class="action-section" style="border:1px solid rgba(214,43,43,0.25);background:rgba(214,43,43,0.04);border-radius:var(--radius);padding:14px">
-      <div class="action-section-title" style="color:var(--red)">❌ Advance Rejected — Action Required</div>
-      <div style="padding:10px 12px;background:rgba(214,43,43,0.06);border:1px solid rgba(214,43,43,0.18);border-radius:var(--radius-sm);margin-bottom:14px;font-size:0.8rem;color:var(--red)">
-        Advance payment was rejected by accounts. You can request again with a different amount, or proceed to place the order without advance.
-      </div>
-      ${selectedQ?`<div style="margin-bottom:14px;padding:9px 12px;background:var(--off-white);border:1px solid var(--border);border-radius:var(--radius-sm)">
-        <div class="detail-key" style="margin-bottom:3px">Selected Quote</div>
-        <div style="font-weight:600;font-size:0.88rem">${selectedQ.vendor_name||vendorObj?.name||'—'} — ${selectedQ.currency||'INR'} ${Number(selectedQ.amount||0).toLocaleString()}</div>
-        ${pt?`<div style="font-size:0.72rem;color:#6366f1;margin-top:2px">💳 ${pt.label}</div>`:''}
-      </div>`:''}
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
-        <button class="btn btn-secondary" onclick="openPOModal('${id}')">📄 Preview &amp; Generate PO</button>
-        <button class="btn btn-primary btn-sm" onclick="reRequestAdvance()">📤 Request Advance Again</button>
-      </div>
-      <div class="form-group" style="margin-bottom:12px">
-        <label class="form-label">Order Notes</label>
-        <textarea class="form-control" id="orderNotes" placeholder="PO number, confirmation, expected delivery..."></textarea>
-      </div>
-      <button class="btn btn-primary" onclick="placeOrder()">Confirm Order Placed Without Advance →</button>
-    </div>`;
+ if(currentPR.phase==='advance_rejected') {
+    const selectedQ = quotations.find(q=>q.is_selected||q.id===currentPR.selected_quotation_id);
+    const vendorObj = vd?.data;
+    const pt = PAYMENT_TERMS_OPTIONS.find(p=>p.value===vendorObj?.payment_terms);
+    actionSection = buildAdvanceRejectedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, existingPO);
   }
 
   // ── ORDER PLACED: invoke GRN ──
@@ -583,7 +754,7 @@ async function openPR(id) {
     </div>`;
   }
 
-  // ── GRN PENDING: rate vendor ──
+  // ── GRN PENDING ──
   if(currentPR.phase==='grn_pending'&&currentPR.assigned_vendor_id) {
     actionSection=`<div class="action-section">
       <div class="action-section-title">📦 GRN in Progress</div>
@@ -592,11 +763,10 @@ async function openPR(id) {
     </div>`;
   }
 
-  // ── QC PASSED (only): create payment request ──
-  // NOTE: 'accepted' is the FINAL closed state — do NOT show payment request for it
+  // ── QC PASSED ──
   if(currentPR.phase==='qc_passed') {
     actionSection=`<div class="action-section" style="background:rgba(22,163,74,0.04);border:1px solid rgba(22,163,74,0.2);border-radius:var(--radius);padding:14px">
-      <div class="action-section-title" style="color:#16a34a">✅ QC Passed — Ready for Payment</div>
+      <div class="action-section-title" style="color:#16a34a"> QC Passed — Ready for Payment</div>
       <p style="font-size:0.82rem;color:var(--gray-3);margin-bottom:12px">The engineer has passed QC. You can now create a payment request for the accounts team.</p>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
         <button class="btn btn-primary" onclick="openPaymentRequestModal('${id}')">💰 Create Payment Request</button>
@@ -665,7 +835,7 @@ function showVendorInfoChip(v) {
 // ── QUOTATION UPLOAD ──────────────────────────────────────────
 function buildQuoteFieldsHTML() {
   if(!uploadedFiles.length) return '<div id="quoteFieldsContainer"></div>';
-  const activeV=allVendors.filter(v=>v.is_active);
+  const allV=allVendors;
   return `<div id="quoteFieldsContainer" style="margin-top:14px">
     <div class="form-label" style="margin-bottom:8px">Quotation Details — select a vendor per file</div>
     ${uploadedFiles.map((f,i)=>`
@@ -679,7 +849,7 @@ function buildQuoteFieldsHTML() {
             <label class="form-label">Vendor for this quote *</label>
             <select class="form-control" id="qvendor-${i}">
               <option value="">— Select vendor —</option>
-              ${activeV.map(v=>`<option value="${v.id}" data-name="${v.name}">${v.name}${v.specialization?' ('+v.specialization+')':''}</option>`).join('')}
+              ${allV.map(v=>`<option value="${v.id}" data-name="${v.name}">${v.name}${v.specialization?' ('+v.specialization+')':''} ${v.is_active?'':'(inactive)'}</option>`).join('')}
             </select>
           </div>
           <div class="form-group">
@@ -731,7 +901,6 @@ function removeUpload(i){uploadedFiles.splice(i,1);renderUploadList();const qfc=
 async function shareQuotations() {
   if (!currentPR) { showToast('No procurement request selected','error'); return; }
   if (!uploadedFiles || !uploadedFiles.length) { showToast('Upload at least one quotation file','error'); return; }
-
   for (let i = 0; i < uploadedFiles.length; i++) {
     const vendorInput = document.getElementById(`qvendor-${i}`);
     if (!vendorInput || !vendorInput.value) {
@@ -739,7 +908,6 @@ async function shareQuotations() {
       return;
     }
   }
-
   showLoader(true);
   try {
     const firstVendorEl = document.getElementById('qvendor-0');
@@ -747,7 +915,6 @@ async function shareQuotations() {
     if (firstVendorId) {
       await db.from('procurement_requests').update({assigned_vendor_id:firstVendorId}).eq('id',currentPR.id);
     }
-
     const vendorNames = [];
     for (let i = 0; i < uploadedFiles.length; i++) {
       const f = uploadedFiles[i];
@@ -758,19 +925,13 @@ async function shareQuotations() {
         vendorName = vendorEl.options[vendorEl.selectedIndex]?.dataset?.name || null;
       }
       if (vendorName) vendorNames.push(vendorName);
-
       const amtEl = document.getElementById(`qamt-${i}`);
       const ltEl = document.getElementById(`qlt-${i}`);
       const noteEl = document.getElementById(`qnote-${i}`);
       const curEl = document.getElementById(`qcur-${i}`);
-
       await db.from('pr_quotations').insert({
-        pr_id: currentPR.id,
-        vendor_id: vendorId,
-        vendor_name: vendorName,
-        file_name: f.name,
-        file_url: f.data,
-        file_type: f.type,
+        pr_id: currentPR.id, vendor_id: vendorId, vendor_name: vendorName,
+        file_name: f.name, file_url: f.data, file_type: f.type,
         amount: amtEl?.value ? parseFloat(amtEl.value) : null,
         currency: curEl?.value || 'INR',
         lead_time_days: ltEl?.value ? parseInt(ltEl.value) : null,
@@ -778,29 +939,20 @@ async function shareQuotations() {
         uploaded_by: currentUser?.id || null
       });
     }
-
     const { error } = await db.from('procurement_requests').update({
-      phase:'quotations_shared',
-      updated_at:new Date().toISOString()
+      phase:'quotations_shared', updated_at:new Date().toISOString()
     }).eq('id',currentPR.id);
-
     if (!error) {
       const uniqueVendors = [...new Set(vendorNames)];
-      await window.postComment(
-        currentPR.id,
-        currentUser?.id,
-        `📎 ${uploadedFiles.length} quotation${uploadedFiles.length>1?'s':''} from ${uniqueVendors.join(', ')} shared with engineer.`
-      );
+      await window.postComment(currentPR.id, currentUser?.id,
+        `📎 ${uploadedFiles.length} quotation${uploadedFiles.length>1?'s':''} from ${uniqueVendors.join(', ')} shared with engineer.`);
     }
-
     showLoader(false);
     if (error) { showToast('Error: '+error.message,'error'); return; }
     showToast('Quotations shared with engineer!','success');
-    closeModal('prModal');
-    await loadRequests();
+    closeModal('prModal'); await loadRequests();
   } catch(err) {
-    showLoader(false);
-    showToast(err.message,'error');
+    showLoader(false); showToast(err.message,'error');
   }
 }
 
@@ -810,22 +962,17 @@ async function submitVendorInfo() {
   const detailsEl = document.getElementById('vendorInfoDetails');
   const details = detailsEl?.value ? detailsEl.value.trim() : '';
   if (!details) { showToast('Please enter vendor details','error'); return; }
-
   showLoader(true);
   const { error } = await db.from('procurement_requests').update({
-    phase:'vendor_info_shared',
-    vendor_info_details:details,
-    updated_at:new Date().toISOString()
+    phase:'vendor_info_shared', vendor_info_details:details, updated_at:new Date().toISOString()
   }).eq('id',currentPR.id);
-
   if (!error) {
     await window.postComment(currentPR.id, currentUser?.id, '🏢 Vendor information provided to engineer.');
   }
   showLoader(false);
   if (error) { showToast('Error: '+error.message,'error'); return; }
   showToast('Vendor info sent!','success');
-  closeModal('prModal');
-  await loadRequests();
+  closeModal('prModal'); await loadRequests();
 }
 
 // ── ADVANCE PAYMENT ───────────────────────────────────────────
@@ -837,15 +984,10 @@ function selectAdvanceOption(opt) {
     const btn = document.getElementById(`advOpt${o.charAt(0).toUpperCase()+o.slice(1)}`);
     if (btn) btn.classList.toggle('selected', o === opt);
   });
-
   const box = document.getElementById('advRequestDetails');
   if (box) box.style.display = opt === 'request' ? 'block' : 'none';
-
-  // FIX: Show PO + Place Order section only when NOT requesting advance from accounts
   const poSection = document.getElementById('poPlaceOrderSection');
-  if (poSection) {
-    poSection.style.display = (opt === 'none' || opt === 'received') ? 'block' : 'none';
-  }
+  if (poSection) poSection.style.display = 'block';
 }
 
 async function requestAdvance() {
@@ -855,13 +997,11 @@ async function requestAdvance() {
   const amt = amtEl?.value ? parseFloat(amtEl.value) : null;
   const note = noteEl?.value ? noteEl.value.trim() : null;
   if (!amt) { showToast('Please enter advance amount','error'); return; }
-
   showLoader(true);
   const { error } = await db.from('advance_payment_requests').insert({
     pr_id: currentPR.id, amount: amt, notes: note,
     requested_by: currentUser?.id, status:'pending'
   });
-
   if (!error) {
     await db.from('procurement_requests').update({
       phase:'advance_requested', updated_at:new Date().toISOString()
@@ -871,34 +1011,55 @@ async function requestAdvance() {
   showLoader(false);
   if (error) { showToast('Error: '+error.message,'error'); return; }
   showToast('Advance request sent to accounts!','success');
-  closeModal('prModal');
-  await loadRequests();
+  closeModal('prModal'); await loadRequests();
 }
 
 // ── PLACE ORDER ─────────────────────────────────────────────
 async function placeOrder() {
   if (!currentPR) return;
+
+  const { data: poCheck } = await db.from('purchase_orders')
+    .select('id,po_number')
+    .eq('pr_id', currentPR.id)
+    .limit(1)
+    .maybeSingle();
+
+  if (!poCheck) {
+    showToast('Please generate and save the Purchase Order (Step 1) before confirming the order.', 'error');
+    return;
+  }
+
   const notesEl = document.getElementById('orderNotes');
   const notes = notesEl?.value ? notesEl.value.trim() : null;
 
   showLoader(true);
+
   const { error } = await db.from('procurement_requests').update({
-    phase:'order_placed',
-    order_notes:notes,
-    advance_option:selectedAdvanceOption || 'none',
-    updated_at:new Date().toISOString()
-  }).eq('id',currentPR.id);
+    phase: 'order_placed',
+    order_notes: notes,
+    advance_option: selectedAdvanceOption || 'none',
+    updated_at: new Date().toISOString()
+  }).eq('id', currentPR.id);
 
   if (!error) {
-    await window.postComment(currentPR.id, currentUser?.id, '🛒 Order placed with vendor.'+(notes?` Notes: ${notes}`:''));
+    await window.postComment(
+      currentPR.id,
+      currentUser.id,
+      `🛒 Order placed with vendor. PO: ${poCheck.po_number}.` + (notes ? ` Notes: ${notes}` : '')
+    );
   }
+
   showLoader(false);
-  if (error) { showToast('Error: '+error.message,'error'); return; }
-  showToast('Order confirmed!','success');
+
+  if (error) {
+    showToast('Error: ' + error.message, 'error');
+    return;
+  }
+
+  showToast('Order confirmed!', 'success');
   closeModal('prModal');
   await loadRequests();
 }
-
 // ── GRN ─────────────────────────────────────────────────────
 async function invokeGRN() {
   if (!currentPR) return;
@@ -906,15 +1067,13 @@ async function invokeGRN() {
   const { error } = await db.from('procurement_requests').update({
     phase:'grn_pending', updated_at:new Date().toISOString()
   }).eq('id',currentPR.id);
-
   if (!error) {
     await window.postComment(currentPR.id, currentUser?.id, '📦 Goods received — engineer notified for QC.');
   }
   showLoader(false);
   if (error) { showToast('Error: '+error.message,'error'); return; }
   showToast('GRN invoked!','success');
-  closeModal('prModal');
-  await loadRequests();
+  closeModal('prModal'); await loadRequests();
 }
 
 // ── NUMBER TO WORDS (INDIAN) ─────────────────────────────────
@@ -938,8 +1097,9 @@ function numToWords(n) {
   return result;
 }
 
+// ── PO MODAL — styled paper layout ───────────────────────────
 async function openPOModal(prId) {
-  const pr=currentPR;
+  const pr = currentPR;
   const{data:quotations}=await db.from('pr_quotations').select('*').eq('pr_id',prId);
   const selectedQ=quotations?.find(q=>q.is_selected||q.id===pr.selected_quotation_id)||quotations?.[0];
   const{data:vendor}=pr.assigned_vendor_id?await db.from('vendors').select('*').eq('id',pr.assigned_vendor_id).single():{data:null};
@@ -949,8 +1109,13 @@ async function openPOModal(prId) {
   const fyShort=`${String(fy).slice(2)}-${String(fy+1).slice(2)}`;
   const poNumber=`IIIPO/${fyShort}/${String(pr.request_number).padStart(4,'0')}`;
   const todayStr=now.toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g,'/');
-  const deliveryDate=selectedQ?.lead_time_days?new Date(Date.now()+selectedQ.lead_time_days*86400000).toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g,'/'):'—';
+  const deliveryDate=selectedQ?.lead_time_days
+    ? new Date(Date.now()+selectedQ.lead_time_days*86400000).toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g,'/')
+    : '—';
   const pt=PAYMENT_TERMS_OPTIONS.find(p=>p.value===vendor?.payment_terms);
+  const ptLabel=pt?.label||vendor?.custom_payment_terms||'As agreed';
+  const currency=selectedQ?.currency||'INR';
+  const currSymbol=currency==='INR'?'₹':currency;
 
   const baseAmt=parseFloat(selectedQ?.amount||0);
   const cgstPct=9, sgstPct=9;
@@ -958,197 +1123,302 @@ async function openPOModal(prId) {
   const sgstAmt=Math.round(baseAmt*sgstPct/100*100)/100;
   const netPayable=baseAmt+cgstAmt+sgstAmt;
 
+  const savedLogo=localStorage.getItem('po_logo');
+  const savedSig=localStorage.getItem('po_sig');
+  const logoSrc=savedLogo||'../Inventindia_Logo-2.png';
+  const sigSrc=savedSig||'../stamp.png';
+
+  const defaultTermsHTML=`- <strong>Packing :</strong> Goods must be packed in new containers with clear markings for content, gross weight, tare weight, net weight, and hazard info. We will reject goods that don't meet these packing requirements.
+- <strong>Delivery :</strong> Goods should be delivered at the desired destination between 9 AM to 5 PM. We shall allow the delivery of the vehicle inside our premises at any time, but unloading of goods is as per Instructions.
+- <strong>Payment :</strong> This will be according to the terms mentioned in the Purchase Order.
+- <strong>Weight &amp; Purity :</strong> Both the parameters should be in accordance with the order form. Any difference in weight or purity will be calculated to achieve the real quantity supplied and payment shall be made on this real quantity.
+- <strong>Mandatory Documents Set :</strong> Material supplied should be accompanied with invoice for buyer along with duplicate for transporter. All supplied document/s must clearly indicate our purchase order number &amp; date, else the payment may not be processed.
+- <strong>Jurisdiction :</strong> Subject To Ahmedabad jurisdiction only.`;
+
   document.getElementById('poModalSub').textContent=`${poNumber} — ${pr.project_name}`;
+
+  // Build parts rows
+  const partsArr = pr.parts && pr.parts.length ? pr.parts : [{name: pr.project_name||'—', qty:1, spec:''}];
+  const itemRows = partsArr.map((p,i) => {
+    const unitRate = partsArr.length > 1
+      ? (baseAmt / partsArr.reduce((s,x)=>s+(x.qty||1),0))
+      : (baseAmt / (p.qty||1));
+    const rowTotal = unitRate * (p.qty||1);
+    const showAmts = partsArr.length > 1;
+    return `<tr>
+      <td class="center">${i+1}</td>
+      <td class="center">NA</td>
+      <td><div class="item-desc-main">${p.name||'—'}</div>${p.spec?`<div class="item-desc-sub">${p.spec}</div>`:''}</td>
+      <td class="center">—</td>
+      <td class="center">${p.qty||1}</td>
+      <td class="center">Nos</td>
+      <td class="right">${showAmts?`${currSymbol} ${unitRate.toLocaleString('en-IN',{minimumFractionDigits:2})}`:'—'}</td>
+      <td class="right">${showAmts?`${currSymbol} ${rowTotal.toLocaleString('en-IN',{minimumFractionDigits:2})}`:'—'}</td>
+    </tr>`;
+  }).join('');
+
   document.getElementById('poModalBody').innerHTML=`
-    <div style="margin-bottom:12px;padding:9px 12px;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.2);border-radius:var(--radius-sm);font-size:0.78rem;display:flex;gap:12px;align-items:center">
-      ⚙️ Review fields before generating. Tax % can be adjusted below.
-      <div style="display:flex;gap:8px;align-items:center;margin-left:auto">
-        <label style="font-size:0.74rem">CGST%</label><input id="cgstInput" type="number" value="9" style="width:50px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:0.78rem" onchange="recalcPO()"/>
-        <label style="font-size:0.74rem">SGST%</label><input id="sgstInput" type="number" value="9" style="width:50px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:0.78rem" onchange="recalcPO()"/>
-        <label style="font-size:0.74rem">P&F</label><input id="pnfInput" type="number" value="0" style="width:60px;padding:3px 6px;border:1px solid var(--border);border-radius:4px;font-size:0.78rem" onchange="recalcPO()"/>
+    <!-- Tax controls strip (outside printable area) -->
+    <div style="margin-bottom:12px;padding:9px 12px;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.2);border-radius:6px;font-size:0.78rem;display:flex;align-items:center;flex-wrap:wrap;gap:12px">
+      <span>⚙️ Review and edit fields directly in the PO below. Adjust tax rates here:</span>
+      <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap">
+        <label style="font-size:0.74rem;white-space:nowrap">CGST %</label>
+        <input id="cgstInput" type="number" value="${cgstPct}" class="po-tax-input" onchange="recalcPO()"/>
+        <label style="font-size:0.74rem;white-space:nowrap">SGST %</label>
+        <input id="sgstInput" type="number" value="${sgstPct}" class="po-tax-input" onchange="recalcPO()"/>
+        <label style="font-size:0.74rem;white-space:nowrap">P&amp;F</label>
+        <input id="pnfInput" type="number" value="0" class="po-tax-input" style="width:70px" onchange="recalcPO()"/>
       </div>
     </div>
 
-    <div class="form-grid" style="margin-bottom:12px">
-      <div class="form-group"><label class="form-label">PO Number</label><input class="form-control" id="poNumber" value="${poNumber}"/></div>
-      <div class="form-group"><label class="form-label">PO Date</label><input class="form-control" id="poDate" value="${todayStr}"/></div>
-      <div class="form-group"><label class="form-label">Delivery Date</label><input class="form-control" id="poDelivery" value="${deliveryDate}"/></div>
-      <div class="form-group"><label class="form-label">Quote Ref</label><input class="form-control" id="poQuoteRef" placeholder="Quote reference #"/></div>
-      <div class="form-group"><label class="form-label">Indent Number</label><input class="form-control" id="poIndent" value="NA"/></div>
-      <div class="form-group"><label class="form-label">Project Code/Name</label><input class="form-control" id="poProjectCode" value="${pr.project_name||'NA'}"/></div>
-    </div>
+    <!-- ══ PO PAPER ══ -->
+    <div id="poPreviewBox">
 
-    <div id="poPreviewBox" style="background:white;border:1.5px solid #333;border-radius:4px;font-size:0.76rem;font-family:'Times New Roman',serif;color:#111">
-      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1.5px solid #333">
-        <div style="font-size:1.3rem;font-weight:900;font-family:sans-serif;letter-spacing:1px">Purchase Order</div>
-        <div id="poLogoSlot" style="text-align:right">
-          <div style="font-size:0.65rem;font-weight:700;font-family:sans-serif;color:#d43d1a;letter-spacing:2px">INVENT</div>
-          <div style="font-size:0.65rem;font-weight:700;font-family:sans-serif;color:#d43d1a;letter-spacing:2px">INDIA</div>
+      <!-- Header: title + logo -->
+      <div class="po-top-bar">
+        <div style="width:130px"></div>
+        <div class="po-paper-title">Purchase Order</div>
+        <div id="poLogoSlot" style="width:130px;display:flex;justify-content:flex-end">
+          <img src="${logoSrc}" class="po-logo-img" alt="Logo" onerror="this.style.display='none'"/>
         </div>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #999">
-        <div style="padding:10px 14px;border-right:1px solid #999">
-          <div style="font-weight:700;font-size:0.72rem;margin-bottom:4px">Name and Address of Buyer :</div>
-          <div style="font-weight:700">INVENTINDIA INNOVATIONS PVT. LTD.</div>
-          <div>Ch03, Inspire Business Park,</div>
-          <div>Adani Shantigram, Near Vaishnodevi Circle, Gandhinagar,</div>
-          <div>Ahmedabad (Gujarat) India - 382421</div>
-          <div>GSTIN : 24AACCI7644H1ZK</div>
-          <div>Contact Person: Jaimin Prajapati</div>
-          <div>Email: Jaimin.p@inventindia.com</div>
-          <div>Contact No.: 9924077107</div>
-          <div>Place of Supply: Gujarat.India</div>
+
+      <!-- Row 1: Buyer | PO Meta -->
+      <div class="po-addr-grid" style="border-top:1px solid #999">
+        <div class="po-addr-cell">
+          <div class="cell-head">Name and Address of Buyer :</div>
+          <div class="company-name">INVENTINDIA INNOVATIONS PVT. LTD.</div>
+          Ch03, Inspire Business Park,<br/>
+          Adani Shantigram, Near Vaishnodevi Circle, Gandhinagar,<br/>
+          Ahmedabad (Gujarat) India - 382421<br/>
+          GSTIN : 24AACCI7644H1ZK<br/>
+          Contact Person: Jaimin Prajapati<br/>
+          Email: Jaimin.p@inventindia.com<br/>
+          Contact No.: 9924077107<br/>
+          Place of Supply: Gujarat.India
         </div>
-        <div style="padding:10px 14px">
-          <div><strong>PO Number :</strong> <span id="poPreviewNum">${poNumber}</span></div>
-          <div><strong>PO Date :</strong> <span id="poPreviewDate">${todayStr}</span></div>
-          <div><strong>Delivery Date :</strong> <span id="poPreviewDel">${deliveryDate}</span></div>
-          <div><strong>Payment Terms :</strong> ${pt?.label||vendor?.custom_payment_terms||'As agreed'}</div>
-          <div><strong>Delivery Terms :</strong> NA</div>
-          <div><strong>Mode of Transport :</strong> NA</div>
-          <div><strong>Final Destination :</strong> Inventindia</div>
-          <div><strong>Quote Ref :</strong> <span id="poPreviewQuote"></span></div>
-          <div><strong>Indent Number :</strong> <span id="poPreviewIndent">NA</span></div>
-          <div><strong>Project Code/Name :</strong> <span id="poPreviewProject">${pr.project_name||'NA'}</span></div>
-        </div>
-      </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;border-bottom:1px solid #999">
-        <div style="padding:10px 14px;border-right:1px solid #999">
-          <div style="font-weight:700;font-size:0.72rem;margin-bottom:4px">Name and Address of Supplier :</div>
-          <div style="font-weight:700">${vendor?.name||'—'}</div>
-          ${vendor?.address?`<div>${vendor.address}</div>`:''}
-          ${vendor?.phone?`<div>Phone: ${vendor.phone}</div>`:''}
-          ${vendor?.contact_person?`<div>Contact: ${vendor.contact_person}</div>`:''}
-          ${vendor?.gstin?`<div>GSTIN : ${vendor.gstin}</div>`:vendor?.email?`<div>${vendor.email}</div>`:''}
-          <div>Place of Supply: Gujarat.India</div>
-        </div>
-        <div style="padding:10px 14px">
-          <div style="font-weight:700;font-size:0.72rem;margin-bottom:4px">Shipping Details :</div>
-          <div style="font-weight:700">INVENTINDIA INNOVATIONS PVT. LTD.</div>
-          <div>Ch03, Inspire Business Park,</div>
-          <div>Adani Shantigram, Ahmedabad (Gujarat) India - 382421</div>
-          <div>GSTIN : 24AACC17644H1ZK</div>
-          <div>Contact Person: Jaimin Prajapati</div>
-          <div>Email: Jaimin.p@inventindia.com</div>
-          <div>Contact No.: 9924077107</div>
-          <div>Place of Supply: Gujarat.India</div>
+        <div class="po-addr-cell">
+          <table style="width:100%;font-size:0.74rem">
+            <tr><td style="font-weight:600;white-space:nowrap;padding-right:6px;padding-bottom:2px">PO Number :</td><td><strong><span id="poPreviewNum">${poNumber}</span></strong></td></tr>
+            <tr><td style="font-weight:600;white-space:nowrap;padding-right:6px;padding-bottom:2px">PO Date :</td><td><input class="po-meta-input" id="poDate" value="${todayStr}" oninput="document.getElementById('poPreviewNum')&&recalcPO()"/></td></tr>
+            <tr><td style="font-weight:600;white-space:nowrap;padding-right:6px;padding-bottom:2px">Delivery Date :</td><td><input class="po-meta-input" id="poDelivery" value="${deliveryDate}"/></td></tr>
+            <tr><td style="font-weight:600;white-space:nowrap;padding-right:6px;padding-bottom:2px">Payment Terms :</td><td>${ptLabel}</td></tr>
+            <tr><td style="font-weight:600;white-space:nowrap;padding-right:6px;padding-bottom:2px">Delivery Terms :</td><td>NA</td></tr>
+            <tr><td style="font-weight:600;white-space:nowrap;padding-right:6px;padding-bottom:2px">Mode of Transport :</td><td>NA</td></tr>
+            <tr><td style="font-weight:600;white-space:nowrap;padding-right:6px;padding-bottom:2px">Final Destination :</td><td>Inventindia</td></tr>
+            <tr><td style="font-weight:600;white-space:nowrap;padding-right:6px;padding-bottom:2px">Quote Ref :</td><td><input class="po-meta-input" id="poQuoteRef" placeholder="—"/></td></tr>
+            <tr><td style="font-weight:600;white-space:nowrap;padding-right:6px;padding-bottom:2px">Indent Number :</td><td><input class="po-meta-input" id="poIndent" value="NA"/></td></tr>
+            <tr><td style="font-weight:600;white-space:nowrap;padding-right:6px;padding-bottom:2px">Project Code/Name :</td><td><input class="po-meta-input" id="poProjectCode" value="${pr.project_name||'NA'}"/></td></tr>
+          </table>
         </div>
       </div>
-      <table style="width:100%;border-collapse:collapse;font-size:0.74rem">
+
+      <!-- Row 2: Supplier | Shipping -->
+      <div class="po-addr-grid">
+        <div class="po-addr-cell">
+          <div class="cell-head">Name and Address of Supplier :</div>
+          <div class="company-name">${vendor?.name||'—'}</div>
+          ${vendor?.address?vendor.address+'<br/>':''}
+          ${vendor?.contact_person?`Contact: ${vendor.contact_person}<br/>`:''}
+          ${vendor?.phone?`Phone: ${vendor.phone}<br/>`:''}
+          ${vendor?.email?`${vendor.email}<br/>`:''}
+          ${vendor?.gstin?`GSTIN : ${vendor.gstin}<br/>`:''}
+          Place of Supply: Gujarat.India
+        </div>
+        <div class="po-addr-cell">
+          <div class="cell-head">Shipping Details :</div>
+          <div class="company-name">INVENTINDIA INNOVATIONS PVT. LTD.</div>
+          Ch03, Inspire Business Park,<br/>
+          Adani Shantigram, Ahmedabad (Gujarat) India - 382421<br/>
+          GSTIN : 24AACC17644H1ZK<br/>
+          Contact Person: Jaimin Prajapati<br/>
+          Email: Jaimin.p@inventindia.com<br/>
+          Contact No.: 9924077107<br/>
+          Place of Supply: Gujarat.India
+        </div>
+      </div>
+
+      <!-- Items table -->
+      <table class="po-items-table">
         <thead>
-          <tr style="background:#f0f0f0">
-            <th style="border:1px solid #999;padding:5px 8px;text-align:center;width:38px">Sr No</th>
-            <th style="border:1px solid #999;padding:5px 8px;text-align:center;width:70px">Item Code</th>
-            <th style="border:1px solid #999;padding:5px 8px;text-align:left">Description</th>
-            <th style="border:1px solid #999;padding:5px 8px;text-align:center;width:60px">HSN/SAC Code</th>
-            <th style="border:1px solid #999;padding:5px 8px;text-align:center;width:60px">Quantity</th>
-            <th style="border:1px solid #999;padding:5px 8px;text-align:center;width:50px">UOM</th>
-            <th style="border:1px solid #999;padding:5px 8px;text-align:right;width:80px">Unit Rate</th>
-            <th style="border:1px solid #999;padding:5px 8px;text-align:right;width:90px">Total</th>
+          <tr>
+            <th style="width:42px">Sr No</th>
+            <th style="width:72px">Item Code</th>
+            <th>Description</th>
+            <th style="width:72px">HSN/SAC Code</th>
+            <th style="width:64px">Quantity</th>
+            <th style="width:52px">UOM</th>
+            <th style="width:82px">Unit Rate</th>
+            <th style="width:96px">Total</th>
           </tr>
         </thead>
         <tbody>
-          ${(pr.parts||[{name:pr.project_name,qty:1,spec:''}]).map((p,i)=>{
-            const unitRate=pr.parts?.length>1?(baseAmt/(pr.parts.reduce((s,x)=>s+(x.qty||1),0))):baseAmt/(p.qty||1);
-            const rowTotal=unitRate*(p.qty||1);
-            return `<tr>
-              <td style="border:1px solid #999;padding:5px 8px;text-align:center">${i+1}</td>
-              <td style="border:1px solid #999;padding:5px 8px;text-align:center">NA</td>
-              <td style="border:1px solid #999;padding:5px 8px"><strong>${p.name||'—'}</strong>${p.spec?'<br/><span style="color:#555;font-size:0.7rem">'+p.spec+'</span>':''}</td>
-              <td style="border:1px solid #999;padding:5px 8px;text-align:center">—</td>
-              <td style="border:1px solid #999;padding:5px 8px;text-align:center">${p.qty||1}</td>
-              <td style="border:1px solid #999;padding:5px 8px;text-align:center">Nos</td>
-              <td style="border:1px solid #999;padding:5px 8px;text-align:right">${selectedQ?.currency||'₹'} ${pr.parts?.length>1?unitRate.toLocaleString('en-IN',{minimumFractionDigits:2}):'—'}</td>
-              <td style="border:1px solid #999;padding:5px 8px;text-align:right">${pr.parts?.length>1?selectedQ?.currency||'₹':''} ${pr.parts?.length>1?rowTotal.toLocaleString('en-IN',{minimumFractionDigits:2}):'—'}</td>
-            </tr>`;
-          }).join('')}
+          ${itemRows}
+          <tr style="height:22px"><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+          <tr style="height:22px"><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
         </tbody>
       </table>
-      <div style="display:grid;grid-template-columns:1fr 1fr;border-top:1px solid #999">
-        <div style="border-right:1px solid #999">
-          <div style="padding:8px 12px;border-bottom:1px solid #ccc">
-            <div style="font-weight:700;margin-bottom:5px;font-size:0.72rem">Bank Details:</div>
-            <table style="font-size:0.72rem;width:100%;border-collapse:collapse">
-              <tr><td style="padding:1px 0;font-weight:600;width:110px">Account Holder Name</td><td>: Inventindia Innovations Private Limited</td></tr>
-              <tr><td style="padding:1px 0;font-weight:600">Bank Name</td><td>: ICICI Bank</td></tr>
-              <tr><td style="padding:1px 0;font-weight:600">A/C No</td><td>: 461105000085</td></tr>
-              <tr><td style="padding:1px 0;font-weight:600">IFCS Code</td><td>: ICIC0004611</td></tr>
+
+      <!-- Bottom: Bank + Terms | Amounts + Sig -->
+      <div class="po-bottom-grid">
+
+        <div class="po-left-bottom">
+          <!-- Bank Details -->
+          <div class="bank-section">
+            <div style="font-weight:700;font-size:0.71rem;margin-bottom:5px">Bank Details:</div>
+            <table style="width:100%">
+              <tr><td>Account Holder Name</td><td>: Inventindia Innovations Private Limited</td></tr>
+              <tr><td>Bank Name</td><td>: ICICI Bank</td></tr>
+              <tr><td>A/C No</td><td>: 461105000085</td></tr>
+              <tr><td>IFCS Code</td><td>: ICIC0004611</td></tr>
             </table>
           </div>
-          <div style="padding:8px 12px;font-size:0.68rem;line-height:1.5;color:#333">
-            <div style="font-weight:700;margin-bottom:3px;font-size:0.7rem">Terms &amp; Conditions:</div>
-            <div>- <strong>Packing :</strong> Goods must be packed in new containers with clear markings for content, gross weight, tare weight, net weight, and hazard info.</div>
-            <div>- <strong>Delivery :</strong> Goods should be delivered at the desired destination between 9 AM to 5 PM.</div>
-            <div>- <strong>Payment :</strong> This will be according to the terms mentioned in the Purchase Order.</div>
-            <div>- <strong>Weight &amp; Purity :</strong> Both parameters should be in accordance with the order form.</div>
-            <div>- <strong>Mandatory Documents Set :</strong> Material supplied should be accompanied with invoice for buyer along with duplicate for transporter. All documents must clearly indicate our PO number &amp; date.</div>
-            <div>- <strong>Jurisdiction :</strong> Subject To Ahmedabad jurisdiction only.</div>
+          <!-- Terms & Conditions (editable) -->
+          <div class="po-terms-section">
+            <div class="terms-head">Terms &amp; Conditions:</div>
+            <div id="poTermsEditable" class="po-terms-editable" contenteditable="true">${defaultTermsHTML}</div>
           </div>
         </div>
+
+        <!-- Right: Amounts + Signature -->
         <div>
-          <table style="width:100%;font-size:0.76rem;border-collapse:collapse">
-            <tr><td style="padding:5px 12px;border-bottom:1px solid #eee">Basic Amount :</td><td style="padding:5px 12px;border-bottom:1px solid #eee;text-align:right;font-weight:600" id="poBasicAmt">₹ ${baseAmt.toLocaleString('en-IN',{minimumFractionDigits:2})}</td></tr>
-            <tr><td style="padding:5px 12px;border-bottom:1px solid #eee">Discount (%) :</td><td style="padding:5px 12px;border-bottom:1px solid #eee;text-align:right" id="poDiscount">0.00</td></tr>
-            <tr><td style="padding:5px 12px;border-bottom:1px solid #eee">Amount after Discount :</td><td style="padding:5px 12px;border-bottom:1px solid #eee;text-align:right" id="poAfterDiscount">₹ ${baseAmt.toLocaleString('en-IN',{minimumFractionDigits:2})}</td></tr>
-            <tr><td style="padding:5px 12px;border-bottom:1px solid #eee">P&amp;F Charge :</td><td style="padding:5px 12px;border-bottom:1px solid #eee;text-align:right" id="poPnf">₹ 0.00</td></tr>
-            <tr><td style="padding:5px 12px;border-bottom:1px solid #eee">CGST % <input id="poPreviewCgstPct" type="number" value="${cgstPct}" style="width:36px;border:1px solid #ccc;padding:1px 3px;font-size:0.72rem" onchange="recalcPO()"/> :</td><td style="padding:5px 12px;border-bottom:1px solid #eee;text-align:right" id="poCgst">₹ ${cgstAmt.toLocaleString('en-IN',{minimumFractionDigits:2})}</td></tr>
-            <tr><td style="padding:5px 12px;border-bottom:1px solid #eee">SGST % <input id="poPreviewSgstPct" type="number" value="${sgstPct}" style="width:36px;border:1px solid #ccc;padding:1px 3px;font-size:0.72rem" onchange="recalcPO()"/> :</td><td style="padding:5px 12px;border-bottom:1px solid #eee;text-align:right" id="poSgst">₹ ${sgstAmt.toLocaleString('en-IN',{minimumFractionDigits:2})}</td></tr>
-            <tr style="background:#f9f9f9"><td style="padding:6px 12px;font-weight:700">Net Payable (INR) :</td><td style="padding:6px 12px;text-align:right;font-weight:800;font-size:0.92rem" id="poNet">₹ ${netPayable.toLocaleString('en-IN',{minimumFractionDigits:0})}</td></tr>
-            <tr><td colspan="2" style="padding:5px 12px;font-size:0.68rem;font-style:italic" id="poWords">${numToWords(netPayable)}</td></tr>
+          <table class="po-amount-table">
+            <tr><td>Basic Amount :</td><td id="poBasicAmt">${currSymbol} ${baseAmt.toLocaleString('en-IN',{minimumFractionDigits:2})}</td></tr>
+            <tr><td>Discount (%) :</td><td id="poDiscount">0.00</td></tr>
+            <tr><td>Amount after Discount :</td><td id="poAfterDiscount">${currSymbol} ${baseAmt.toLocaleString('en-IN',{minimumFractionDigits:2})}</td></tr>
+            <tr><td>P&amp;F Charge :</td><td id="poPnf">${currSymbol} 0.00</td></tr>
+            <tr><td>CGST % &nbsp; <span id="poCgstPctLabel">${cgstPct}</span>.00 :</td><td id="poCgst">${currSymbol} ${cgstAmt.toLocaleString('en-IN',{minimumFractionDigits:2})}</td></tr>
+            <tr><td>SGST % &nbsp; <span id="poSgstPctLabel">${sgstPct}</span>.00 :</td><td id="poSgst">${currSymbol} ${sgstAmt.toLocaleString('en-IN',{minimumFractionDigits:2})}</td></tr>
+            <tr class="net-row"><td>Net Payable (INR) :</td><td id="poNet">${currSymbol} ${netPayable.toLocaleString('en-IN',{minimumFractionDigits:0})}</td></tr>
+            <tr class="words-row"><td colspan="2"><strong>Amount in words :</strong><br/><span id="poWords">${numToWords(netPayable)}</span></td></tr>
           </table>
-          <div style="padding:14px 12px;text-align:center;border-top:1px solid #ccc;margin-top:8px">
-            <div id="poSigSlot" style="height:50px;border-bottom:1px solid #999;width:80%;margin:0 auto 6px;display:flex;align-items:flex-end;justify-content:center"></div>
-            <div style="font-size:0.72rem">(Authorized Signatory)</div>
+
+          <!-- Signature -->
+          <div class="po-sig-section">
+            <div class="po-sig-img-wrap">
+              <div id="poSigSlot">
+                <img src="${sigSrc}" alt="Authorized Signatory" style="max-height:68px;max-width:100%;object-fit:contain" onerror="this.style.display='none'"/>
+              </div>
+            </div>
+            <div class="po-sig-label">(Authorized Signatory)</div>
           </div>
         </div>
-      </div>
-      <div style="display:flex;justify-content:space-between;padding:6px 14px;border-top:1.5px solid #333;font-size:0.66rem;color:#555">
+
+      </div><!-- /po-bottom-grid -->
+
+      <!-- Footer -->
+      <div class="po-doc-footer">
         <span>This is a computer generated document</span>
         <span>Jurisdiction : Subject To Ahmedabad jurisdiction only.</span>
       </div>
-    </div>`;
 
-  document.getElementById('poNumber').oninput=()=>{document.getElementById('poPreviewNum').textContent=document.getElementById('poNumber').value;};
-  document.getElementById('poDate').oninput=()=>{document.getElementById('poPreviewDate').textContent=document.getElementById('poDate').value;};
-  document.getElementById('poDelivery').oninput=()=>{document.getElementById('poPreviewDel').textContent=document.getElementById('poDelivery').value;};
-  document.getElementById('poQuoteRef').oninput=()=>{document.getElementById('poPreviewQuote').textContent=document.getElementById('poQuoteRef').value;};
-  document.getElementById('poIndent').oninput=()=>{document.getElementById('poPreviewIndent').textContent=document.getElementById('poIndent').value;};
-  document.getElementById('poProjectCode').oninput=()=>{document.getElementById('poPreviewProject').textContent=document.getElementById('poProjectCode').value;};
+    </div><!-- /#poPreviewBox -->
+  `;
 
-  window._poBaseAmt=baseAmt;
+  // Store base amount and currency symbol for recalc
+  window._poBaseAmt = baseAmt;
+  window._poCurrSymbol = currSymbol;
+  window._poCgstPct = cgstPct;
+  window._poSgstPct = sgstPct;
+
   openModal('poModal');
-  // Inject saved logo and signature into preview
-  applyBrandingToPO();
 }
 
+// ── PO RECALC ────────────────────────────────────────────────
 function recalcPO() {
-  const base=window._poBaseAmt||0;
-  const cgst=parseFloat(document.getElementById('poPreviewCgstPct')?.value||9)||0;
-  const sgst=parseFloat(document.getElementById('poPreviewSgstPct')?.value||9)||0;
-  const pnf=parseFloat(document.getElementById('pnfInput')?.value||0)||0;
-  const cgstAmt=Math.round(base*cgst/100*100)/100;
-  const sgstAmt=Math.round(base*sgst/100*100)/100;
-  const net=base+cgstAmt+sgstAmt+pnf;
-  document.getElementById('poCgst').textContent=`₹ ${cgstAmt.toLocaleString('en-IN',{minimumFractionDigits:2})}`;
-  document.getElementById('poSgst').textContent=`₹ ${sgstAmt.toLocaleString('en-IN',{minimumFractionDigits:2})}`;
-  document.getElementById('poPnf').textContent=`₹ ${pnf.toLocaleString('en-IN',{minimumFractionDigits:2})}`;
-  document.getElementById('poNet').textContent=`₹ ${net.toLocaleString('en-IN',{minimumFractionDigits:0})}`;
-  document.getElementById('poWords').textContent=numToWords(net);
+  const base = window._poBaseAmt || 0;
+  const sym  = window._poCurrSymbol || '₹';
+  const cgst = parseFloat(document.getElementById('cgstInput')?.value || 9) || 0;
+  const sgst = parseFloat(document.getElementById('sgstInput')?.value || 9) || 0;
+  const pnf  = parseFloat(document.getElementById('pnfInput')?.value  || 0) || 0;
+  const cgstAmt = Math.round(base * cgst / 100 * 100) / 100;
+  const sgstAmt = Math.round(base * sgst / 100 * 100) / 100;
+  const net = base + cgstAmt + sgstAmt + pnf;
+
+  const s = (el, val) => { const e = document.getElementById(el); if(e) e.textContent = val; };
+  const f = v => v.toLocaleString('en-IN', {minimumFractionDigits:2});
+  s('poCgstPctLabel', cgst);
+  s('poSgstPctLabel', sgst);
+  s('poCgst',  `${sym} ${f(cgstAmt)}`);
+  s('poSgst',  `${sym} ${f(sgstAmt)}`);
+  s('poPnf',   `${sym} ${f(pnf)}`);
+  s('poNet',   `${sym} ${net.toLocaleString('en-IN',{minimumFractionDigits:0})}`);
+  s('poWords', numToWords(net));
 }
 
+// ── DOWNLOAD PO AS PDF ────────────────────────────────────────
+async function downloadPO() {
+  const poBox = document.getElementById('poPreviewBox');
+  if (!poBox) { showToast('PO preview not found','error'); return; }
+
+  const btn = document.querySelector('#poModal .modal-footer .btn-secondary');
+  const origText = btn?.innerHTML;
+  if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Generating...'; }
+
+  await new Promise(r => setTimeout(r, 80));
+
+  try {
+    // Temporarily hide contenteditable outlines and input borders for clean capture
+    const inputs = poBox.querySelectorAll('input.po-meta-input');
+    inputs.forEach(i => { i.style.borderBottom = 'none'; });
+    const terms = poBox.querySelector('#poTermsEditable');
+    if (terms) { terms.style.border = 'none'; terms.style.boxShadow = 'none'; }
+
+    const canvas = await html2canvas(poBox, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      logging: false
+    });
+
+    // Restore styles
+    inputs.forEach(i => { i.style.borderBottom = ''; });
+    if (terms) { terms.style.border = ''; terms.style.boxShadow = ''; }
+
+    const imgData = canvas.toDataURL('image/jpeg', 0.95);
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+    const pageW = 210, pageH = 297;
+    const imgW = pageW;
+    const imgH = (canvas.height * imgW) / canvas.width;
+
+    if (imgH <= pageH) {
+      pdf.addImage(imgData, 'JPEG', 0, 0, imgW, imgH);
+    } else {
+      let yOffset = 0;
+      while (yOffset < imgH) {
+        if (yOffset > 0) pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, -yOffset, imgW, imgH);
+        yOffset += pageH;
+      }
+    }
+
+    const poNum = document.getElementById('poPreviewNum')?.textContent || 'PO';
+    pdf.save(`${poNum.replace(/\//g,'-')}.pdf`);
+    showToast('PDF downloaded!', 'success');
+  } catch(err) {
+    showToast('PDF generation failed: ' + err.message, 'error');
+    console.error(err);
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = origText; }
+  }
+}
+
+// ── CONFIRM GENERATE & SAVE PO ────────────────────────────────
 async function confirmGeneratePO() {
   showLoader(true);
-  const poNumber=document.getElementById('poNumber')?.value||'';
-  const cgstPct=parseFloat(document.getElementById('poPreviewCgstPct')?.value||9);
-  const sgstPct=parseFloat(document.getElementById('poPreviewSgstPct')?.value||9);
-  const pnf=parseFloat(document.getElementById('pnfInput')?.value||0);
-  const base=window._poBaseAmt||0;
-  const netPayable=base+Math.round(base*cgstPct/100*100)/100+Math.round(base*sgstPct/100*100)/100+pnf;
+  const poNumber = document.getElementById('poPreviewNum')?.textContent || '';
+  const cgstPct  = parseFloat(document.getElementById('cgstInput')?.value || 9);
+  const sgstPct  = parseFloat(document.getElementById('sgstInput')?.value || 9);
+  const pnf      = parseFloat(document.getElementById('pnfInput')?.value  || 0);
+  const base     = window._poBaseAmt || 0;
+  const netPayable = base + Math.round(base*cgstPct/100*100)/100 + Math.round(base*sgstPct/100*100)/100 + pnf;
 
   const{data:quotations}=await db.from('pr_quotations').select('*').eq('pr_id',currentPR.id);
   const selectedQ=quotations?.find(q=>q.is_selected)||quotations?.[0];
 
-  // ── Step 1: Save to purchase_orders ──────────────────────────
+  // Step 1: Save to purchase_orders
   const{error:poErr}=await db.from('purchase_orders').insert({
     pr_id:currentPR.id, po_number:poNumber, po_date:new Date().toISOString(),
     vendor_id:currentPR.assigned_vendor_id, quotation_id:selectedQ?.id||null,
@@ -1156,20 +1426,22 @@ async function confirmGeneratePO() {
   });
   if(poErr){showLoader(false);showToast('Error saving PO: '+poErr.message,'error');return;}
 
-  // ── Step 2: Generate PDF from preview box ─────────────────────
+  // Step 2: Generate PDF from the styled preview box
   let pdfUrl = null;
   try {
     const previewEl = document.getElementById('poPreviewBox');
-    // Temporarily hide input fields inside preview before capturing
-    const inputs = previewEl.querySelectorAll('input');
-    inputs.forEach(i=>i.style.display='none');
+    const inputs = previewEl.querySelectorAll('input.po-meta-input');
+    inputs.forEach(i=>{ i.style.borderBottom='none'; });
+    const terms = previewEl.querySelector('#poTermsEditable');
+    if (terms) { terms.style.border='none'; terms.style.boxShadow='none'; }
 
     const canvas = await html2canvas(previewEl, {scale:2, useCORS:true, backgroundColor:'#ffffff'});
-    inputs.forEach(i=>i.style.display='');
+    inputs.forEach(i=>{ i.style.borderBottom=''; });
+    if (terms) { terms.style.border=''; terms.style.boxShadow=''; }
 
     const {jsPDF} = window.jspdf;
     const pdf = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
-    const imgW = 210; // A4 width mm
+    const imgW = 210;
     const imgH = (canvas.height * imgW) / canvas.width;
     pdf.addImage(canvas.toDataURL('image/jpeg',0.92), 'JPEG', 0, 0, imgW, imgH);
 
@@ -1177,7 +1449,7 @@ async function confirmGeneratePO() {
     const fileName = `${poNumber.replace(/\//g,'-')}_${Date.now()}.pdf`;
     const storagePath = `po/${currentPR.id}/${fileName}`;
 
-    // ── Step 3: Upload to Supabase Storage ────────────────────────
+    // Step 3: Upload to Supabase Storage
     const{data:uploadData, error:uploadErr} = await db.storage
       .from('attachments')
       .upload(storagePath, pdfBlob, {contentType:'application/pdf', upsert:true});
@@ -1189,10 +1461,9 @@ async function confirmGeneratePO() {
       const{data:urlData} = db.storage.from('attachments').getPublicUrl(storagePath);
       pdfUrl = urlData?.publicUrl;
 
-      // ── Step 4: Save to pr_attachments ───────────────────────────
+      // Step 4: Save to pr_attachments
       await db.from('pr_attachments').insert({
-        pr_id: currentPR.id,
-        uploaded_by: currentUser.id,
+        pr_id: currentPR.id, uploaded_by: currentUser.id,
         attachment_type: 'other',
         file_name: `PO_${poNumber.replace(/\//g,'-')}.pdf`,
         file_url: pdfUrl
@@ -1201,22 +1472,29 @@ async function confirmGeneratePO() {
   } catch(pdfErr) {
     console.warn('PDF generation failed:', pdfErr);
     showToast('PO saved — PDF generation failed: '+pdfErr.message,'error');
-  }
+    await loadRequests();
 
-  // ── Step 5: Comment on PR thread ─────────────────────────────
+    const updatedPR = allRequests.find(r => r.id === currentPR.id);
+    if (updatedPR) {
+      currentPR = updatedPR;
+      closeModal('poModal');
+      openPR(currentPR.id);
+      }
+    }
+
+  // Step 5: Comment on PR thread
   const commentText = pdfUrl
     ? `📄 Purchase Order ${poNumber} generated. Net Payable: ₹${netPayable.toLocaleString('en-IN')} — [View PO PDF](${pdfUrl})`
     : `📄 Purchase Order ${poNumber} generated. Net Payable: ₹${netPayable.toLocaleString('en-IN')}`;
   await window.postComment(currentPR.id, currentUser.id, commentText);
 
   showLoader(false);
-  showToast(`PO ${poNumber} generated${pdfUrl?' & shared as attachment':''}!`,'success');
+  showToast(`PO ${poNumber} generated${pdfUrl?' & saved as attachment':''}!`,'success');
   closeModal('poModal');
 }
 
-// ── PO BRANDING (logo + signature) ───────────────────────────
+// ── PO BRANDING ───────────────────────────────────────────────
 function openPOBranding() {
-  // Populate previews from localStorage
   const logo = localStorage.getItem('po_logo');
   const sig  = localStorage.getItem('po_sig');
   const lw = document.getElementById('logoPreviewWrap');
@@ -1236,7 +1514,6 @@ function handleBrandingUpload(e, type) {
     const wrapId = type==='logo' ? 'logoPreviewWrap' : 'sigPreviewWrap';
     document.getElementById(wrapId).innerHTML =
       `<img src="${b64}" style="max-width:100%;max-height:100%;object-fit:contain"/>`;
-    // Stash temporarily so saveBrandingAndClose can persist
     window[`_pending_${type}`] = b64;
   };
   reader.readAsDataURL(file);
@@ -1260,7 +1537,6 @@ function saveBrandingAndClose() {
     window._pending_sig = undefined;
   }
   closeModal('poBrandingModal');
-  // Re-apply to PO preview if it's open
   applyBrandingToPO();
   showToast('Branding saved!', 'success');
 }
@@ -1270,16 +1546,17 @@ function applyBrandingToPO() {
   const sig  = localStorage.getItem('po_sig');
   const logoSlot = document.getElementById('poLogoSlot');
   const sigSlot  = document.getElementById('poSigSlot');
-  if(logoSlot) {
-    if(logo) logoSlot.innerHTML=`<img src="${logo}" style="max-height:44px;max-width:120px;object-fit:contain"/>`;
-    else logoSlot.innerHTML=`<div style="font-size:0.65rem;font-weight:700;font-family:sans-serif;color:#d43d1a;letter-spacing:2px">INVENT</div><div style="font-size:0.65rem;font-weight:700;font-family:sans-serif;color:#d43d1a;letter-spacing:2px">INDIA</div>`;
+  if (logoSlot) {
+    logoSlot.innerHTML = logo
+      ? `<img src="${logo}" class="po-logo-img" alt="Logo"/>`
+      : `<img src="../Inventindia_Logo-2.png" class="po-logo-img" alt="Logo" onerror="this.style.display='none'"/>`;
   }
-  if(sigSlot) {
-    if(sig) sigSlot.innerHTML=`<img src="${sig}" style="max-height:46px;max-width:100%;object-fit:contain;margin-bottom:2px"/>`;
-    else sigSlot.innerHTML='';
+  if (sigSlot) {
+    sigSlot.innerHTML = sig
+      ? `<img src="${sig}" style="max-height:68px;max-width:100%;object-fit:contain" alt="Signature"/>`
+      : `<img src="../stamp.png" style="max-height:68px;max-width:100%;object-fit:contain" alt="Authorized Signatory" onerror="this.style.display='none'"/>`;
   }
 }
-
 
 async function reRequestAdvance() {
   const amt=parseFloat(prompt('Enter advance amount:')||'0');
@@ -1308,7 +1585,7 @@ async function openPaymentRequestModal(prId) {
   document.getElementById('payReqSub').textContent=`PR-${String(pr.request_number).padStart(4,'0')} — ${pr.project_name}`;
   document.getElementById('payReqBody').innerHTML=`
     <div style="background:rgba(22,163,74,0.05);border:1px solid rgba(22,163,74,0.2);border-radius:var(--radius);padding:12px 14px;margin-bottom:16px">
-      <div style="font-size:0.8rem;font-weight:600;color:#16a34a;margin-bottom:2px">✅ Auto-filled from QC Passed request</div>
+      <div style="font-size:0.8rem;font-weight:600;color:#16a34a;margin-bottom:2px"> Auto-filled from QC Passed request</div>
       <div style="font-size:0.74rem;color:var(--gray-3)">Review and complete before submitting to accounts</div>
     </div>
     <div class="payment-req-form">
@@ -1416,7 +1693,13 @@ function openRateModal(prId, vendorId) {
   document.getElementById('rateComment').value='';
   openModal('rateModal');
 }
-function setRating(n){const c=document.getElementById('rateStars');if(!c)return;c.dataset.rating=n;c.querySelectorAll('span').forEach((s,i)=>s.classList.toggle('active',i<n));}
+
+function setRating(n){
+  const c=document.getElementById('rateStars');if(!c)return;
+  c.dataset.rating=n;
+  c.querySelectorAll('span').forEach((s,i)=>s.classList.toggle('active',i<n));
+}
+
 async function submitVendorRating() {
   const rating=parseInt(document.getElementById('rateStars').dataset.rating||'0');
   if(!rating){showToast('Please select a rating','error');return;}
@@ -1439,8 +1722,165 @@ async function addComment() {
     document.getElementById('commentsList').innerHTML=renderComments(c);
   }catch(e){showToast('Comment failed','error');}
 }
+function buildAdvanceRejectedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, existingPO) {
+  const hasPO = !!existingPO;
+  return `<div class="action-section" style="border:1px solid rgba(214,43,43,0.25);background:rgba(214,43,43,0.04);border-radius:var(--radius);padding:14px">
+    <div class="action-section-title" style="color:var(--red)">✗ Advance Rejected — Action Required</div>
+    <div style="padding:10px 12px;background:rgba(214,43,43,0.06);border:1px solid rgba(214,43,43,0.18);border-radius:var(--radius-sm);margin-bottom:14px;font-size:0.8rem;color:var(--red)">
+      Advance payment was rejected by accounts. You can request again or proceed without advance.
+    </div>
+
+    ${selectedQ ? `<div style="margin-bottom:14px;padding:9px 12px;background:var(--off-white);border:1px solid var(--border);border-radius:var(--radius-sm)">
+      <div class="detail-key" style="margin-bottom:3px">Selected Quote</div>
+      <div style="font-weight:600;font-size:0.88rem">${selectedQ.vendor_name || vendorObj?.name || '—'} — ${selectedQ.currency || 'INR'} ${Number(selectedQ.amount || 0).toLocaleString()}</div>
+      ${pt ? `<div style="font-size:0.72rem;color:#6366f1;margin-top:2px">💳 ${pt.label}</div>` : ''}
+    </div>` : ''}
+
+    <!-- PO info -->
+    <div style="padding:10px 12px;border-radius:var(--radius-sm);margin-bottom:14px;
+      background:${hasPO ? 'rgba(22,163,74,0.04)' : 'rgba(245,158,11,0.05)'};
+      border:1px solid ${hasPO ? 'rgba(22,163,74,0.22)' : 'rgba(245,158,11,0.22)'}">
+      ${hasPO
+        ? `<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+             <div>
+               <div style="font-size:0.78rem;font-weight:700;color:#16a34a">📄 PO Already Generated</div>
+               <div style="font-family:var(--font-mono);font-size:0.82rem;font-weight:700">${existingPO.po_number}</div>
+             </div>
+             <div style="text-align:right;font-size:0.72rem;color:var(--gray-3)">${existingPO.currency || 'INR'} ${Number(existingPO.total_amount || 0).toLocaleString()}</div>
+           </div>`
+        : `<div style="font-size:0.78rem;color:#b45309;font-weight:600">⚠ No PO found — generate before placing order</div>
+           <div style="margin-top:8px"><button class="btn btn-secondary btn-sm" onclick="openPOModal('${id}')">📄 Generate PO</button></div>`
+      }
+    </div>
+
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+      <button class="btn btn-primary btn-sm" onclick="reRequestAdvance()">📤 Request Advance Again</button>
+    </div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">Order Notes</label>
+      <textarea class="form-control" id="orderNotes" placeholder="PO number, confirmation, expected delivery..."></textarea>
+    </div>
+    <button class="btn btn-primary" onclick="placeOrder()">Confirm Order Placed Without Advance →</button>
+  </div>`;
+}
+
+function buildAdvanceApprovedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, advRec, existingPO) {
+  const hasPO = !!existingPO;
+  return `<div class="action-section" style="border:1px solid rgba(22,163,74,0.25);background:rgba(22,163,74,0.04);border-radius:var(--radius);padding:14px">
+    <div class="action-section-title" style="color:#16a34a">✅ Advance Approved — Ready to Place Order</div>
+
+    ${selectedQ ? `<div style="margin:10px 0;padding:9px 12px;background:var(--off-white);border:1px solid var(--border);border-radius:var(--radius-sm)">
+      <div class="detail-key" style="margin-bottom:3px">Selected Quote</div>
+      <div style="font-weight:600;font-size:0.88rem">${selectedQ.vendor_name || vendorObj?.name || '—'} — ${selectedQ.currency || 'INR'} ${Number(selectedQ.amount || 0).toLocaleString()}</div>
+      ${pt ? `<div style="font-size:0.72rem;color:#6366f1;margin-top:2px">💳 ${pt.label}</div>` : ''}
+    </div>` : ''}
+
+    ${advRec ? `<div style="margin-bottom:14px;padding:9px 12px;background:rgba(22,163,74,0.08);border:1px solid rgba(22,163,74,0.2);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:0.88rem;color:#16a34a">
+      ✅ Advance of AED ${Number(advRec.amount || 0).toLocaleString()} approved by accounts
+    </div>` : ''}
+
+    <!-- PO info (already generated) -->
+    <div style="padding:10px 12px;border-radius:var(--radius-sm);margin-bottom:14px;
+      background:${hasPO ? 'rgba(22,163,74,0.04)' : 'rgba(245,158,11,0.05)'};
+      border:1px solid ${hasPO ? 'rgba(22,163,74,0.22)' : 'rgba(245,158,11,0.22)'}">
+      ${hasPO
+        ? `<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+             <div>
+               <div style="font-size:0.78rem;font-weight:700;color:#16a34a">📄 Purchase Order Already Generated</div>
+               <div style="font-family:var(--font-mono);font-size:0.82rem;font-weight:700">${existingPO.po_number}</div>
+             </div>
+             <div style="text-align:right;font-size:0.72rem;color:var(--gray-3)">${existingPO.currency || 'INR'} ${Number(existingPO.total_amount || 0).toLocaleString()}<br/>${fmtDate(existingPO.po_date || existingPO.created_at)}</div>
+           </div>`
+        : `<div style="font-size:0.78rem;color:#b45309;font-weight:600">⚠ No PO found — generate PO before placing order</div>
+           <div style="margin-top:8px"><button class="btn btn-secondary btn-sm" onclick="openPOModal('${id}')">📄 Generate PO Now</button></div>`
+      }
+    </div>
+
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">Order Notes</label>
+      <textarea class="form-control" id="orderNotes" placeholder="PO number, confirmation, expected delivery..."></textarea>
+    </div>
+    <button class="btn btn-primary" onclick="placeOrder()">Confirm Order Placed →</button>
+  </div>`;
+}
+
+function buildApprovedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, existingPO) {
+  const currency = selectedQ?.currency || 'AED';
+  const hasPO = !!existingPO;
+
+  return `<div class="action-section">
+    <div class="action-section-title">🛒 Place Order <span class="action-badge">ACTION REQUIRED</span></div>
+    <p style="font-size:0.82rem;color:var(--gray-3);margin-bottom:12px">Follow the two steps below: first generate the PO, then confirm the order.</p>
+
+    ${selectedQ ? `<div style="margin-bottom:14px;padding:10px 12px;background:var(--off-white);border:1px solid var(--border);border-radius:var(--radius-sm)">
+      <div class="detail-key" style="margin-bottom:4px">Selected Quote</div>
+      <div style="font-weight:600">${selectedQ.vendor_name || vendorObj?.name || '—'} — ${currency} ${Number(selectedQ.amount || 0).toLocaleString()}</div>
+      ${pt ? `<div style="font-size:0.72rem;color:#6366f1;margin-top:3px">💳 Payment Terms: ${pt.label}</div>` : ''}
+    </div>` : ''}
+
+    <!-- STEP 1: PO -->
+    <div style="border:1px solid ${hasPO ? 'rgba(22,163,74,0.3)' : 'var(--border)'};border-radius:var(--radius);padding:14px;margin-bottom:14px;background:${hasPO ? 'rgba(22,163,74,0.04)' : 'white'}">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:${hasPO ? '0' : '10px'}">
+        <div style="font-size:0.82rem;font-weight:700;color:${hasPO ? '#16a34a' : '#111'}">
+          ${hasPO ? `✅ Step 1 — PO Generated` : '📋 Step 1 — Generate Purchase Order (Required)'}
+        </div>
+        ${hasPO ? `<div style="font-family:var(--font-mono);font-size:0.78rem;font-weight:700;color:#16a34a">${existingPO.po_number}</div>` : ''}
+      </div>
+      ${hasPO
+        ? `<div style="font-size:0.72rem;color:var(--gray-3)">
+            Generated ${fmtDate(existingPO.po_date || existingPO.created_at)} · 
+            ${existingPO.currency || 'INR'} ${Number(existingPO.total_amount || 0).toLocaleString()}
+           </div>`
+        : `<p style="font-size:0.78rem;color:var(--gray-3);margin-bottom:10px">Generate and save the PO before confirming the order.</p>
+           <button class="btn btn-secondary" onclick="openPOModal('${id}')">📄 Preview &amp; Generate PO</button>`
+      }
+    </div>
+
+    <!-- STEP 2: Place Order -->
+    <div style="border:1px solid var(--border);border-radius:var(--radius);padding:14px;background:white;${!hasPO ? 'opacity:0.45;pointer-events:none' : ''}">
+      <div style="font-size:0.82rem;font-weight:700;margin-bottom:10px;color:${hasPO ? '#111' : 'var(--gray-4)'}">
+        🛒 Step 2 — Confirm Order Placed ${!hasPO ? '<span style="font-size:0.72rem;font-weight:400">(generate PO first)</span>' : ''}
+      </div>
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">Order Notes</label>
+        <textarea class="form-control" id="orderNotes" placeholder="PO number, confirmation reference, expected delivery..."></textarea>
+      </div>
+      <button class="btn btn-primary" onclick="placeOrder()" ${!hasPO ? 'disabled' : ''}>Confirm Order Placed →</button>
+    </div>
+
+    <!-- STEP 3: Advance Options -->
+    <div style="margin-top:16px">
+      <div class="form-label" style="margin-bottom:8px">💳 Step 3 — Advance Payment Options (optional)</div>
+      <div class="advance-options">
+        <div class="advance-option" id="advOptNone" onclick="selectAdvanceOption('none')">
+          <div style="font-size:1.2rem;margin-bottom:4px">✓</div>
+          <div style="font-weight:600;font-size:0.8rem">No Advance Required</div>
+          <div style="font-size:0.72rem;color:var(--gray-4)">Pay on delivery</div>
+        </div>
+        <div class="advance-option" id="advOptReceived" onclick="selectAdvanceOption('received')">
+          <div style="font-size:1.2rem;margin-bottom:4px">💵</div>
+          <div style="font-weight:600;font-size:0.8rem">Advance Already Received</div>
+          <div style="font-size:0.72rem;color:var(--gray-4)">Mark as already paid</div>
+        </div>
+        <div class="advance-option" id="advOptRequest" onclick="selectAdvanceOption('request')">
+          <div style="font-size:1.2rem;margin-bottom:4px">📤</div>
+          <div style="font-weight:600;font-size:0.8rem">Request Advance from Accounts</div>
+          <div style="font-size:0.72rem;color:var(--gray-4)">Send request to accounts first</div>
+        </div>
+      </div>
+      <div id="advRequestDetails" style="display:none;margin-top:10px;padding:12px;background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.18);border-radius:var(--radius-sm)">
+        <div class="form-grid">
+          <div class="form-group"><label class="form-label">Advance Amount (${currency})</label><input class="form-control" id="advanceAmt" type="number" placeholder="0.00"/></div>
+          <div class="form-group"><label class="form-label">Notes to Accounts</label><input class="form-control" id="advanceNote" placeholder="Reason, urgency..."/></div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="requestAdvance()">Send Request to Accounts →</button>
+      </div>
+    </div>
+  </div>`;
+}
 
 init();
 </script>
 </body>
 </html>
+

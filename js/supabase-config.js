@@ -38,11 +38,11 @@ const PHASES = {
   quotations_shared:            { label: 'Quotations Shared',        color: '#8b5cf6', icon: '📨' },
   pending_client_approval:      { label: 'Pending Client Approval',  color: '#ec4899', icon: '👤' },
   pending_pm_final_approval:    { label: 'Pending PM Approval',      color: '#f97316', icon: '✍️'  },
-  approved:                     { label: 'Approved',                 color: '#10b981', icon: '✅' },
+  approved:                     { label: 'Approved',                 color: '#10b981', icon: '' },
   order_placed:                 { label: 'Order Placed',             color: '#14b8a6', icon: '🛒' },
   grn_pending:                  { label: 'GRN / QC Pending',         color: '#f59e0b', icon: '📦' },
   accepted:                     { label: 'Accepted & Closed',        color: '#22c55e', icon: '✔️'  },
-  rejected:                     { label: 'Rejected & Closed',        color: '#ef4444', icon: '❌' }
+  rejected:                     { label: 'Rejected & Closed',        color: '#ef4444', icon: '' }
 };
 
 const ORDER_TYPES = {

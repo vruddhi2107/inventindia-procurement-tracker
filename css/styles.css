@@ -73,7 +73,7 @@ body {
   text-decoration: none; color: inherit;
   flex-shrink: 0;
 }
-.nav-logo-mark {
+/* .nav-logo-mark {
   width: 36px; height: 36px;
   background: var(--black);
   border-radius: 8px;
@@ -87,8 +87,8 @@ body {
   width: 14px; height: 14px;
   background: white;
   opacity: 0.3;
-}
-.nav-logo-mark svg { position: relative; z-index: 1; }
+} */
+/* .nav-logo-mark svg { position: relative; z-index: 1; } */
 .nav-logo-text { font-family: var(--font-display); font-weight: 800; font-size: 1rem; letter-spacing: -0.02em; line-height: 1; }
 .nav-logo-text span { color: var(--red); }
 .nav-logo-sub { font-size: 0.65rem; font-family: var(--font-mono); color: var(--gray-4); letter-spacing: 0.08em; text-transform: uppercase; }
@@ -735,7 +735,7 @@ footer {
   .approval-options { grid-template-columns: 1fr; }
 }
 /* ============================================================
-   PROCUREOPS v3.1 — Clean & Compact
+   Invent India ProcureOps v3.1 — Clean & Compact
    Font: Outfit (display + body) + JetBrains Mono (data)
    Theme: White / Near-black / Red accent
    ============================================================ */
@@ -810,7 +810,7 @@ body {
   box-shadow: 0 1px 4px rgba(0,0,0,0.04);
 }
 .nav-logo { display: flex; align-items: center; gap: 9px; text-decoration: none; color: inherit; flex-shrink: 0; }
-.nav-logo-mark { width: 27px; height: 27px; background: var(--red); border-radius: 5px; display: flex; align-items: center; justify-content: center; }
+/* .nav-logo-mark { width: 27px; height: 27px; background: var(--red); border-radius: 5px; display: flex; align-items: center; justify-content: center; } */
 .nav-logo-text { font-family: var(--font-display); font-weight: 700; font-size: 0.93rem; letter-spacing: -0.02em; }
 .nav-logo-text span { color: var(--red); }
 .nav-spacer { flex: 1; }
@@ -1108,7 +1108,7 @@ footer { background: var(--black); color: var(--gray-4); padding: 18px 22px; dis
 
 
 /* ============================================================
-   PROCUREOPS v3.1 — Clean & Compact
+   Invent India ProcureOps v3.1 — Clean & Compact
    Font: Outfit (display + body) + JetBrains Mono (data)
    Theme: White / Near-black / Red accent
    ============================================================ */
@@ -1183,7 +1183,7 @@ body {
   box-shadow: 0 1px 4px rgba(0,0,0,0.04);
 }
 .nav-logo { display: flex; align-items: center; gap: 9px; text-decoration: none; color: inherit; flex-shrink: 0; }
-.nav-logo-mark { width: 27px; height: 27px; background: var(--red); border-radius: 5px; display: flex; align-items: center; justify-content: center; }
+/* .nav-logo-mark { width: 27px; height: 27px; background: var(--red); border-radius: 5px; display: flex; align-items: center; justify-content: center; } */
 .nav-logo-text { font-family: var(--font-display); font-weight: 700; font-size: 0.93rem; letter-spacing: -0.02em; }
 .nav-logo-text span { color: var(--red); }
 .nav-spacer { flex: 1; }
