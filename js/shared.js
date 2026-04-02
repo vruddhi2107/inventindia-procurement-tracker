@@ -106,9 +106,9 @@ function buildNavbar(user) {
   const links = navLinks[user.role]||[];
   return `<nav class="navbar">
     <a class="nav-logo" href="#">
-<div class="nav-logo-mark">
-  <img src="../Inventindia_logo-2.png" alt="Logo" width="50" height="20">
-</div>
+  <div class="nav-logo-mark">
+    <img src="../Inventindia_logo-2.png" alt="Logo" width="50" height="20">
+  </div>
       <div><div class="nav-logo-text">Procure<span>X</span></div></div>
     </a>
     <div class="nav-links" style="display:flex;gap:4px;margin-left:18px">
