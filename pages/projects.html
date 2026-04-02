@@ -92,8 +92,14 @@
 
       <!-- Select from Library -->
       <div style="margin-top:14px">
-        <label class="form-label" style="margin-bottom:4px;display:block">Project Phases</label>
-        <p style="font-size:0.74rem;color:var(--gray-3);margin-bottom:10px">Select from the global library below, or type to add a new one:</p>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px">
+          <label class="form-label" style="margin:0">Project Phases</label>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-secondary btn-sm" onclick="selectAllPhases()" id="selectAllBtn">☑ Select All</button>
+            <button class="btn btn-ghost btn-sm" onclick="deselectAllPhases()" id="deselectAllBtn">☐ Deselect All</button>
+          </div>
+        </div>
+        <p style="font-size:0.74rem;color:var(--gray-3);margin-bottom:10px">Click phases to toggle, or use the buttons above:</p>
 
         <div id="librarySelectChips" style="display:flex;flex-wrap:wrap;gap:2px;margin-bottom:12px;padding:10px;background:var(--off-white);border:1px solid var(--border);border-radius:var(--radius-sm);min-height:44px">
           <span style="font-size:0.74rem;color:var(--gray-4);padding:3px">Loading library...</span>
@@ -127,119 +133,165 @@
 <script src="../js/shared.js"></script>
 <script>
 let currentUser, allProjects=[], allPMs=[];
+// phaseLibrary: array of {id, name} from Supabase
+let phaseLibrary = [];
 // selectedProjectPhases: array of {name, fromLibrary:bool, existingId?}
-let selectedProjectPhases=[];
+let selectedProjectPhases = [];
 
-// ── PHASE LIBRARY (localStorage) ────────────────────────────
-const LIBRARY_KEY='procureops_phase_library';
+// ── PHASE LIBRARY (Supabase) ─────────────────────────────────
 
-function getLibrary() {
-  try { return JSON.parse(localStorage.getItem(LIBRARY_KEY)||'[]'); } catch(e){ return []; }
-}
-function saveLibrary(phases) {
-  localStorage.setItem(LIBRARY_KEY, JSON.stringify(phases));
+async function loadPhaseLibrary() {
+  const { data, error } = await db
+    .from('phase_library')
+    .select('id, name')
+    .order('name');
+  if (error) { console.error('Phase library load error:', error); return; }
+  phaseLibrary = data || [];
+  renderPhaseLibraryChips();
 }
 
 function renderPhaseLibraryChips() {
-  const lib=getLibrary();
-  const el=document.getElementById('phaseLibraryChips');
-  if(!el) return;
-  if(!lib.length){
-    el.innerHTML=`<span style="color:var(--gray-4);font-size:0.78rem;padding:6px 0">No phases yet — add your first phase above</span>`;
+  const el = document.getElementById('phaseLibraryChips');
+  if (!el) return;
+  if (!phaseLibrary.length) {
+    el.innerHTML = `<span style="color:var(--gray-4);font-size:0.78rem;padding:6px 0">No phases yet — add your first phase above</span>`;
     return;
   }
-  el.innerHTML=lib.map((ph,i)=>`
+  el.innerHTML = phaseLibrary.map(ph => `
     <span class="phase-library-chip">
-      📍 ${ph}
-      <button class="del-btn" onclick="removeFromLibrary(${i})" title="Remove from library">✕</button>
+      📍 ${ph.name}
+      <button class="del-btn" onclick="removeFromLibrary('${ph.id}', '${ph.name.replace(/'/g,"\\'")}')" title="Remove from library">✕</button>
     </span>`).join('');
 }
 
-function addToLibrary() {
-  const input=document.getElementById('newLibPhase');
-  const name=input.value.trim(); if(!name) return;
-  const lib=getLibrary();
-  if(lib.find(p=>p.toLowerCase()===name.toLowerCase())){showToast('Already in library','error');return;}
-  lib.push(name);
-  saveLibrary(lib);
-  input.value='';
+async function addToLibrary() {
+  const input = document.getElementById('newLibPhase');
+  const name = input.value.trim();
+  if (!name) return;
+
+  if (phaseLibrary.find(p => p.name.toLowerCase() === name.toLowerCase())) {
+    showToast('Already in library', 'error');
+    return;
+  }
+
+  const { data, error } = await db
+    .from('phase_library')
+    .insert({ name, created_by: currentUser.id })
+    .select()
+    .single();
+
+  if (error) { showToast('Failed to add: ' + error.message, 'error'); return; }
+
+  phaseLibrary.push({ id: data.id, name: data.name });
+  // Keep alphabetically sorted
+  phaseLibrary.sort((a, b) => a.name.localeCompare(b.name));
+  input.value = '';
   renderPhaseLibraryChips();
-  showToast(`"${name}" added to library`,'success');
-  // Refresh selector if modal is open
+  showToast(`"${name}" added to library`, 'success');
   renderLibrarySelectChips();
 }
 
-function removeFromLibrary(idx) {
-  const lib=getLibrary();
-  const removed=lib[idx];
-  lib.splice(idx,1);
-  saveLibrary(lib);
+async function removeFromLibrary(id, name) {
+  const { error } = await db.from('phase_library').delete().eq('id', id);
+  if (error) { showToast('Failed to remove: ' + error.message, 'error'); return; }
+
+  phaseLibrary = phaseLibrary.filter(p => p.id !== id);
   renderPhaseLibraryChips();
   renderLibrarySelectChips();
-  showToast(`"${removed}" removed from library`,'info');
+  showToast(`"${name}" removed from library`, 'info');
 }
 
 // ── LIBRARY SELECT CHIPS (inside project modal) ──────────────
 function renderLibrarySelectChips() {
-  const el=document.getElementById('librarySelectChips');
-  if(!el) return;
-  const lib=getLibrary();
-  if(!lib.length){
-    el.innerHTML=`<span style="font-size:0.74rem;color:var(--gray-4);padding:3px">No phases in library yet. Add some above first.</span>`;
+  const el = document.getElementById('librarySelectChips');
+  if (!el) return;
+  if (!phaseLibrary.length) {
+    el.innerHTML = `<span style="font-size:0.74rem;color:var(--gray-4);padding:3px">No phases in library yet. Add some above first.</span>`;
     return;
   }
-  el.innerHTML=lib.map(ph=>{
-    const isActive=selectedProjectPhases.some(p=>p.name===ph);
-    return `<span class="phase-select-chip ${isActive?'active':''}" onclick="toggleLibraryPhase('${ph.replace(/'/g,"\\'")}')">
-      <span class="check">${isActive?'✓':''}</span>
-      ${ph}
+  el.innerHTML = phaseLibrary.map(ph => {
+    const isActive = selectedProjectPhases.some(p => p.name === ph.name);
+    return `<span class="phase-select-chip ${isActive ? 'active' : ''}" onclick="toggleLibraryPhase('${ph.name.replace(/'/g,"\\'")}')">
+      <span class="check">${isActive ? '✓' : ''}</span>
+      ${ph.name}
     </span>`;
   }).join('');
 }
 
 function toggleLibraryPhase(name) {
-  const idx=selectedProjectPhases.findIndex(p=>p.name===name);
-  if(idx>=0){
-    selectedProjectPhases.splice(idx,1);
+  const idx = selectedProjectPhases.findIndex(p => p.name === name);
+  if (idx >= 0) {
+    selectedProjectPhases.splice(idx, 1);
   } else {
-    selectedProjectPhases.push({name, fromLibrary:true});
+    selectedProjectPhases.push({ name, fromLibrary: true });
   }
+  renderLibrarySelectChips();
+  renderSelectedPhasesPreview();
+}
+
+// ── SELECT ALL / DESELECT ALL ────────────────────────────────
+function selectAllPhases() {
+  phaseLibrary.forEach(ph => {
+    if (!selectedProjectPhases.find(p => p.name === ph.name)) {
+      selectedProjectPhases.push({ name: ph.name, fromLibrary: true });
+    }
+  });
+  renderLibrarySelectChips();
+  renderSelectedPhasesPreview();
+}
+
+function deselectAllPhases() {
+  // Only remove library phases; keep any custom-typed ones
+  selectedProjectPhases = selectedProjectPhases.filter(p => !p.fromLibrary);
   renderLibrarySelectChips();
   renderSelectedPhasesPreview();
 }
 
 function addCustomPhaseToProject() {
-  const input=document.getElementById('newCustomPhase');
-  const name=input.value.trim(); if(!name) return;
-  if(selectedProjectPhases.find(p=>p.name.toLowerCase()===name.toLowerCase())){
-    showToast('Phase already added','error'); return;
+  const input = document.getElementById('newCustomPhase');
+  const name = input.value.trim();
+  if (!name) return;
+  if (selectedProjectPhases.find(p => p.name.toLowerCase() === name.toLowerCase())) {
+    showToast('Phase already added', 'error');
+    return;
   }
-  selectedProjectPhases.push({name, fromLibrary:false});
-  input.value='';
+  selectedProjectPhases.push({ name, fromLibrary: false });
+  input.value = '';
   renderLibrarySelectChips();
   renderSelectedPhasesPreview();
-  // Also offer to add to library
-  const lib=getLibrary();
-  if(!lib.find(p=>p.toLowerCase()===name.toLowerCase())){
-    lib.push(name);
-    saveLibrary(lib);
+  // Also offer to add to library if not already there
+  if (!phaseLibrary.find(p => p.name.toLowerCase() === name.toLowerCase())) {
+    addCustomToLibrarySilent(name);
+  }
+}
+
+async function addCustomToLibrarySilent(name) {
+  const { data, error } = await db
+    .from('phase_library')
+    .insert({ name, created_by: currentUser.id })
+    .select()
+    .single();
+  if (!error && data) {
+    phaseLibrary.push({ id: data.id, name: data.name });
+    phaseLibrary.sort((a, b) => a.name.localeCompare(b.name));
     renderPhaseLibraryChips();
+    renderLibrarySelectChips();
   }
 }
 
 function removeSelectedPhase(idx) {
-  selectedProjectPhases.splice(idx,1);
+  selectedProjectPhases.splice(idx, 1);
   renderLibrarySelectChips();
   renderSelectedPhasesPreview();
 }
 
 function renderSelectedPhasesPreview() {
-  const preview=document.getElementById('selectedPhasesPreview');
-  const list=document.getElementById('selectedPhasesList');
-  if(!preview||!list) return;
-  if(!selectedProjectPhases.length){preview.style.display='none';return;}
-  preview.style.display='block';
-  list.innerHTML=selectedProjectPhases.map((ph,i)=>`
+  const preview = document.getElementById('selectedPhasesPreview');
+  const list = document.getElementById('selectedPhasesList');
+  if (!preview || !list) return;
+  if (!selectedProjectPhases.length) { preview.style.display = 'none'; return; }
+  preview.style.display = 'block';
+  list.innerHTML = selectedProjectPhases.map((ph, i) => `
     <span class="phase-chip selected">
       📍 ${ph.name}
       <button onclick="removeSelectedPhase(${i})" title="Remove">✕</button>
@@ -248,70 +300,74 @@ function renderSelectedPhasesPreview() {
 
 // ── INIT ────────────────────────────────────────────────────
 async function init() {
-  currentUser=Session.require(['project_manager','master','procurement_manager']); if(!currentUser) return;
-  document.getElementById('navbarMount').innerHTML=buildNavbar(currentUser);
-  document.getElementById('footerMount').innerHTML=buildFooter();
+  currentUser = Session.require(['project_manager', 'master', 'procurement_manager']);
+  if (!currentUser) return;
+  document.getElementById('navbarMount').innerHTML = buildNavbar(currentUser);
+  document.getElementById('footerMount').innerHTML = buildFooter();
   initNavbar(currentUser);
-  renderPhaseLibraryChips();
   showLoader(true);
-  await Promise.all([loadProjects(), loadPMs()]);
+  await Promise.all([loadProjects(), loadPMs(), loadPhaseLibrary()]);
   showLoader(false);
 }
 
 async function loadProjects() {
-  const{data,error}=await db.from('projects').select('*,project_phases(id,name),users:default_pm_id(id,name)').order('name');
-  if(error){showToast('Failed to load projects','error');return;}
-  allProjects=data||[];
+  const { data, error } = await db
+    .from('projects')
+    .select('*,project_phases(id,name),users:default_pm_id(id,name)')
+    .order('name');
+  if (error) { showToast('Failed to load projects', 'error'); return; }
+  allProjects = data || [];
   filterProjects();
 }
 
 async function loadPMs() {
-  const{data}=await db.from('users').select('id,name').eq('role','project_manager').order('name');
-  allPMs=data||[];
-  const sel=document.getElementById('pDefaultPM');
-  sel.innerHTML='<option value="">Select PM (optional)</option>'+allPMs.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+  const { data } = await db.from('users').select('id,name').eq('role', 'project_manager').order('name');
+  allPMs = data || [];
+  const sel = document.getElementById('pDefaultPM');
+  sel.innerHTML = '<option value="">Select PM (optional)</option>' +
+    allPMs.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
 }
 
 function filterProjects() {
-  const s=document.getElementById('searchInput').value.toLowerCase();
-  const st=document.getElementById('filterStatus').value;
-  let projs=allProjects;
-  if(s) projs=projs.filter(p=>p.name.toLowerCase().includes(s));
-  if(st==='active') projs=projs.filter(p=>p.is_active!==false);
-  if(st==='inactive') projs=projs.filter(p=>p.is_active===false);
+  const s = document.getElementById('searchInput').value.toLowerCase();
+  const st = document.getElementById('filterStatus').value;
+  let projs = allProjects;
+  if (s) projs = projs.filter(p => p.name.toLowerCase().includes(s));
+  if (st === 'active') projs = projs.filter(p => p.is_active !== false);
+  if (st === 'inactive') projs = projs.filter(p => p.is_active === false);
   renderProjects(projs);
 }
 
 function renderProjects(projs) {
-  const grid=document.getElementById('projectGrid');
-  if(!projs.length){
-    grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--gray-4)"><div style="font-size:2rem;margin-bottom:10px">📋</div><h3>No projects yet</h3><p>Add your first project to get started.</p></div>`;
+  const grid = document.getElementById('projectGrid');
+  if (!projs.length) {
+    grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--gray-4)"><div style="font-size:2rem;margin-bottom:10px">📋</div><h3>No projects yet</h3><p>Add your first project to get started.</p></div>`;
     return;
   }
-  grid.innerHTML=projs.map(p=>{
-    const phases=p.project_phases||[];
-    const pm=p.users;
+  grid.innerHTML = projs.map(p => {
+    const phases = p.project_phases || [];
+    const pm = p.users;
     return `<div class="project-card">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:8px">
         <div>
           <div style="font-weight:700;font-size:0.92rem">${p.name}</div>
-          ${pm?`<div style="font-size:0.74rem;color:var(--gray-3);margin-top:2px">👔 ${pm.name}</div>`:''}
+          ${pm ? `<div style="font-size:0.74rem;color:var(--gray-3);margin-top:2px">👔 ${pm.name}</div>` : ''}
         </div>
-        <span style="font-size:0.62rem;padding:2px 7px;border-radius:3px;font-family:var(--font-mono);flex-shrink:0;${p.is_active!==false?'background:rgba(5,150,105,0.08);color:#047857;border:1px solid rgba(5,150,105,0.2)':'background:var(--off-white);color:var(--gray-4);border:1px solid var(--border)'}">
-          ${p.is_active!==false?'Active':'Inactive'}
+        <span style="font-size:0.62rem;padding:2px 7px;border-radius:3px;font-family:var(--font-mono);flex-shrink:0;${p.is_active !== false ? 'background:rgba(5,150,105,0.08);color:#047857;border:1px solid rgba(5,150,105,0.2)' : 'background:var(--off-white);color:var(--gray-4);border:1px solid var(--border)'}">
+          ${p.is_active !== false ? 'Active' : 'Inactive'}
         </span>
       </div>
-      ${p.description?`<p style="font-size:0.76rem;color:var(--gray-3);margin-bottom:8px">${p.description}</p>`:''}
+      ${p.description ? `<p style="font-size:0.76rem;color:var(--gray-3);margin-bottom:8px">${p.description}</p>` : ''}
       <div style="margin-bottom:10px">
         <div style="font-size:0.68rem;font-weight:600;color:var(--gray-4);margin-bottom:5px;text-transform:uppercase;letter-spacing:0.5px">Phases (${phases.length})</div>
         <div style="display:flex;flex-wrap:wrap;gap:3px">
-          ${phases.map(ph=>`<span class="phase-chip">📍 ${ph.name}</span>`).join('')}
-          ${!phases.length?`<span style="font-size:0.72rem;color:var(--gray-4)">No phases added</span>`:''}
+          ${phases.map(ph => `<span class="phase-chip">📍 ${ph.name}</span>`).join('')}
+          ${!phases.length ? `<span style="font-size:0.72rem;color:var(--gray-4)">No phases added</span>` : ''}
         </div>
       </div>
       <div style="display:flex;gap:5px">
         <button class="btn btn-secondary btn-sm" onclick="openEditProject('${p.id}')">Edit</button>
-        <button class="btn btn-danger btn-sm" onclick="toggleProjectActive('${p.id}',${p.is_active!==false})">${p.is_active!==false?'Deactivate':'Activate'}</button>
+        <button class="btn btn-danger btn-sm" onclick="toggleProjectActive('${p.id}',${p.is_active !== false})">${p.is_active !== false ? 'Deactivate' : 'Activate'}</button>
       </div>
     </div>`;
   }).join('');
@@ -319,85 +375,93 @@ function renderProjects(projs) {
 
 // ── PROJECT MODAL ─────────────────────────────────────────────
 function openProjectModal() {
-  document.getElementById('projectModalTitle').textContent='Add Project';
-  document.getElementById('pId').value='';
-  document.getElementById('pName').value='';
-  document.getElementById('pDesc').value='';
-  document.getElementById('pDefaultPM').value='';
-  selectedProjectPhases=[];
+  document.getElementById('projectModalTitle').textContent = 'Add Project';
+  document.getElementById('pId').value = '';
+  document.getElementById('pName').value = '';
+  document.getElementById('pDesc').value = '';
+  document.getElementById('pDefaultPM').value = '';
+  selectedProjectPhases = [];
   renderLibrarySelectChips();
   renderSelectedPhasesPreview();
   openModal('projectModal');
 }
 
 async function openEditProject(id) {
-  const proj=allProjects.find(p=>p.id===id); if(!proj) return;
-  document.getElementById('projectModalTitle').textContent='Edit Project';
-  document.getElementById('pId').value=proj.id;
-  document.getElementById('pName').value=proj.name||'';
-  document.getElementById('pDesc').value=proj.description||'';
-  document.getElementById('pDefaultPM').value=proj.default_pm_id||'';
+  const proj = allProjects.find(p => p.id === id);
+  if (!proj) return;
+  document.getElementById('projectModalTitle').textContent = 'Edit Project';
+  document.getElementById('pId').value = proj.id;
+  document.getElementById('pName').value = proj.name || '';
+  document.getElementById('pDesc').value = proj.description || '';
+  document.getElementById('pDefaultPM').value = proj.default_pm_id || '';
   // Pre-populate selectedProjectPhases from existing project_phases
-  selectedProjectPhases=(proj.project_phases||[]).map(ph=>({name:ph.name, existingId:ph.id, fromLibrary:false}));
+  // Mark as fromLibrary=true if name exists in library (for toggle highlighting)
+  selectedProjectPhases = (proj.project_phases || []).map(ph => ({
+    name: ph.name,
+    existingId: ph.id,
+    fromLibrary: !!phaseLibrary.find(l => l.name === ph.name)
+  }));
   renderLibrarySelectChips();
   renderSelectedPhasesPreview();
   openModal('projectModal');
 }
 
 async function saveProject() {
-  const name=document.getElementById('pName').value.trim();
-  if(!name){showToast('Project name required','error');return;}
-  if(!selectedProjectPhases.length){showToast('Please select at least one phase','error');return;}
+  const name = document.getElementById('pName').value.trim();
+  if (!name) { showToast('Project name required', 'error'); return; }
+  if (!selectedProjectPhases.length) { showToast('Please select at least one phase', 'error'); return; }
 
-  const id=document.getElementById('pId').value;
-  const vals={
+  const id = document.getElementById('pId').value;
+  const vals = {
     name,
-    description:document.getElementById('pDesc').value.trim()||null,
-    default_pm_id:document.getElementById('pDefaultPM').value||null,
-    created_by:currentUser.id
+    description: document.getElementById('pDesc').value.trim() || null,
+    default_pm_id: document.getElementById('pDefaultPM').value || null,
+    created_by: currentUser.id
   };
 
   showLoader(true);
-  let projectId=id;
+  let projectId = id;
 
-  if(id){
-    await db.from('projects').update(vals).eq('id',id);
+  if (id) {
+    const { error } = await db.from('projects').update(vals).eq('id', id);
+    if (error) { showToast('Update failed: ' + error.message, 'error'); showLoader(false); return; }
   } else {
-    const{data}=await db.from('projects').insert({...vals,is_active:true}).select().single();
-    projectId=data?.id;
+    const { data, error } = await db.from('projects').insert({ ...vals, is_active: true }).select().single();
+    if (error) { showToast('Create failed: ' + error.message, 'error'); showLoader(false); return; }
+    projectId = data?.id;
   }
 
-  if(projectId){
-    // Determine what to add and what to delete
-    const existingInDB=(allProjects.find(p=>p.id===id)?.project_phases||[]);
-    const selectedNames=selectedProjectPhases.map(p=>p.name);
-    const existingNames=existingInDB.map(p=>p.name);
+  if (projectId) {
+    const existingInDB = (allProjects.find(p => p.id === id)?.project_phases || []);
+    const selectedNames = selectedProjectPhases.map(p => p.name);
+    const existingNames = existingInDB.map(p => p.name);
 
     // Delete phases that were removed
-    const toDelete=existingInDB.filter(ph=>!selectedNames.includes(ph.name));
-    for(const ph of toDelete){
-      await db.from('project_phases').delete().eq('id',ph.id);
+    const toDelete = existingInDB.filter(ph => !selectedNames.includes(ph.name));
+    for (const ph of toDelete) {
+      await db.from('project_phases').delete().eq('id', ph.id);
     }
 
-    // Add new phases
-    const toAdd=selectedProjectPhases.filter(p=>!existingNames.includes(p.name));
-    if(toAdd.length){
-      await db.from('project_phases').insert(toAdd.map(p=>({
-        project_id:projectId, name:p.name, created_by:currentUser.id
-      })));
+    // Add new phases (those not already in DB for this project)
+    const toAdd = selectedProjectPhases.filter(p => !existingNames.includes(p.name));
+    if (toAdd.length) {
+      const { error } = await db.from('project_phases').insert(
+        toAdd.map(p => ({ project_id: projectId, name: p.name, created_by: currentUser.id }))
+      );
+      if (error) { showToast('Phase save error: ' + error.message, 'error'); }
     }
   }
 
   showLoader(false);
-  showToast(id?'Project updated!':'Project added!','success');
+  showToast(id ? 'Project updated!' : 'Project added!', 'success');
   closeModal('projectModal');
   await loadProjects();
 }
 
 async function toggleProjectActive(id, current) {
-  const{error}=await db.from('projects').update({is_active:!current}).eq('id',id);
-  if(error){showToast('Error: '+error.message,'error');return;}
-  showToast(`Project ${current?'deactivated':'activated'}.`,'success');
+  const { error } = await db.from('projects').update({ is_active: !current }).eq('id', id);
+  if (error) { showToast('Error: ' + error.message, 'error'); return; }
+  showToast(`Project ${current ? 'deactivated' : 'activated'}.`, 'success');
   await loadProjects();
 }
 
