@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>ProcureX — Sign In</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="icon" type="image/x-icon" href="ii favicon.png">
+
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
@@ -167,14 +169,16 @@
             display: flex; align-items: center; gap: 9px;
         }
         .fl-mark {
-            width: 32px; height: 32px;
-            background: var(--red);
-            border-radius: var(--r);
-            display: flex; align-items: center; justify-content: center;
-            font-weight: 800; font-size: 12px; color: white;
-            animation: markPulse 3.5s ease-in-out infinite;
-            flex-shrink: 0;
-        }
+    width: 32px;
+    height: 32px;
+    background: url("ii favicon.png") center/cover no-repeat;
+    border-radius: var(--r);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: markPulse 3.5s ease-in-out infinite;
+    flex-shrink: 0;
+}
         @keyframes markPulse {
             0%, 100% { box-shadow: 0 0 0 0 rgba(200,40,26,0.5); }
             50%       { box-shadow: 0 0 0 7px rgba(200,40,26,0); }
@@ -281,10 +285,17 @@
         }
         .bk-logo { display: flex; align-items: center; gap: 7px; }
         .bk-mark {
-            width: 25px; height: 25px; background: var(--red);
-            border-radius: 5px; display: flex; align-items: center; justify-content: center;
-            font-weight: 800; font-size: 9px; color: white;
-        }
+    width: 25px;
+    height: 25px;
+    background: url("ii favicon.png") center/cover no-repeat;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 9px;
+    color: white;
+}
         .bk-name { font-size: 0.83rem; font-weight: 700; color: var(--black); letter-spacing: -0.02em; }
         .bk-name span { color: var(--red); }
 
@@ -411,7 +422,7 @@
             </div>
 
             <div class="fl-logo">
-                <div class="fl-mark">PX</div>
+                <div class="fl-mark"></div>
                 <div class="fl-name">Procure<span>X</span></div>
             </div>
 
@@ -449,7 +460,7 @@
         <div class="face back-face">
             <div class="bk-header">
                 <div class="bk-logo">
-                    <div class="bk-mark">PX</div>
+                    <div class="bk-mark"></div>
                     <div class="bk-name">Procure<span>X</span></div>
                 </div>
                 <button class="bk-back" onclick="flip()" aria-label="Back">
