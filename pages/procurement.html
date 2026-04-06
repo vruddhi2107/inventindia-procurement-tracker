@@ -1125,7 +1125,7 @@ async function openPOModal(prId) {
 
   const savedLogo=localStorage.getItem('po_logo');
   const savedSig=localStorage.getItem('po_sig');
-  const logoSrc=savedLogo||'../assets/Inventindia_Logo-2.png';
+  const logoSrc=savedLogo||'https://nxhvxfvfhvbkymgvmwwi.supabase.co/storage/v1/object/public/assets/Inventindia_Logo-2.png';
   const sigSrc=savedSig||'../stamp.png';
 
   const defaultTermsHTML=`- <strong>Packing :</strong> Goods must be packed in new containers with clear markings for content, gross weight, tare weight, net weight, and hazard info. We will reject goods that don't meet these packing requirements.
@@ -1549,7 +1549,7 @@ function applyBrandingToPO() {
   if (logoSlot) {
     logoSlot.innerHTML = logo
       ? `<img src="${logo}" class="po-logo-img" alt="Logo"/>`
-      : `<img src="../assets/Inventindia_Logo-2.png" class="po-logo-img" alt="Logo" onerror="this.style.display='none'"/>`;
+      : `<img src="https://nxhvxfvfhvbkymgvmwwi.supabase.co/storage/v1/object/public/assets/Inventindia_Logo-2.png" class="po-logo-img" alt="Logo" onerror="this.style.display='none'"/>`;
   }
   if (sigSlot) {
     sigSlot.innerHTML = sig

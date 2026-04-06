@@ -107,7 +107,7 @@ function buildNavbar(user) {
   return `<nav class="navbar">
     <a class="nav-logo" href="#">
       <div class="nav-logo-mark">
-        <img src="/assets/Inventindia_logo-2.png" alt="Logo" width="50" height="20">
+        <img src="https://nxhvxfvfhvbkymgvmwwi.supabase.co/storage/v1/object/public/assets/Inventindia_Logo-2.png" alt="Logo" width="50" height="20">
       </div>
       <div><div class="nav-logo-text">Procure<span>X</span></div></div>
     </a>
