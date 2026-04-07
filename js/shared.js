@@ -149,10 +149,12 @@ function buildNavbar(user) {
 function buildFooter() {
   return `<footer>
     <div class="footer-logo">
-      <div class="footer-logo-mark"><svg width="11" height="11" viewBox="0 0 18 18" fill="none"><rect x="1" y="1" width="6" height="6" rx="1.5" fill="white" opacity="0.9"/><rect x="10" y="1" width="6" height="6" rx="1.5" fill="white" opacity="0.5"/><rect x="1" y="10" width="6" height="6" rx="1.5" fill="white" opacity="0.5"/><rect x="10" y="10" width="6" height="6" rx="1.5" fill="white" opacity="0.9"/></svg></div>
-      <div class="footer-logo-text">Procure<span>Ops</span></div>
+      <div class="footer-logo-mark">
+      <img src="../ii favicon.png" alt="Logo" width="50" height="20">
+      </div>
+      <div class="footer-logo-text">Procure<span>X</span></div>
     </div>
-    <div class="footer-copy">© ${new Date().getFullYear()} ProcureOps</div>
+    <div class="footer-copy">© ${new Date().getFullYear()} ProcureX</div>
     <div class="footer-links"><a href="#">Support</a><a href="#">Docs</a><a href="change-password.html">Change Password</a></div>
   </footer>`;
 }
@@ -441,10 +443,14 @@ function renderVendorCards(vendors, gridId, canEdit=false) {
       <div style="margin-bottom:6px">${starRating(v.avg_rating,v.rating_count)}</div>
       ${pt?`<div style="font-size:0.7rem;margin-bottom:8px;padding:3px 7px;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.18);border-radius:3px;color:#6366f1">💳 ${pt.label}</div>`:''}
       <div style="display:flex;flex-direction:column;gap:2px;margin-bottom:9px">
-        ${v.contact_person?`<div style="font-size:0.75rem;color:var(--gray-3)">👤 ${v.contact_person}</div>`:''}
-        ${v.email?`<div style="font-size:0.75rem">✉ <a href="mailto:${v.email}" style="color:var(--red);text-decoration:none">${v.email}</a></div>`:''}
-        ${v.phone?`<div style="font-size:0.75rem;color:var(--gray-3)">📞 ${v.phone}</div>`:''}
-      </div>
+      ${v.contact_person?`<div style="font-size:0.75rem;color:var(--gray-3)">👤 ${v.contact_person}</div>`:''}
+      ${v.email?`<div style="font-size:0.75rem">✉ <a href="mailto:${v.email}" style="color:var(--red);text-decoration:none">${v.email}</a></div>`:''}
+      ${v.phone?`<div style="font-size:0.75rem;color:var(--gray-3)">📞 ${v.phone}</div>`:''}
+
+      ${(v.gstin||v.GSTIN)?`<div style="font-size:0.75rem;color:var(--gray-3)">🧾 GSTIN: ${v.gstin||v.GSTIN}</div>`:''}
+        ${v.country?`<div style="font-size:0.75rem;color:var(--gray-3)">🌍 ${v.country}</div>`:''}
+        ${v.vendor_type?`<div style="font-size:0.75rem;color:var(--gray-3)">🏷 ${v.vendor_type}</div>`:''}
+    </div>
       <div style="display:flex;gap:5px;flex-wrap:wrap">
         ${canEdit?`
           <button class="btn btn-secondary btn-sm" onclick="editVendor('${v.id}')">Edit</button>

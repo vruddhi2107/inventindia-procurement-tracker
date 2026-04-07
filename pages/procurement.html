@@ -299,6 +299,20 @@
         <div class="form-group"><label class="form-label">Email</label><input class="form-control" id="vEmail" type="email" placeholder="vendor@email.com"/></div>
         <div class="form-group"><label class="form-label">Phone</label><input class="form-control" id="vPhone" placeholder="+971 ..."/></div>
         <div class="form-group"><label class="form-label">Specialization</label><input class="form-control" id="vSpec" placeholder="Electronics, Mechanical..."/></div>
+        <div class="form-group"><label class="form-label">GSTIN</label><input class="form-control" id="vGstin" placeholder="24ABCDE1234F1Z5"/></div>
+
+        <div class="form-group"><label class="form-label">Country</label><input class="form-control" id="vCountry" placeholder="India"/></div>
+
+        <div class="form-group">
+          <label class="form-label">Vendor Type</label>
+          <select class="form-control" id="vVendorType">
+            <option value="">Select type...</option>
+            <option value="Manufacturer">Manufacturer</option>
+            <option value="Supplier">Job Work</option>
+            <option value="Service Provider">Distributor</option>
+            <option value="Trader">Trader</option>
+          </select>
+        </div>
         <div class="form-group full">
           <label class="form-label">Payment Terms *</label>
           <select class="form-control" id="vPaymentTerms">
@@ -591,7 +605,7 @@ document.addEventListener('DOMContentLoaded',()=>{
 
 function openVendorModal(vendor=null){
   document.getElementById('vendorModalTitle').textContent=vendor?'Edit Vendor':'Add Vendor';
-  ['vId','vName','vContact','vEmail','vPhone','vSpec','vAddress','vNotes','vPaymentTerms','vCustomPaymentTerms'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
+  ['vId','vName','vContact','vEmail','vPhone','vSpec','vAddress','vNotes','vPaymentTerms','vCustomPaymentTerms','vGstin','vCountry','vVendorType'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   document.getElementById('customPaymentTermsGroup').style.display='none';
   if(vendor){
     document.getElementById('vId').value=vendor.id;
@@ -603,6 +617,9 @@ function openVendorModal(vendor=null){
     document.getElementById('vAddress').value=vendor.address||'';
     document.getElementById('vNotes').value=vendor.notes||'';
     document.getElementById('vPaymentTerms').value=vendor.payment_terms||'';
+    document.getElementById('vGstin').value = vendor.GSTIN || '';
+document.getElementById('vCountry').value = vendor.country || '';
+document.getElementById('vVendorType').value = vendor.vendor_type || '';
     if(vendor.payment_terms==='custom'){document.getElementById('customPaymentTermsGroup').style.display='block';document.getElementById('vCustomPaymentTerms').value=vendor.custom_payment_terms||'';}
   }
   openModal('vendorModal');
@@ -616,7 +633,9 @@ async function saveVendor(){
   const paymentTerms=document.getElementById('vPaymentTerms').value;
   if(!paymentTerms){showToast('Please select payment terms','error');return;}
   const id=document.getElementById('vId').value;
-  const vals={name,contact_person:document.getElementById('vContact').value.trim()||null,email:document.getElementById('vEmail').value.trim()||null,phone:document.getElementById('vPhone').value.trim()||null,specialization:document.getElementById('vSpec').value.trim()||null,address:document.getElementById('vAddress').value.trim()||null,notes:document.getElementById('vNotes').value.trim()||null,payment_terms:paymentTerms,custom_payment_terms:paymentTerms==='custom'?document.getElementById('vCustomPaymentTerms').value.trim():null,added_by:currentUser.id};
+  const vals={name,contact_person:document.getElementById('vContact').value.trim()||null,email:document.getElementById('vEmail').value.trim()||null,phone:document.getElementById('vPhone').value.trim()||null,specialization:document.getElementById('vSpec').value.trim()||null,address:document.getElementById('vAddress').value.trim()||null,notes:document.getElementById('vNotes').value.trim()||null,GSTIN: document.getElementById('vGstin').value.trim() || null,
+  country: document.getElementById('vCountry').value.trim() || null,
+  vendor_type: document.getElementById('vVendorType').value.trim() || null,payment_terms:paymentTerms,custom_payment_terms:paymentTerms==='custom'?document.getElementById('vCustomPaymentTerms').value.trim():null,added_by:currentUser.id};
   showLoader(true);
   const{error}=id?await db.from('vendors').update(vals).eq('id',id):await db.from('vendors').insert(vals);
   showLoader(false);
@@ -1113,7 +1132,9 @@ async function openPOModal(prId) {
     ? new Date(Date.now()+selectedQ.lead_time_days*86400000).toLocaleDateString('en-GB',{day:'2-digit',month:'2-digit',year:'numeric'}).replace(/\//g,'/')
     : '—';
   const pt=PAYMENT_TERMS_OPTIONS.find(p=>p.value===vendor?.payment_terms);
-  const ptLabel=pt?.label||vendor?.custom_payment_terms||'As agreed';
+  const ptLabel = vendor?.payment_terms === 'custom'
+    ? (vendor?.custom_payment_terms || 'Custom Terms')
+    : (pt?.label || 'As agreed');
   const currency=selectedQ?.currency||'INR';
   const currSymbol=currency==='INR'?'₹':currency;
 
@@ -1144,16 +1165,15 @@ async function openPOModal(prId) {
       ? (baseAmt / partsArr.reduce((s,x)=>s+(x.qty||1),0))
       : (baseAmt / (p.qty||1));
     const rowTotal = unitRate * (p.qty||1);
-    const showAmts = partsArr.length > 1;
     return `<tr>
       <td class="center">${i+1}</td>
-      <td class="center">NA</td>
+      <td class="center"><input class="po-meta-input" style="text-align:center" placeholder="—"/></td>
       <td><div class="item-desc-main">${p.name||'—'}</div>${p.spec?`<div class="item-desc-sub">${p.spec}</div>`:''}</td>
-      <td class="center">—</td>
+      <td class="center"><input class="po-meta-input" style="text-align:center" placeholder="—"/></td>
       <td class="center">${p.qty||1}</td>
       <td class="center">Nos</td>
-      <td class="right">${showAmts?`${currSymbol} ${unitRate.toLocaleString('en-IN',{minimumFractionDigits:2})}`:'—'}</td>
-      <td class="right">${showAmts?`${currSymbol} ${rowTotal.toLocaleString('en-IN',{minimumFractionDigits:2})}`:'—'}</td>
+      <td class="right"><input class="po-meta-input" id="po-unitrate-${i}" style="text-align:right" type="number" value="${unitRate.toFixed(2)}" oninput="recalcPORow(${i},${p.qty||1})"/></td>
+      <td class="right" id="po-rowtotal-${i}">${currSymbol} ${rowTotal.toLocaleString('en-IN',{minimumFractionDigits:2})}</td>
     </tr>`;
   }).join('');
 
@@ -1223,6 +1243,8 @@ async function openPOModal(prId) {
           ${vendor?.phone?`Phone: ${vendor.phone}<br/>`:''}
           ${vendor?.email?`${vendor.email}<br/>`:''}
           ${vendor?.gstin?`GSTIN : ${vendor.gstin}<br/>`:''}
+          ${vendor?.country?`Country : ${vendor.country}<br/>`:''}
+          ${vendor?.vendor_type?`Vendor Type : ${vendor.vendor_type}<br/>`:''}
           Place of Supply: Gujarat.India
         </div>
         <div class="po-addr-cell">
@@ -1346,6 +1368,29 @@ function recalcPO() {
   s('poWords', numToWords(net));
 }
 
+function recalcPORow(idx, qty) {
+  const input = document.getElementById(`po-unitrate-${idx}`);
+  const totalCell = document.getElementById(`po-rowtotal-${idx}`);
+  const sym = window._poCurrSymbol || '₹';
+  if (!input || !totalCell) return;
+  const unitRate = parseFloat(input.value) || 0;
+  const rowTotal = unitRate * qty;
+  totalCell.textContent = `${sym} ${rowTotal.toLocaleString('en-IN',{minimumFractionDigits:2})}`;
+
+  // Recalculate base amount from all row unit rates
+  const partsArr = currentPR?.parts?.length ? currentPR.parts : [{qty:1}];
+  let newBase = 0;
+  partsArr.forEach((p, i) => {
+    const el = document.getElementById(`po-unitrate-${i}`);
+    newBase += (parseFloat(el?.value) || 0) * (p.qty || 1);
+  });
+  window._poBaseAmt = newBase;
+  const basicEl = document.getElementById('poBasicAmt');
+  if (basicEl) basicEl.textContent = `${sym} ${newBase.toLocaleString('en-IN',{minimumFractionDigits:2})}`;
+  const afterEl = document.getElementById('poAfterDiscount');
+  if (afterEl) afterEl.textContent = `${sym} ${newBase.toLocaleString('en-IN',{minimumFractionDigits:2})}`;
+  recalcPO();
+}
 // ── DOWNLOAD PO AS PDF ────────────────────────────────────────
 async function downloadPO() {
   const poBox = document.getElementById('poPreviewBox');
@@ -1857,11 +1902,7 @@ function buildApprovedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, existin
           <div style="font-weight:600;font-size:0.8rem">No Advance Required</div>
           <div style="font-size:0.72rem;color:var(--gray-4)">Pay on delivery</div>
         </div>
-        <div class="advance-option" id="advOptReceived" onclick="selectAdvanceOption('received')">
-          <div style="font-size:1.2rem;margin-bottom:4px">💵</div>
-          <div style="font-weight:600;font-size:0.8rem">Advance Already Received</div>
-          <div style="font-size:0.72rem;color:var(--gray-4)">Mark as already paid</div>
-        </div>
+
         <div class="advance-option" id="advOptRequest" onclick="selectAdvanceOption('request')">
           <div style="font-size:1.2rem;margin-bottom:4px">📤</div>
           <div style="font-weight:600;font-size:0.8rem">Request Advance from Accounts</div>
