@@ -239,8 +239,7 @@
 
   <div id="tabRequests">
     <div class="filter-bar">
-      <input type="text" id="searchInput" placeholder="Search by project or PR #..." oninput="filterTable()"/>
-      <select id="filterPhase" onchange="filterTable()">
+<input type="text" id="searchInput" placeholder="Search by project or PR #..." oninput="filterTable()" autocomplete="off"/>      <select id="filterPhase" onchange="filterTable()">
         <option value="">All Phases</option>
         <option value="procurement_active">Procurement Active</option>
         <option value="approved">Approved — to Order</option>
@@ -1219,7 +1218,7 @@ async function openPOModal(prId) {
         </div>
         <div class="po-addr-cell">
           <table style="width:100%;font-size:0.74rem">
-            <tr><td style="font-weight:600;white-space:nowrap;padding-right:6px;padding-bottom:2px">PO Number :</td><td><strong><span id="poPreviewNum">${poNumber}</span></strong></td></tr>
+            <tr><td style="font-weight:600;white-space:nowrap;padding-right:6px;padding-bottom:2px">PO Number :</td><td><input class="po-meta-input" id="poPreviewNum" value="${poNumber}" style="font-weight:700;font-size:0.82rem"/></td></tr>
             <tr><td style="font-weight:600;white-space:nowrap;padding-right:6px;padding-bottom:2px">PO Date :</td><td><input class="po-meta-input" id="poDate" value="${todayStr}" oninput="document.getElementById('poPreviewNum')&&recalcPO()"/></td></tr>
             <tr><td style="font-weight:600;white-space:nowrap;padding-right:6px;padding-bottom:2px">Delivery Date :</td><td><input class="po-meta-input" id="poDelivery" value="${deliveryDate}"/></td></tr>
             <tr><td style="font-weight:600;white-space:nowrap;padding-right:6px;padding-bottom:2px">Payment Terms :</td><td>${ptLabel}</td></tr>
@@ -1353,19 +1352,38 @@ function recalcPO() {
   const cgst = parseFloat(document.getElementById('cgstInput')?.value || 9) || 0;
   const sgst = parseFloat(document.getElementById('sgstInput')?.value || 9) || 0;
   const pnf  = parseFloat(document.getElementById('pnfInput')?.value  || 0) || 0;
-  const cgstAmt = Math.round(base * cgst / 100 * 100) / 100;
-  const sgstAmt = Math.round(base * sgst / 100 * 100) / 100;
-  const net = base + cgstAmt + sgstAmt + pnf;
+  const discPct = parseFloat(document.getElementById('poDiscountPct')?.value || 0) || 0;
+  const other = parseFloat(document.getElementById('poOtherCharges')?.value || 0) || 0;
+
+  const discAmt = Math.round(base * discPct / 100 * 100) / 100;
+  const afterDiscount = base - discAmt;
+  const cgstAmt = Math.round(afterDiscount * cgst / 100 * 100) / 100;
+  const sgstAmt = Math.round(afterDiscount * sgst / 100 * 100) / 100;
+  const subtotal = afterDiscount + cgstAmt + sgstAmt + pnf + other;
+  const net = Math.round(subtotal);
+  const roundOff = Math.round((net - subtotal) * 100) / 100;
 
   const s = (el, val) => { const e = document.getElementById(el); if(e) e.textContent = val; };
   const f = v => v.toLocaleString('en-IN', {minimumFractionDigits:2});
   s('poCgstPctLabel', cgst);
   s('poSgstPctLabel', sgst);
+  s('poAfterDiscount', `${sym} ${f(afterDiscount)}`);
   s('poCgst',  `${sym} ${f(cgstAmt)}`);
   s('poSgst',  `${sym} ${f(sgstAmt)}`);
   s('poPnf',   `${sym} ${f(pnf)}`);
+  s('poRoundOff', roundOff.toFixed(2));
   s('poNet',   `${sym} ${net.toLocaleString('en-IN',{minimumFractionDigits:0})}`);
   s('poWords', numToWords(net));
+  // Sync the table P&F input with the strip
+  const tableInput = document.getElementById('pnfTableInput');
+  if (tableInput && tableInput !== document.activeElement) tableInput.value = pnf;
+}
+
+function syncPnfInputs() {
+  const tableVal = document.getElementById('pnfTableInput')?.value || '0';
+  const stripInput = document.getElementById('pnfInput');
+  if (stripInput) stripInput.value = tableVal;
+  recalcPO();
 }
 
 function recalcPORow(idx, qty) {
@@ -1453,7 +1471,7 @@ async function downloadPO() {
 // ── CONFIRM GENERATE & SAVE PO ────────────────────────────────
 async function confirmGeneratePO() {
   showLoader(true);
-  const poNumber = document.getElementById('poPreviewNum')?.textContent || '';
+  const poNumber = document.getElementById('poPreviewNum')?.value || document.getElementById('poPreviewNum')?.textContent || '';
   const cgstPct  = parseFloat(document.getElementById('cgstInput')?.value || 9);
   const sgstPct  = parseFloat(document.getElementById('sgstInput')?.value || 9);
   const pnf      = parseFloat(document.getElementById('pnfInput')?.value  || 0);

@@ -62,8 +62,7 @@
 
   <div id="tabRequests">
     <div class="filter-bar">
-      <input type="text" id="searchInput" placeholder="Search by project or PR #..." oninput="filterTable()"/>
-      <select id="filterPhase" onchange="filterTable()">
+<input type="text" id="searchInput" placeholder="Search by project or PR #..." oninput="filterTable()" autocomplete="off"/>      <select id="filterPhase" onchange="filterTable()">
         <option value="">All Phases</option>
         <option value="submitted">Submitted</option>
         <option value="pending_initial_pm_approval">Awaiting PM Clearance</option>

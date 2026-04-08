@@ -159,6 +159,9 @@ function buildFooter() {
   </footer>`;
 }
 
+/*
+
+*/
 // ── PASSWORD CHANGE MODAL (injected once per page) ───────────
 function injectSharedModals() {
   if (document.getElementById('_sharedChangePasswordModal')) return;
