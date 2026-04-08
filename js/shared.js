@@ -75,7 +75,7 @@ function initNavbar(user) {
 function roleLabel(r){return{master:'Master Admin',procurement_manager:'Procurement',engineer:'Engineer',project_manager:'Project Manager',accounts:'Accounts'}[r]||r;}
 function logout(){Session.clear();window.location.href='../index.html';}
 
-function toggleUserMenu(e) {
+window.toggleUserMenu = function toggleUserMenu(e) {
   e.stopPropagation();
   const menu = document.getElementById('userNavMenu');
   if (!menu) return;
@@ -194,7 +194,7 @@ function injectSharedModals() {
   document.body.appendChild(el.firstElementChild);
 }
 
-function openChangePasswordModal() {
+window.openChangePasswordModal = function openChangePasswordModal() {
   const menu = document.getElementById('userNavMenu');
   if (menu) menu.style.display = 'none';
   const m = document.getElementById('_sharedChangePasswordModal');
@@ -206,12 +206,12 @@ function openChangePasswordModal() {
   if (modal) { modal.classList.add('active'); document.body.style.overflow='hidden'; }
 }
 
-function closeChangePasswordModal() {
+window.closeChangePasswordModal = function closeChangePasswordModal() {
   const m = document.getElementById('_sharedChangePasswordModal');
   if (m) { m.classList.remove('active'); document.body.style.overflow=''; }
 }
 
-async function submitPasswordChange() {
+window.submitPasswordChange = async function submitPasswordChange() {
   const oldPw = document.getElementById('_cpOld')?.value || '';
   const newPw = document.getElementById('_cpNew')?.value || '';
   const confirmPw = document.getElementById('_cpConfirm')?.value || '';
