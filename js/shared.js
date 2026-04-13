@@ -352,7 +352,10 @@ function buildPRDetailHTML(pr, quotations=[], vendorName='', pmName='') {
     </div>`:''}
 
     ${pr.client_approval_screenshot?`<div style="margin-top:14px;padding:12px;background:rgba(22,163,74,0.06);border:1px solid rgba(22,163,74,0.2);border-radius:var(--radius)">
-      <div class="detail-key" style="color:#16a34a;margin-bottom:6px">✓ Client Approval</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div class="detail-key" style="color:#16a34a">✓ Client Approval</div>
+        <button class="btn btn-secondary btn-sm" onclick="(function(url){if(!url)return;if(url.startsWith('data:')){try{const arr=url.split(','),mime=arr[0].match(/:(.*?);/)[1],bstr=atob(arr[1]);let n=bstr.length;const u8=new Uint8Array(n);while(n--)u8[n]=bstr.charCodeAt(n);const blob=new Blob([u8],{type:mime}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='client_approval.'+mime.split('/')[1];document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);}catch(e){window.open(url,'_blank');}}else{window.open(url,'_blank');}}('${pr.client_approval_screenshot}'))">⬇ Download</button>
+      </div>
       <img src="${pr.client_approval_screenshot}" style="max-width:100%;max-height:240px;object-fit:contain;border-radius:6px;border:1px solid var(--border)" onerror="this.style.display='none'"/>
       ${pr.client_approval_notes?`<p style="font-size:0.8rem;color:var(--gray-3);margin-top:6px">${pr.client_approval_notes}</p>`:''}
     </div>`:''}
@@ -398,7 +401,7 @@ function renderQuotationCard(q, showSelectBtn=false, selectedId=null) {
       ${q.notes?`<p style="font-size:0.78rem;color:var(--gray-3);margin-bottom:8px">${q.notes}</p>`:''}
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
         ${isImg?`<button class="btn btn-secondary btn-sm" onclick="previewImage('${q.file_url}','${q.file_name}')">👁 Preview</button>`:''}
-        <a href="${q.file_url}" target="_blank" download="${q.file_name}" class="btn btn-secondary btn-sm">⬇ Download</a>
+        <button class="btn btn-secondary btn-sm" onclick="(function(url,name){if(!url)return;if(url.startsWith('data:')){try{const arr=url.split(','),mime=arr[0].match(/:(.*?);/)[1],bstr=atob(arr[1]);let n=bstr.length;const u8=new Uint8Array(n);while(n--)u8[n]=bstr.charCodeAt(n);const blob=new Blob([u8],{type:mime}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);}catch(e){window.open(url,'_blank');}}else{const a=document.createElement('a');a.href=url;a.download=name;a.target='_blank';document.body.appendChild(a);a.click();a.remove();}}('${q.file_url}','${(q.file_name||'quotation').replace(/'/g,"\\'").replace(/\\/g,'\\\\')}'  ))">⬇ Download</button>
         ${showSelectBtn&&!isSelected?`<button class="btn btn-primary btn-sm" onclick="selectQuotation('${q.id}')">✓ Select as Final</button>`:''}
         ${showSelectBtn&&isSelected?`<button class="btn btn-danger btn-sm" onclick="selectQuotation(null)">Deselect</button>`:''}
       </div>

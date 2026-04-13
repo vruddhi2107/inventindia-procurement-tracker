@@ -324,6 +324,22 @@ let selectedQuotationId=null, screenshotBase64=null, selectedApprovalPath=null;
 let isEditMode=false, editingParentId=null;
 let pmScreenshotBase64=null, selectedSourcing=[], attachedFiles=[];
 
+function handleAttachmentDownload(e, url, fileName) {
+  if (!url) return;
+  if (url.startsWith('data:')) {
+    e.preventDefault();
+    try {
+      const arr = url.split(','), mime = arr[0].match(/:(.*?);/)[1];
+      const bstr = atob(arr[1]); let n = bstr.length; const u8 = new Uint8Array(n);
+      while(n--) u8[n] = bstr.charCodeAt(n);
+      const blob = new Blob([u8], {type: mime});
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fileName;
+      document.body.appendChild(a); a.click();
+      setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    } catch(err) { window.open(url, '_blank'); }
+  }
+}
+
 // ── INIT ─────────────────────────────────────────────────────
 async function init() {
   currentUser=Session.require(['engineer']); if(!currentUser) return;

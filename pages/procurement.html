@@ -657,13 +657,15 @@ async function openPR(id) {
   document.getElementById('prModalSub').textContent=`${currentPR.request_category==='vendor_info'?'Vendor Info':'RFQ'} · ${DEPARTMENTS[currentPR.department]} · ${currentPR.users?.name||''}`;
   showLoader(true);
   await loadVendors();
-  const[comments,quotations,vd,poRes]=await Promise.all([
+  const[comments,quotations,vd,poRes,attRes]=await Promise.all([
     loadComments(id),
     db.from('pr_quotations').select('*').eq('pr_id',id).order('created_at').then(r=>r.data||[]),
     currentPR.assigned_vendor_id?db.from('vendors').select('*').eq('id',currentPR.assigned_vendor_id).single():Promise.resolve({data:null}),
-    db.from('purchase_orders').select('*').eq('pr_id',id).order('created_at',{ascending:false}).limit(1).maybeSingle()
+    db.from('purchase_orders').select('*').eq('pr_id',id).order('created_at',{ascending:false}).limit(1).maybeSingle(),
+    db.from('pr_attachments').select('*').eq('pr_id',id).order('created_at')
   ]);
   const existingPO = poRes.data || null;
+  const attachments = attRes.data || [];
   showLoader(false);
   const footer=document.getElementById('prModalFooter');
   footer.innerHTML=`<button class="btn btn-secondary" onclick="closeModal('prModal')">Close</button>`;
@@ -812,8 +814,22 @@ async function openPR(id) {
     </div>`;
   }
 
+  const attachmentsSectionHTML = attachments.length ? `
+    <div style="margin-top:16px;padding:14px;background:rgba(99,102,241,0.04);border:1px solid rgba(99,102,241,0.15);border-radius:var(--radius)">
+      <div class="detail-key" style="color:#6366f1;margin-bottom:10px">📎 Attachments (${attachments.length})</div>
+      <div style="display:flex;flex-direction:column;gap:6px">
+        ${attachments.map(a=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--off-white);border:1px solid var(--border);border-radius:6px">
+          <span style="font-size:1rem;flex-shrink:0">${(a.file_name||'').toLowerCase().includes('.pdf')?'📄':'🖼️'}</span>
+          <span style="font-size:0.78rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.file_name||'Attachment'}</span>
+          <span style="font-size:0.65rem;padding:2px 6px;background:white;border:1px solid var(--border);border-radius:3px;color:var(--gray-4);font-family:var(--font-mono);flex-shrink:0">${a.attachment_type||'doc'}</span>
+          <a href="${a.file_url}" target="_blank" download="${a.file_name||'attachment'}" class="btn btn-secondary btn-sm" style="flex-shrink:0" onclick="handleAttachmentDownload(event,'${a.file_url}','${(a.file_name||'attachment').replace(/'/g,'')}')">⬇ Download</a>
+        </div>`).join('')}
+      </div>
+    </div>` : '';
+
   document.getElementById('prModalBody').innerHTML=
     buildPRDetailHTML(currentPR,quotations,vd?.data?.name||'',currentPR.project_manager_name||'')
+    +attachmentsSectionHTML
     +actionSection+
     `<div style="margin-top:22px;border-top:1px solid var(--border);padding-top:16px">
       <div class="section-title" style="margin-bottom:10px">💬 Comments</div>
@@ -1469,6 +1485,29 @@ async function downloadPO() {
 }
 
 // ── CONFIRM GENERATE & SAVE PO ────────────────────────────────
+// ── ATTACHMENT DOWNLOAD HELPER ───────────────────────────────
+// Handles both Supabase storage URLs and base64 data URIs
+function handleAttachmentDownload(e, url, fileName) {
+  if (!url) return;
+  // base64 data URI — must use programmatic download (browser blocks direct <a download> for data URIs in some contexts)
+  if (url.startsWith('data:')) {
+    e.preventDefault();
+    try {
+      const arr = url.split(','), mime = arr[0].match(/:(.*?);/)[1];
+      const bstr = atob(arr[1]);
+      let n = bstr.length; const u8 = new Uint8Array(n);
+      while(n--) u8[n] = bstr.charCodeAt(n);
+      const blob = new Blob([u8], {type: mime});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = fileName;
+      document.body.appendChild(a); a.click();
+      setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    } catch(err) { console.warn('Download failed:', err); window.open(url, '_blank'); }
+  }
+  // Regular URL — let default <a> behavior handle it
+}
+
 async function confirmGeneratePO() {
   showLoader(true);
   const poNumber = document.getElementById('poPreviewNum')?.value || document.getElementById('poPreviewNum')?.textContent || '';
@@ -1512,14 +1551,28 @@ async function confirmGeneratePO() {
     const fileName = `${poNumber.replace(/\//g,'-')}_${Date.now()}.pdf`;
     const storagePath = `po/${currentPR.id}/${fileName}`;
 
-    // Step 3: Upload to Supabase Storage
+    // Step 3: Upload to Supabase Storage (bucket: 'attachments' must exist and be public)
     const{data:uploadData, error:uploadErr} = await db.storage
       .from('attachments')
       .upload(storagePath, pdfBlob, {contentType:'application/pdf', upsert:true});
 
     if(uploadErr){
-      console.warn('Storage upload failed:', uploadErr.message);
-      showToast('PO saved but PDF upload failed: '+uploadErr.message,'error');
+      console.warn('Storage upload failed:', uploadErr.message, '— falling back to base64 storage');
+      // Fallback: store PDF as base64 data URI directly in pr_attachments
+      try {
+        const reader = new FileReader();
+        const base64Url = await new Promise((res,rej)=>{ reader.onload=()=>res(reader.result); reader.onerror=rej; reader.readAsDataURL(pdfBlob); });
+        await db.from('pr_attachments').insert({
+          pr_id: currentPR.id, uploaded_by: currentUser.id,
+          attachment_type: 'purchase_order',
+          file_name: `PO_${poNumber.replace(/\//g,'-')}.pdf`,
+          file_url: base64Url
+        });
+        pdfUrl = base64Url;
+      } catch(fbErr) {
+        console.warn('Base64 fallback also failed:', fbErr);
+        showToast('PO saved — PDF could not be stored: '+uploadErr.message,'error');
+      }
     } else {
       const{data:urlData} = db.storage.from('attachments').getPublicUrl(storagePath);
       pdfUrl = urlData?.publicUrl;
@@ -1527,7 +1580,7 @@ async function confirmGeneratePO() {
       // Step 4: Save to pr_attachments
       await db.from('pr_attachments').insert({
         pr_id: currentPR.id, uploaded_by: currentUser.id,
-        attachment_type: 'other',
+        attachment_type: 'purchase_order',
         file_name: `PO_${poNumber.replace(/\//g,'-')}.pdf`,
         file_url: pdfUrl
       });

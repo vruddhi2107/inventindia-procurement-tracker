@@ -79,6 +79,22 @@
 let currentUser, allRequests=[], activeTab='clearance', currentPR=null;
 let pmSelectedQuotationId=null, prQuotations=[];
 
+function handleAttachmentDownload(e, url, fileName) {
+  if (!url) return;
+  if (url.startsWith('data:')) {
+    e.preventDefault();
+    try {
+      const arr = url.split(','), mime = arr[0].match(/:(.*?);/)[1];
+      const bstr = atob(arr[1]); let n = bstr.length; const u8 = new Uint8Array(n);
+      while(n--) u8[n] = bstr.charCodeAt(n);
+      const blob = new Blob([u8], {type: mime});
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fileName;
+      document.body.appendChild(a); a.click();
+      setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    } catch(err) { window.open(url, '_blank'); }
+  }
+}
+
 async function init() {
   currentUser=Session.require(['project_manager']); if(!currentUser) return;
   document.getElementById('navbarMount').innerHTML=buildNavbar(currentUser);
@@ -224,7 +240,10 @@ async function openPR(id) {
         <p style="font-size:0.82rem;color:var(--gray-3);margin-bottom:14px">Engineer selected a quote and client has approved. Review below and make your final decision.</p>
         ${selectedQ?`<div style="margin-bottom:14px"><div class="detail-key" style="margin-bottom:8px">Engineer's Selected Quote</div>${renderQuotationCard(selectedQ,false)}</div>`:''}
         ${currentPR.client_approval_screenshot?`<div style="margin-bottom:14px;padding:12px;background:rgba(22,163,74,0.06);border:1px solid rgba(22,163,74,0.2);border-radius:var(--radius)">
-          <div class="detail-key" style="color:#16a34a;margin-bottom:6px">✓ Client Approval Screenshot</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <div class="detail-key" style="color:#16a34a">✓ Client Approval Screenshot</div>
+            <button class="btn btn-secondary btn-sm" onclick="(function(url){if(!url)return;if(url.startsWith('data:')){try{const arr=url.split(','),mime=arr[0].match(/:(.*?);/)[1],bstr=atob(arr[1]);let n=bstr.length;const u8=new Uint8Array(n);while(n--)u8[n]=bstr.charCodeAt(n);const blob=new Blob([u8],{type:mime}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='client_approval.'+mime.split('/')[1];document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);}catch(e){window.open(url,'_blank');}}else{window.open(url,'_blank');}}('${currentPR.client_approval_screenshot}'))">⬇ Download</button>
+          </div>
           <img src="${currentPR.client_approval_screenshot}" style="max-width:100%;max-height:260px;object-fit:contain;border-radius:6px;border:1px solid var(--border)" onerror="this.style.display='none'"/>
           ${currentPR.client_approval_notes?`<p style="margin-top:6px;font-size:0.8rem;color:var(--gray-3)">${currentPR.client_approval_notes}</p>`:''}
         </div>`:''}
