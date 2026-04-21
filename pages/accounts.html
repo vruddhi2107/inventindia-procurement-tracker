@@ -123,21 +123,82 @@
 let currentUser, allPayments=[], allAdvances=[], activeTab='due';
 let pendingAdvanceId=null, pendingAdvanceDecision=null;
 
-function handleAttachmentDownload(e, url, fileName) {
+
+// ── ATTACHMENT PREVIEW & SAFE DOWNLOAD ENGINE ───────────────
+let _attRegistry = [], _previewUrl = null, _previewName = null;
+
+function _registerAtts(arr) { _attRegistry = arr; }
+
+function _attIcon(name) { return (name||'').toLowerCase().includes('.pdf') ? '📄' : '🖼️'; }
+
+function _attTypeLabel(t) {
+  return {quotation:'Quotation',approval_screenshot:'Approval',grn_doc:'GRN',other:'Document',engineer_upload:'Engineer Upload'}[t] || t || 'doc';
+}
+
+function _buildAttRow(a, i) {
+  return `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--off-white,#f8f9fa);border:1px solid var(--border,#e5e7eb);border-radius:6px">
+    <span style="font-size:1.1rem;flex-shrink:0">${_attIcon(a.file_name)}</span>
+    <span style="font-size:0.78rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500">${a.file_name||'Attachment'}</span>
+    <span style="font-size:0.62rem;padding:2px 6px;background:white;border:1px solid var(--border,#e5e7eb);border-radius:3px;color:#6b7280;font-family:monospace;flex-shrink:0">${_attTypeLabel(a.attachment_type)}</span>
+    <button class="btn btn-secondary btn-sm" style="flex-shrink:0" onclick="previewAttByIndex(${i})">👁 Preview</button>
+    <button class="btn btn-secondary btn-sm" style="flex-shrink:0" onclick="downloadAttByIndex(${i})">⬇ Download</button>
+  </div>`;
+}
+
+function _buildAttsSection(atts, title) {
+  if (!atts || !atts.length) return '';
+  _registerAtts(atts);
+  return `<div style="margin-top:16px;padding:14px;background:rgba(99,102,241,0.04);border:1px solid rgba(99,102,241,0.15);border-radius:8px">
+    <div style="color:#6366f1;font-weight:600;font-size:0.82rem;margin-bottom:10px">📎 ${title||'Attachments'} (${atts.length})</div>
+    <div style="display:flex;flex-direction:column;gap:6px">${atts.map((a,i)=>_buildAttRow(a,i)).join('')}</div>
+  </div>`;
+}
+
+function previewAttByIndex(i) { const a=_attRegistry[i]; if(a) openAttPreview(a.file_url, a.file_name); }
+function downloadAttByIndex(i) { const a=_attRegistry[i]; if(a) _triggerDownload(a.file_url, a.file_name); }
+function downloadCurrentPreview() { if(_previewUrl) _triggerDownload(_previewUrl, _previewName); }
+
+function _triggerDownload(url, fileName) {
   if (!url) return;
   if (url.startsWith('data:')) {
-    e.preventDefault();
     try {
-      const arr = url.split(','), mime = arr[0].match(/:(.*?);/)[1];
-      const bstr = atob(arr[1]); let n = bstr.length; const u8 = new Uint8Array(n);
-      while(n--) u8[n] = bstr.charCodeAt(n);
-      const blob = new Blob([u8], {type: mime});
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fileName;
-      document.body.appendChild(a); a.click();
-      setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-    } catch(err) { window.open(url, '_blank'); }
+      const arr=url.split(','), mime=arr[0].match(/:(.*?);/)[1];
+      const bstr=atob(arr[1]); let n=bstr.length; const u8=new Uint8Array(n);
+      while(n--) u8[n]=bstr.charCodeAt(n);
+      const blob=new Blob([u8],{type:mime});
+      const el=document.createElement('a'); el.href=URL.createObjectURL(blob); el.download=fileName||'attachment';
+      document.body.appendChild(el); el.click(); setTimeout(()=>{URL.revokeObjectURL(el.href);el.remove();},1000);
+    } catch(err) { window.open(url,'_blank'); }
+  } else {
+    const el=document.createElement('a'); el.href=url; el.download=fileName||'attachment'; el.target='_blank';
+    document.body.appendChild(el); el.click(); setTimeout(()=>el.remove(),500);
   }
 }
+
+function openAttPreview(url, name) {
+  if (!url) return;
+  _previewUrl=url; _previewName=name||'Attachment';
+  const ov=document.getElementById('attPreviewOverlay');
+  const content=document.getElementById('attPreviewContent');
+  document.getElementById('attPreviewName').textContent=_previewName;
+  const isImage=/\.(png|jpe?g|gif|webp)$/i.test(name)||url.startsWith('data:image');
+  const isPDF=/\.pdf$/i.test(name)||url.startsWith('data:application/pdf');
+  if (isImage) {
+    content.innerHTML=`<img src="${url}" style="max-width:88vw;max-height:76vh;object-fit:contain;border-radius:4px"/>`;
+  } else if (isPDF) {
+    content.innerHTML=`<iframe src="${url}" style="width:82vw;height:76vh;border:none" title="${name}"></iframe>`;
+  } else {
+    content.innerHTML=`<div style="padding:48px;text-align:center;color:#6b7280"><div style="font-size:3rem;margin-bottom:12px">📄</div><div style="font-size:0.9rem;font-weight:600">${name}</div><div style="font-size:0.78rem;margin-top:8px">Preview not available — please use Download</div></div>`;
+  }
+  ov.style.display='flex';
+}
+
+function closeAttPreview() {
+  document.getElementById('attPreviewOverlay').style.display='none';
+  document.getElementById('attPreviewContent').innerHTML='';
+  _previewUrl=null; _previewName=null;
+}
+
 
 async function init() {
   currentUser=Session.require(['accounts','master']); if(!currentUser) return;
@@ -357,16 +418,7 @@ async function openAdvancePRDetail(prId) {
           </div>
         </div>
       </div>` : ''}
-      ${attachments.length ? `<div class="detail-section">
-        <div class="detail-section-title">📎 Attachments (${attachments.length})</div>
-        <div style="display:flex;flex-direction:column;gap:6px">
-          ${attachments.map(a=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--off-white);border:1px solid var(--border);border-radius:6px">
-            <span style="font-size:1rem">${a.file_name?.includes('.pdf')?'📄':'🖼️'}</span>
-            <span style="font-size:0.78rem;flex:1">${a.file_name}</span>
-            <a href="${a.file_url}" target="_blank" download="${a.file_name}" class="btn btn-secondary btn-sm" onclick="handleAttachmentDownload(event,'${a.file_url}','${(a.file_name||'attachment').replace(/'/g,'')}')">⬇ Download</a>
-          </div>`).join('')}
-        </div>
-      </div>` : ''}
+      ${_buildAttsSection(attachments, 'Attachments')}
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="document.getElementById('_advPRDetailModal').classList.remove('active')">Close</button>
@@ -676,17 +728,7 @@ async function openPayDetail(id) {
     </div>
 
     <!-- ── ATTACHMENTS ── -->
-    ${prAttachments.length?`<div class="detail-section">
-      <div class="detail-section-title">📎 Documents & Attachments (${prAttachments.length})</div>
-      <div style="display:flex;flex-direction:column;gap:5px">
-        ${prAttachments.map(a=>`<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--off-white);border:1px solid var(--border);border-radius:6px">
-          <span style="font-size:1rem">${a.file_name?.includes('.pdf')?'📄':'🖼️'}</span>
-          <span style="font-size:0.78rem;flex:1">${a.file_name}</span>
-          <span style="font-size:0.66rem;padding:2px 6px;background:white;border:1px solid var(--border);border-radius:3px;color:var(--gray-4);font-family:var(--font-mono)">${a.attachment_type||'doc'}</span>
-          <a href="${a.file_url}" target="_blank" download="${a.file_name}" class="btn btn-secondary btn-sm" onclick="handleAttachmentDownload(event,'${a.file_url}','${(a.file_name||'attachment').replace(/'/g,'')}')">⬇ Download</a>
-        </div>`).join('')}
-      </div>
-    </div>`:''}
+    ${_buildAttsSection(prAttachments, 'Documents & Attachments')}
 
     <!-- ── BOM ── -->
     ${prData?.parts?.length?`<div class="detail-section">
