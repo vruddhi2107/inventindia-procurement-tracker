@@ -1,3 +1,60 @@
+
+// ══════════════════════════════════════════════════════════════
+// SAFE FILE REGISTRY — eliminates base64-in-HTML-attribute bugs
+// All large file URLs are stored here; buttons reference by index only.
+// ══════════════════════════════════════════════════════════════
+const _fileRegistry = [];
+
+function _regFile(url, name) {
+  // Reuse existing slot if same file already registered
+  const existing = _fileRegistry.findIndex(f => f.url === url && f.name === name);
+  if (existing !== -1) return existing;
+  return _fileRegistry.push({url, name}) - 1;
+}
+
+function _safeDownload(url, fileName) {
+  if (!url) return;
+  if (url.startsWith('data:')) {
+    try {
+      const arr = url.split(','), mime = arr[0].match(/:(.*?);/)[1];
+      const bstr = atob(arr[1]); let n = bstr.length; const u8 = new Uint8Array(n);
+      while(n--) u8[n] = bstr.charCodeAt(n);
+      const blob = new Blob([u8], {type: mime});
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+      a.download = fileName || 'file'; document.body.appendChild(a); a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    } catch(e) { window.open(url, '_blank'); }
+  } else {
+    const a = document.createElement('a'); a.href = url; a.download = fileName || 'file';
+    a.target = '_blank'; document.body.appendChild(a); a.click(); a.remove();
+  }
+}
+
+function _safePreview(url, name) {
+  if (!url) return;
+  // Use page-level preview if available (procurement/accounts pages inject attPreviewOverlay)
+  if (typeof openAttPreview === 'function') { openAttPreview(url, name); return; }
+  // Fallback: inline modal (for pages without the full preview engine)
+  const isImg = /\.(png|jpe?g|gif|webp)$/i.test(name) || url.startsWith('data:image');
+  const isPDF = /\.pdf$/i.test(name) || url.startsWith('data:application/pdf');
+  const o = document.createElement('div');
+  o.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
+  const inner = isImg
+    ? `<div style="max-width:90vw;max-height:85vh;overflow:auto;border-radius:10px;background:white;padding:4px"><img src="${url}" style="max-width:100%;display:block;border-radius:8px" alt="${name}"/></div>`
+    : isPDF
+    ? `<div style="width:84vw;height:82vh;border-radius:10px;overflow:hidden;background:white"><iframe src="${url}" style="width:100%;height:100%;border:none" title="${name}"></iframe></div>`
+    : `<div style="padding:48px;background:white;border-radius:10px;text-align:center;color:#6b7280"><div style="font-size:3rem;margin-bottom:12px">📄</div><div style="font-weight:600">${name}</div><div style="font-size:0.8rem;margin-top:8px">Preview not available</div></div>`;
+  o.innerHTML = inner + `<div style="display:flex;gap:10px;margin-top:14px">
+    <button style="background:white;border:none;padding:8px 22px;border-radius:6px;font-weight:600;cursor:pointer" onclick="_safeDownload(_fileRegistry[${_fileRegistry.length}]?.url,_fileRegistry[${_fileRegistry.length}]?.name)">⬇ Download</button>
+    <button style="background:white;border:none;padding:8px 22px;border-radius:6px;font-weight:600;cursor:pointer" onclick="this.closest('[style*=fixed]').remove()">✕ Close</button>
+  </div>`;
+  o.onclick = e => { if(e.target===o) o.remove(); };
+  document.body.appendChild(o);
+}
+
+function _downloadByIdx(i) { const f=_fileRegistry[i]; if(f) _safeDownload(f.url,f.name); }
+function _previewByIdx(i)  { const f=_fileRegistry[i]; if(f) _safePreview(f.url,f.name); }
+// ══════════════════════════════════════════════════════════════
 // ── DOUBLE-LOAD GUARD ───────────────────────────────────────
 if (!window._procureSharedLoaded) {
 window._procureSharedLoaded = true;
@@ -354,7 +411,8 @@ function buildPRDetailHTML(pr, quotations=[], vendorName='', pmName='') {
     ${pr.client_approval_screenshot?`<div style="margin-top:14px;padding:12px;background:rgba(22,163,74,0.06);border:1px solid rgba(22,163,74,0.2);border-radius:var(--radius)">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
         <div class="detail-key" style="color:#16a34a">✓ Client Approval</div>
-        <button class="btn btn-secondary btn-sm" onclick="(function(url){if(!url)return;if(url.startsWith('data:')){try{const arr=url.split(','),mime=arr[0].match(/:(.*?);/)[1],bstr=atob(arr[1]);let n=bstr.length;const u8=new Uint8Array(n);while(n--)u8[n]=bstr.charCodeAt(n);const blob=new Blob([u8],{type:mime}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='client_approval.'+mime.split('/')[1];document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);}catch(e){window.open(url,'_blank');}}else{window.open(url,'_blank');}}('${pr.client_approval_screenshot}'))">⬇ Download</button>
+        <button class="btn btn-secondary btn-sm" onclick="_previewByIdx(${_regFile(pr.client_approval_screenshot,'client_approval')})">👁 Preview</button>
+        <button class="btn btn-secondary btn-sm" onclick="_downloadByIdx(${_regFile(pr.client_approval_screenshot,'client_approval')})">⬇ Download</button>
       </div>
       <img src="${pr.client_approval_screenshot}" style="max-width:100%;max-height:240px;object-fit:contain;border-radius:6px;border:1px solid var(--border)" onerror="this.style.display='none'"/>
       ${pr.client_approval_notes?`<p style="font-size:0.8rem;color:var(--gray-3);margin-top:6px">${pr.client_approval_notes}</p>`:''}
@@ -380,8 +438,9 @@ function buildPRDetailHTML(pr, quotations=[], vendorName='', pmName='') {
 function renderQuotationCard(q, showSelectBtn=false, selectedId=null) {
   const isSelected = q.id===selectedId||q.is_selected;
   const isImg = q.file_type?.includes('image');
-  const isPDF = q.file_type==='application/pdf';
+  const isPDF = q.file_type==='application/pdf'||q.file_name?.toLowerCase().includes('.pdf');
   const currency = q.currency||'AED';
+  const fi = _regFile(q.file_url, q.file_name||'quotation');
   return `<div class="quotation-card ${isSelected?'selected':''}" id="qcard-${q.id}">
     <div class="quotation-card-header">
       <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
@@ -400,8 +459,8 @@ function renderQuotationCard(q, showSelectBtn=false, selectedId=null) {
       </div>`:''}
       ${q.notes?`<p style="font-size:0.78rem;color:var(--gray-3);margin-bottom:8px">${q.notes}</p>`:''}
       <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-        ${isImg?`<button class="btn btn-secondary btn-sm" onclick="previewImage('${q.file_url}','${q.file_name}')">👁 Preview</button>`:''}
-        <button class="btn btn-secondary btn-sm" onclick="(function(url,name){if(!url)return;if(url.startsWith('data:')){try{const arr=url.split(','),mime=arr[0].match(/:(.*?);/)[1],bstr=atob(arr[1]);let n=bstr.length;const u8=new Uint8Array(n);while(n--)u8[n]=bstr.charCodeAt(n);const blob=new Blob([u8],{type:mime}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);}catch(e){window.open(url,'_blank');}}else{const a=document.createElement('a');a.href=url;a.download=name;a.target='_blank';document.body.appendChild(a);a.click();a.remove();}}('${q.file_url}','${(q.file_name||'quotation').replace(/'/g,"\\'").replace(/\\/g,'\\\\')}'  ))">⬇ Download</button>
+        <button class="btn btn-secondary btn-sm" onclick="_previewByIdx(${fi})">👁 Preview</button>
+        <button class="btn btn-secondary btn-sm" onclick="_downloadByIdx(${fi})">⬇ Download</button>
         ${showSelectBtn&&!isSelected?`<button class="btn btn-primary btn-sm" onclick="selectQuotation('${q.id}')">✓ Select as Final</button>`:''}
         ${showSelectBtn&&isSelected?`<button class="btn btn-danger btn-sm" onclick="selectQuotation(null)">Deselect</button>`:''}
       </div>
@@ -409,14 +468,7 @@ function renderQuotationCard(q, showSelectBtn=false, selectedId=null) {
   </div>`;
 }
 
-function previewImage(url, name) {
-  const o=document.createElement('div');
-  o.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;cursor:pointer';
-  o.innerHTML=`<div style="max-width:90vw;max-height:85vh;overflow:auto;border-radius:10px;background:white;padding:3px"><img src="${url}" style="max-width:100%;display:block;border-radius:8px" alt="${name}"/></div>
-    <button style="margin-top:14px;background:white;border:none;padding:8px 22px;border-radius:6px;font-weight:600;cursor:pointer" onclick="this.parentElement.remove()">✕ Close</button>`;
-  o.onclick=e=>{if(e.target===o)o.remove();};
-  document.body.appendChild(o);
-}
+function previewImage(url, name) { _safePreview(url, name); }
 
 // ── VENDOR VIEW ─────────────────────────────────────────────
 async function loadAndRenderVendors(gridId, searchId) {
