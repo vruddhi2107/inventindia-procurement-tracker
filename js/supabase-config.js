@@ -45,6 +45,7 @@ const PHASES = {
   rejected:                     { label: 'Rejected & Closed',        color: '#ef4444', icon: '' }
 };
 
+
 const ORDER_TYPES = {
   repeat:       'Repeat Order (Previously Requested)',
   custom:       'Custom Order (Vendor Customization)',

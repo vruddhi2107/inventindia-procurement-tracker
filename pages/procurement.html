@@ -444,7 +444,7 @@
 <script>
 let currentUser, allRequests=[], allVendors=[], activeTab='active', currentPR=null;
 let pendingRatePRId=null, pendingRateVendorId=null;
-let uploadedFiles=[];
+let uploadedFiles=[], currentAttachments=[], paymentRequestFiles=[];
 
 // ── INIT ─────────────────────────────────────────────────────
 async function init() {
@@ -665,7 +665,16 @@ async function openPR(id) {
     db.from('pr_attachments').select('*').eq('pr_id',id).order('created_at')
   ]);
   const existingPO = poRes.data || null;
-  const attachments = attRes.data || [];
+  // Normalize engineer's JSONB attachments (stored in procurement_requests.attachments)
+  // into the same shape as pr_attachments table rows so they render identically
+  const jsonbAttachments = (currentPR.attachments || []).map(a => ({
+    file_name: a.name || 'Attachment',
+    file_url: a.data,
+    attachment_type: 'engineer_upload',
+    file_type: a.type
+  }));
+  currentAttachments = [...jsonbAttachments, ...(attRes.data || [])];
+  const attachments = currentAttachments;
   showLoader(false);
   const footer=document.getElementById('prModalFooter');
   footer.innerHTML=`<button class="btn btn-secondary" onclick="closeModal('prModal')">Close</button>`;
@@ -818,11 +827,11 @@ async function openPR(id) {
     <div style="margin-top:16px;padding:14px;background:rgba(99,102,241,0.04);border:1px solid rgba(99,102,241,0.15);border-radius:var(--radius)">
       <div class="detail-key" style="color:#6366f1;margin-bottom:10px">📎 Attachments (${attachments.length})</div>
       <div style="display:flex;flex-direction:column;gap:6px">
-        ${attachments.map(a=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--off-white);border:1px solid var(--border);border-radius:6px">
+        ${attachments.map((a,i)=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--off-white);border:1px solid var(--border);border-radius:6px">
           <span style="font-size:1rem;flex-shrink:0">${(a.file_name||'').toLowerCase().includes('.pdf')?'📄':'🖼️'}</span>
           <span style="font-size:0.78rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.file_name||'Attachment'}</span>
           <span style="font-size:0.65rem;padding:2px 6px;background:white;border:1px solid var(--border);border-radius:3px;color:var(--gray-4);font-family:var(--font-mono);flex-shrink:0">${a.attachment_type||'doc'}</span>
-          <a href="${a.file_url}" target="_blank" download="${a.file_name||'attachment'}" class="btn btn-secondary btn-sm" style="flex-shrink:0" onclick="handleAttachmentDownload(event,'${a.file_url}','${(a.file_name||'attachment').replace(/'/g,'')}')">⬇ Download</a>
+          <button class="btn btn-secondary btn-sm" style="flex-shrink:0" onclick="downloadAttachmentByIndex(${i})">⬇ Download</button>
         </div>`).join('')}
       </div>
     </div>` : '';
@@ -1486,27 +1495,54 @@ async function downloadPO() {
 
 // ── CONFIRM GENERATE & SAVE PO ────────────────────────────────
 // ── ATTACHMENT DOWNLOAD HELPER ───────────────────────────────
-// Handles both Supabase storage URLs and base64 data URIs
-function handleAttachmentDownload(e, url, fileName) {
-  if (!url) return;
-  // base64 data URI — must use programmatic download (browser blocks direct <a download> for data URIs in some contexts)
+// Uses index into currentAttachments to avoid embedding large base64 in HTML attributes
+function downloadAttachmentByIndex(i) {
+  const a = currentAttachments[i];
+  if (!a || !a.file_url) return;
+  const url = a.file_url;
+  const fileName = a.file_name || 'attachment';
   if (url.startsWith('data:')) {
-    e.preventDefault();
     try {
       const arr = url.split(','), mime = arr[0].match(/:(.*?);/)[1];
-      const bstr = atob(arr[1]);
-      let n = bstr.length; const u8 = new Uint8Array(n);
+      const bstr = atob(arr[1]); let n = bstr.length;
+      const u8 = new Uint8Array(n);
       while(n--) u8[n] = bstr.charCodeAt(n);
       const blob = new Blob([u8], {type: mime});
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = fileName;
-      document.body.appendChild(a); a.click();
-      setTimeout(()=>{ URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      const el = document.createElement('a');
+      el.href = URL.createObjectURL(blob);
+      el.download = fileName;
+      document.body.appendChild(el); el.click();
+      setTimeout(()=>{ URL.revokeObjectURL(el.href); el.remove(); }, 1000);
     } catch(err) { console.warn('Download failed:', err); window.open(url, '_blank'); }
+  } else {
+    window.open(url, '_blank');
   }
-  // Regular URL — let default <a> behavior handle it
 }
+
+// ── PAYMENT REQUEST ATTACHMENT HELPERS ───────────────────────
+async function handlePRAttachFiles(e) {
+  const files = [...e.target.files];
+  const allowed = ['image/png','image/jpeg','application/pdf'];
+  for (const file of files) {
+    if (file.size > 5*1024*1024) { showToast(`${file.name} too large`,'error'); continue; }
+    if (!allowed.includes(file.type)) { showToast(`${file.name} — unsupported`,'error'); continue; }
+    const b64 = await fileToBase64(file);
+    paymentRequestFiles.push({name: file.name, type: file.type, data: b64});
+  }
+  e.target.value = '';
+  renderPRAttachList();
+}
+
+function renderPRAttachList() {
+  const el = document.getElementById('prAttachList'); if (!el) return;
+  el.innerHTML = paymentRequestFiles.map((f,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--off-white);border:1px solid var(--border);border-radius:6px">
+      <span style="font-size:0.8rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</span>
+      <button class="btn btn-danger btn-sm" onclick="removePRAttach(${i})">✕</button>
+    </div>`).join('');
+}
+
+function removePRAttach(i) { paymentRequestFiles.splice(i,1); renderPRAttachList(); }
 
 async function confirmGeneratePO() {
   showLoader(true);
@@ -1691,6 +1727,7 @@ async function reRequestAdvance() {
 
 // ── PAYMENT REQUEST ───────────────────────────────────────────
 async function openPaymentRequestModal(prId) {
+  paymentRequestFiles = [];
   const pr=currentPR;
   const{data:quotations}=await db.from('pr_quotations').select('*').eq('pr_id',prId);
   const selectedQ=quotations?.find(q=>q.is_selected||q.id===pr.selected_quotation_id)||quotations?.[0];
@@ -1767,6 +1804,15 @@ async function openPaymentRequestModal(prId) {
           <label class="form-label">Additional Notes to Accounts</label>
           <textarea class="form-control" id="prPayNotes" placeholder="Any special instructions, partial payment status..."></textarea>
         </div>
+        <div class="form-group full" style="margin-top:4px">
+          <label class="form-label">📎 Attach Documents (Invoice, Delivery Note, etc.)</label>
+          <div style="border:2px dashed var(--border);border-radius:var(--radius);padding:14px 16px;text-align:center;cursor:pointer;transition:border-color .15s" onclick="document.getElementById('prAttachInput').click()" onmouseenter="this.style.borderColor='#6366f1'" onmouseleave="this.style.borderColor=''">
+            <div style="font-size:1.4rem;margin-bottom:4px">📁</div>
+            <div style="font-size:0.82rem;color:var(--gray-3)">Click to upload · PNG, JPG, PDF · Max 5 MB each</div>
+            <input type="file" id="prAttachInput" accept=".png,.jpg,.jpeg,.pdf" multiple style="display:none" onchange="handlePRAttachFiles(event)"/>
+          </div>
+          <div id="prAttachList" style="margin-top:8px;display:flex;flex-direction:column;gap:6px"></div>
+        </div>
       </div>
     </div>`;
   openModal('payReqModal');
@@ -1791,6 +1837,18 @@ async function submitPaymentRequest() {
   if(!error){
     await db.from('procurement_requests').update({phase:'payment_requested',updated_at:new Date().toISOString()}).eq('id',currentPR.id);
     await window.postComment(currentPR.id,currentUser.id,`💰 Payment request of ${invCur} ${invAmt.toLocaleString()} submitted to accounts.`);
+    if (paymentRequestFiles.length) {
+      for (const f of paymentRequestFiles) {
+        await db.from('pr_attachments').insert({
+          pr_id: currentPR.id,
+          uploaded_by: currentUser.id,
+          attachment_type: 'payment_request',
+          file_name: f.name,
+          file_url: f.data
+        });
+      }
+      paymentRequestFiles = [];
+    }
   }
   showLoader(false);
   if(error){showToast('Error: '+error.message,'error');return;}

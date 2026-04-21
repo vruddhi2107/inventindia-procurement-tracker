@@ -332,7 +332,11 @@ async function openAdvancePRDetail(prId) {
   }
   const po = poRes.data;
   const quotes = quotesRes.data || [];
-  const attachments = attRes.data || [];
+  const jsonbAtts1 = (pr?.attachments || []).map(a => ({
+    file_name: a.name || 'Attachment', file_url: a.data,
+    attachment_type: 'engineer_upload', file_type: a.type
+  }));
+  const attachments = [...jsonbAtts1, ...(attRes.data || [])];
 
   ov.innerHTML = `<div class="modal" style="max-width:800px">
     <div class="modal-header">
@@ -505,7 +509,11 @@ async function openPayDetail(id) {
     prData = prRes.data;
     prQuotes = quotesRes.data || [];
     prPO = poRes.data;
-    prAttachments = attRes.data || [];
+    const jsonbAtts2 = (prData?.attachments || []).map(a => ({
+      file_name: a.name || 'Attachment', file_url: a.data,
+      attachment_type: 'engineer_upload', file_type: a.type
+    }));
+    prAttachments = [...jsonbAtts2, ...(attRes.data || [])];
     prComments = commRes.data || [];
     advanceData = advRes.data;
   }
