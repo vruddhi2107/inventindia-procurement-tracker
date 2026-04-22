@@ -1447,25 +1447,18 @@ async function downloadPO() {
   if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Generating...'; }
 
   await new Promise(r => setTimeout(r, 80));
-
+const frozen = _freezePOInputs(poBox);   // ← swap inputs to spans
   try {
     // Temporarily hide contenteditable outlines and input borders for clean capture
-    const inputs = poBox.querySelectorAll('input.po-meta-input');
-    inputs.forEach(i => { i.style.borderBottom = 'none'; });
-    const terms = poBox.querySelector('#poTermsEditable');
-    if (terms) { terms.style.border = 'none'; terms.style.boxShadow = 'none'; }
-
-    const canvas = await html2canvas(poBox, {
+    // ── PO CAPTURE HELPER: swap inputs → spans, capture, restore ──
+    
+   const canvas = await html2canvas(poBox, {
       scale: 2,
       useCORS: true,
       allowTaint: true,
       backgroundColor: '#ffffff',
       logging: false
     });
-
-    // Restore styles
-    inputs.forEach(i => { i.style.borderBottom = ''; });
-    if (terms) { terms.style.border = ''; terms.style.boxShadow = ''; }
 
     const imgData = canvas.toDataURL('image/jpeg', 0.95);
     const { jsPDF } = window.jspdf;
@@ -1485,13 +1478,14 @@ async function downloadPO() {
       }
     }
 
-    const poNum = document.getElementById('poPreviewNum')?.textContent || 'PO';
+    const poNum = document.getElementById('poPreviewNum')?.value || 'PO';
     pdf.save(`${poNum.replace(/\//g,'-')}.pdf`);
     showToast('PDF downloaded!', 'success');
   } catch(err) {
     showToast('PDF generation failed: ' + err.message, 'error');
     console.error(err);
   } finally {
+    _restorePOInputs(frozen);              // ← always restore
     if (btn) { btn.disabled = false; btn.innerHTML = origText; }
   }
 }
@@ -1622,14 +1616,9 @@ async function confirmGeneratePO() {
   let pdfUrl = null;
   try {
     const previewEl = document.getElementById('poPreviewBox');
-    const inputs = previewEl.querySelectorAll('input.po-meta-input');
-    inputs.forEach(i=>{ i.style.borderBottom='none'; });
-    const terms = previewEl.querySelector('#poTermsEditable');
-    if (terms) { terms.style.border='none'; terms.style.boxShadow='none'; }
-
+    const frozen = _freezePOInputs(previewEl);
     const canvas = await html2canvas(previewEl, {scale:2, useCORS:true, backgroundColor:'#ffffff'});
-    inputs.forEach(i=>{ i.style.borderBottom=''; });
-    if (terms) { terms.style.border=''; terms.style.boxShadow=''; }
+    _restorePOInputs(frozen);
 
     const {jsPDF} = window.jspdf;
     const pdf = new jsPDF({orientation:'portrait', unit:'mm', format:'a4'});
@@ -2031,6 +2020,30 @@ function buildAdvanceApprovedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, 
     <button class="btn btn-primary" onclick="placeOrder()">Confirm Order Placed →</button>
   </div>`;
 }
+function _freezePOInputs(container) {
+      const inputs = [...container.querySelectorAll('input.po-meta-input')];
+      const snapshots = inputs.map(inp => {
+        const span = document.createElement('span');
+        span.textContent = inp.value || inp.placeholder || '';
+        span.style.cssText = `display:inline-block;font-size:inherit;font-family:inherit;
+          color:inherit;width:100%;padding:0;background:transparent;`;
+        inp.parentNode.replaceChild(span, inp);
+        return { span, inp };
+      });
+      // Also hide the tax input borders
+      const taxInputs = [...container.querySelectorAll('.po-tax-input')];
+      taxInputs.forEach(i => { i._origBorder = i.style.border; i.style.border = 'none'; });
+      const terms = container.querySelector('#poTermsEditable');
+      if (terms) { terms._origBorder = terms.style.border; terms._origShadow = terms.style.boxShadow;
+        terms.style.border = 'none'; terms.style.boxShadow = 'none'; }
+      return { snapshots, taxInputs, terms };
+    }
+
+    function _restorePOInputs({ snapshots, taxInputs, terms }) {
+      snapshots.forEach(({ span, inp }) => span.parentNode.replaceChild(inp, span));
+      taxInputs.forEach(i => { i.style.border = i._origBorder || ''; });
+      if (terms) { terms.style.border = terms._origBorder || ''; terms.style.boxShadow = terms._origShadow || ''; }
+    }
 
 function buildApprovedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, existingPO) {
   const currency = selectedQ?.currency || 'AED';
