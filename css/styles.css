@@ -583,6 +583,7 @@ footer {
 .role-procurement_manager { background: rgba(224,32,32,0.1); color: var(--red); border: 1px solid rgba(224,32,32,0.3); }
 .role-engineer { background: rgba(59,130,246,0.1); color: #3b82f6; border: 1px solid rgba(59,130,246,0.3); }
 .role-project_manager { background: rgba(16,185,129,0.1); color: #10b981; border: 1px solid rgba(16,185,129,0.3); }
+.role-workshop { background: rgba(185, 148, 16, 0.1); color: #f1cc70; border: 1px solid rgba(203, 190, 8, 0.3); }
 
 /* ── REQUEST NUMBER ── */
 .pr-number {
@@ -967,6 +968,11 @@ textarea.form-control { resize: vertical; min-height: 74px; line-height: 1.5; }
 .wf-label { font-size: 0.57rem; color: var(--gray-4); margin-top: 4px; text-align: center; line-height: 1.3; font-weight: 500; }
 .wf-step.current .wf-label { color: var(--red); font-weight: 600; }
 .wf-step.done .wf-label { color: #15803d; }
+.wf-date { font-size: 0.52rem; color: var(--gray-4); margin-top: 2px; text-align: center; font-family: var(--font-mono); line-height: 1.2; min-height: 14px; }
+.wf-step.done .wf-date, .wf-step.current .wf-date { color: var(--gray-3); }
+.wf-step.skipped .wf-node { background: var(--off-white); border-color: var(--border); color: var(--gray-4); }
+.wf-step.skipped .wf-label { color: var(--gray-5); font-style: italic; }
+.wf-email-tag { font-size: 0.48rem; color: #6366f1; background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2); border-radius: 3px; padding: 1px 4px; margin-top: 2px; text-align: center; white-space: nowrap; }
 
 /* ── COMMENTS ── */
 .comment-list { display: flex; flex-direction: column; gap: 8px; }
@@ -1340,6 +1346,11 @@ textarea.form-control { resize: vertical; min-height: 74px; line-height: 1.5; }
 .wf-label { font-size: 0.57rem; color: var(--gray-4); margin-top: 4px; text-align: center; line-height: 1.3; font-weight: 500; }
 .wf-step.current .wf-label { color: var(--red); font-weight: 600; }
 .wf-step.done .wf-label { color: #15803d; }
+.wf-date { font-size: 0.52rem; color: var(--gray-4); margin-top: 2px; text-align: center; font-family: var(--font-mono); line-height: 1.2; min-height: 14px; }
+.wf-step.done .wf-date, .wf-step.current .wf-date { color: var(--gray-3); }
+.wf-step.skipped .wf-node { background: var(--off-white); border-color: var(--border); color: var(--gray-4); }
+.wf-step.skipped .wf-label { color: var(--gray-5); font-style: italic; }
+.wf-email-tag { font-size: 0.48rem; color: #6366f1; background: rgba(99,102,241,0.08); border: 1px solid rgba(99,102,241,0.2); border-radius: 3px; padding: 1px 4px; margin-top: 2px; text-align: center; white-space: nowrap; }
 
 /* ── COMMENTS ── */
 .comment-list { display: flex; flex-direction: column; gap: 8px; }

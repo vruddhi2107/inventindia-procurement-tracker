@@ -92,13 +92,12 @@ var PAYMENT_TERMS_OPTIONS = typeof PAYMENT_TERMS_OPTIONS !== 'undefined' ? PAYME
   {value:'no_advance',label:'No Advance (Net 30/60/90)'},
   {value:'custom',label:'Custom Terms'}
 ];
-// Legacy phase compat: map old keys to new
-const PHASE_LEGACY_MAP = {
-  'advance_requested':  'advance_raised_to_accounts',
-  'advance_approved':   'advance_payment_received',
-  'advance_rejected':   'advance_raised_to_accounts',
-  'payment_requested':  'payment_raised_to_accounts',
-};
+if (typeof PHASE_ORDER !== 'undefined' && !PHASE_ORDER.includes('qc_passed')) {
+  PHASE_ORDER.splice(PHASE_ORDER.indexOf('accepted'), 0, 'qc_passed', 'payment_requested');
+}
+if (typeof PHASE_ORDER !== 'undefined' && !PHASE_ORDER.includes('advance_requested')) {
+  PHASE_ORDER.splice(PHASE_ORDER.indexOf('order_placed') + 1, 0, 'advance_requested');
+}
 
 function getPhaseBadge(phase){
   const map={
@@ -319,75 +318,42 @@ const WF_STEPS = [
   {key:'procurement_active',label:'Procurement'},
   {key:'quotations_shared',label:'Quotations'},
   {key:'pending_pm_final_approval',label:'PM Approval'},
-  {key:'approved',label:'Approved'},
-  {key:'advance_raised_to_accounts',label:'Adv. Raised',optional:true},
-  {key:'advance_payment_received',label:'Adv. Received',optional:true},
+  {key:'approved',label:'PM Approved'},
   {key:'order_placed',label:'Ordered'},
+  {key:'advance_requested',label:'Advance Pay'},
   {key:'grn_pending',label:'GRN/QC'},
   {key:'qc_passed',label:'QC Passed'},
-  {key:'payment_raised_to_accounts',label:'Pay. Raised'},
-  {key:'payment_received',label:'Pay. Received'},
-  {key:'accepted',label:'Complete'}
+  {key:'payment_requested',label:'Payment'}
 ];
 
-function renderWorkflowTrack(phase, phaseTimestamps, createdAt) {
-  var ts = Object.assign({}, phaseTimestamps || {});
-  // Fall back to created_at for submitted timestamp
-  if (!ts.submitted && createdAt) ts.submitted = createdAt;
+function renderWorkflowTrack(phase, phaseTimestamps) {
+  var ts = phaseTimestamps || {};
   var phaseToStep = {
-    'advance_approved': 'advance_payment_received',
-    'advance_rejected': 'advance_raised_to_accounts',
-    // legacy compat
-    'advance_requested': 'advance_raised_to_accounts',
-    'payment_requested': 'payment_raised_to_accounts'
+    'advance_approved': 'advance_requested',
+    'advance_rejected': 'advance_requested'
   };
   var effectivePhase = phaseToStep[phase] || phase;
-  var idx = PHASE_ORDER.indexOf(effectivePhase);
-  var isRej = phase === 'rejected';
-
+  var idx=PHASE_ORDER.indexOf(effectivePhase);
+  var isRej=phase==='rejected';
+  var isAdvRej=phase==='advance_rejected';
+  var isAdvApp=phase==='advance_approved';
   function shortDate(iso) {
     if (!iso) return '';
     var d = new Date(iso);
-    return d.toLocaleDateString('en-GB', {day:'2-digit', month:'short'});
+    return d.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
   }
-  function shortTime(iso) {
-    if (!iso) return '';
-    var d = new Date(iso);
-    return d.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
-  }
-
-  return '<div class="workflow-track">' + WF_STEPS.map(function(s, i) {
-    var si = PHASE_ORDER.indexOf(s.key);
-    var isCurrent = effectivePhase === s.key;
-    var isDone = si < idx;
-    var hasTs = !!ts[s.key];
-    // Optional phases (advance) shown as skipped if done but no timestamp
-    var isSkipped = isDone && !hasTs && s.optional;
-    var cls = isCurrent ? 'current' : (isDone && !isSkipped) ? 'done' : isSkipped ? 'skipped' : '';
-
-    // Email notification indicator
-    var emailKey = s.key + '_email_sent';
-    var emailTs = ts[emailKey];
-    var emailHtml = emailTs
-      ? '<div class="wf-email-tag">✉ ' + shortDate(emailTs) + '</div>'
-      : (isCurrent || isDone) && !isSkipped ? '<div class="wf-email-tag wf-email-pending"></div>' : '';
-
-    var nodeStyle = '', labelStyle = '', nodeContent = isDone && !isSkipped ? '✓' : i + 1;
-    var nodeLabel = s.label;
-    if (isSkipped) { nodeStyle = 'style="background:var(--off-white);border-color:var(--border);color:var(--gray-4)"'; labelStyle = 'style="color:var(--gray-4)"'; nodeContent = '—'; }
-
-    // Date: show for all done/current phases even if timestamp missing (show '—' placeholder)
-    var dateStr = (isDone || isCurrent) && !isSkipped ? (shortDate(ts[s.key]) || '') : '';
-    var dateHtml = '<div class="wf-date">' + dateStr + '</div>';
-
-    return '<div class="wf-step ' + cls + '">' +
-      '<div class="wf-node" ' + nodeStyle + '>' + nodeContent + '</div>' +
-      '<div class="wf-label" ' + labelStyle + '>' + nodeLabel + '</div>' +
-      dateHtml +
-      '</div>';
-  }).join('') +
-  (isRej ? '<div class="wf-step current"><div class="wf-node" style="background:var(--red);border-color:var(--red);color:white">✗</div><div class="wf-label" style="color:var(--red)">Rejected</div><div class="wf-date">' + shortDate(ts['rejected']) + '</div></div>' : '') +
-  '</div>';
+  return '<div class="workflow-track">'+WF_STEPS.map(function(s,i){
+    var si=PHASE_ORDER.indexOf(s.key);
+    var isCurrent=effectivePhase===s.key;
+    var cls=isCurrent?'current':si<idx?'done':'';
+    var isAdvNode=isCurrent&&s.key==='advance_requested';
+    var nodeStyle='', labelStyle='', nodeContent=cls==='done'?'✓':i+1, nodeLabel=s.label;
+    if(isAdvNode&&isAdvRej){nodeStyle='style="background:var(--red);border-color:var(--red);color:white"';labelStyle='style="color:var(--red)"';nodeContent='✗';nodeLabel='Adv Rejected';}
+    if(isAdvNode&&isAdvApp){nodeStyle='style="background:#16a34a;border-color:#16a34a;color:white"';labelStyle='style="color:#16a34a"';nodeContent='✓';nodeLabel='Adv Approved';}
+    var dateStr = (cls==='done'||isCurrent) ? shortDate(ts[s.key]) : '';
+    var dateHtml = '<div class="wf-date">'+dateStr+'</div>';
+    return '<div class="wf-step '+cls+'"><div class="wf-node" '+nodeStyle+'>'+nodeContent+'</div><div class="wf-label" '+labelStyle+'>'+nodeLabel+'</div>'+dateHtml+'</div>';
+  }).join('')+(isRej?'<div class="wf-step current"><div class="wf-node" style="background:var(--red);border-color:var(--red);color:white">✗</div><div class="wf-label" style="color:var(--red)">Rejected</div><div class="wf-date">'+shortDate(ts['rejected'])+'</div></div>':'')+'</div>';
 }
 
 // ── LEAD TIME HELPERS ────────────────────────────────────────
@@ -461,7 +427,7 @@ function buildPRDetailHTML(pr, quotations=[], vendorName='', pmName='') {
       <strong style="font-family:var(--font-mono);font-size:0.88rem">${calcLeadTimeDays(pr.created_at)} days</strong>
       <span style="font-size:0.75rem;color:var(--gray-4)">(from ${fmtDate(pr.created_at)} to today)</span>
     </div>
-    <div style="margin-top:16px">${renderWorkflowTrack(pr.phase, pr.phase_timestamps, pr.created_at)}</div>
+    <div style="margin-top:16px">${renderWorkflowTrack(pr.phase, pr.phase_timestamps)}</div>
 
     ${(pr.phase==='advance_requested'||pr.phase==='advance_approved'||pr.phase==='advance_rejected')?`<div style="margin-top:14px;padding:12px 14px;background:${pr.phase==='advance_approved'?'rgba(22,163,74,0.06)':pr.phase==='advance_rejected'?'rgba(214,43,43,0.06)':'rgba(245,158,11,0.06)'};border:1px solid ${pr.phase==='advance_approved'?'rgba(22,163,74,0.25)':pr.phase==='advance_rejected'?'rgba(214,43,43,0.25)':'rgba(245,158,11,0.25)'};border-radius:var(--radius)">
       <div class="detail-key" style="color:${pr.phase==='advance_approved'?'#16a34a':pr.phase==='advance_rejected'?'var(--red)':'#b45309'};margin-bottom:6px">

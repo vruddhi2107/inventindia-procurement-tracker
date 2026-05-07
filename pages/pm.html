@@ -77,6 +77,12 @@
 <script src="../js/shared.js"></script>
 <script>
 let currentUser, allRequests=[], activeTab='clearance', currentPR=null;
+function addPhaseTimestamp(pr, phaseName) {
+  var existing = (pr && pr.phase_timestamps) ? pr.phase_timestamps : {};
+  var ts = Object.assign({}, existing);
+  ts[phaseName] = new Date().toISOString();
+  return ts;
+}
 let pmSelectedQuotationId=null, prQuotations=[];
 
 function handleAttachmentDownload(e, url, fileName) {
@@ -318,8 +324,10 @@ async function grantClearance(decision) {
   const{error}=await db.from('procurement_requests').update({
     phase:approved?'procurement_active':'rejected',
     rejection_reason:approved?null:notes,
-    updated_at:new Date().toISOString()
+    updated_at:new Date().toISOString(),
+    phase_timestamps:addPhaseTimestamp(currentPR,approved?'procurement_active':'rejected')
   }).eq('id',currentPR.id);
+  notifyPhaseChange(currentPR.id,approved?'procurement_active':'rejected',currentUser?.id);
   if(!error) await postComment(currentPR.id,currentUser.id,`${approved?'':''} PM Clearance ${approved?'Granted':'Denied'}: ${notes}`);
   showLoader(false);
   if(error){showToast('Error: '+error.message,'error');return;}
@@ -350,8 +358,10 @@ async function finalDecision(decision) {
     selected_quotation_id:isPMPath&&decision==='approved'?pmSelectedQuotationId:currentPR.selected_quotation_id,
     rejection_reason:decision==='rejected'?notes:null,
     needs_more_vendors:needsMoreVendors,
-    updated_at:new Date().toISOString()
+    updated_at:new Date().toISOString(),
+    phase_timestamps:addPhaseTimestamp(currentPR,decision==='approved'?'approved':'rejected')
   }).eq('id',currentPR.id);
+  notifyPhaseChange(currentPR.id,decision==='approved'?'approved':'rejected',currentUser?.id);
   if(!error) await postComment(currentPR.id,currentUser.id,`${decision==='approved'?'':''} PM Final ${decision==='approved'?'Approved':'Rejected'}: ${notes}${needsMoreVendors?' — more vendors requested.':''}`);
   showLoader(false);
   if(error){showToast('Error: '+error.message,'error');return;}

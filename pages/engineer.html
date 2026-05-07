@@ -263,13 +263,16 @@
 
       <!-- ── BOM Upload ── -->
       <div style="margin-top:14px;padding:14px;border:1.5px dashed rgba(34,197,94,0.4);border-radius:var(--radius);background:rgba(34,197,94,0.03)">
-        <div style="font-size:0.82rem;font-weight:600;margin-bottom:8px;color:#16a34a">📊 Upload BOM (Bill of Materials) — Auto-fills parts below</div>
-        <p style="font-size:0.74rem;color:var(--gray-3);margin-bottom:10px">Upload a CSV file with columns: <code>name</code>, <code>qty</code>, <code>spec</code>. Parts will be auto-populated in the table below.</p>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px">
+          <div style="font-size:0.82rem;font-weight:600;color:#16a34a">📊 Upload BOM (Bill of Materials) — Auto-fills parts below</div>
+          <a id="bomTemplateLink" href="#" onclick="downloadBOMTemplate(event)" style="font-size:0.72rem;font-weight:600;color:#6366f1;text-decoration:none;display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border:1px solid #6366f130;border-radius:6px;background:#6366f108;white-space:nowrap">⬇ Download Template</a>
+        </div>
+        <p style="font-size:0.74rem;color:var(--gray-3);margin-bottom:10px">Use the template above, then upload your filled <strong>CSV or Excel (.xlsx)</strong>. Key columns: <code>Part Name</code> · <code>Quantity&nbsp;(per&nbsp;Set)</code> · <code>Unit&nbsp;of&nbsp;Measurement</code> · <code>Material&nbsp;Specifications</code>.</p>
         <div class="bom-upload-zone" id="bomZone" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleBOMDrop(event)">
-          <input type="file" id="bomFile" accept=".csv" onchange="handleBOMFile(event)"/>
+          <input type="file" id="bomFile" accept=".csv,.xlsx,.xls,.xlsm" onchange="handleBOMFile(event)"/>
           <div style="font-size:1.3rem;margin-bottom:4px">📊</div>
           <div style="font-size:0.8rem;font-weight:600">Upload BOM CSV</div>
-          <div style="font-size:0.72rem;color:var(--gray-4)">CSV format — auto-parses into parts table</div>
+          <div style="font-size:0.72rem;color:var(--gray-4)">CSV or Excel (.xlsx) — auto-parses into parts table</div>
         </div>
         <div id="bomStatus" style="margin-top:8px;font-size:0.78rem"></div>
       </div>
@@ -314,11 +317,18 @@
 <div id="toast-container"></div>
 <div id="footerMount"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="../js/supabase-config.js"></script>
 <script src="../js/shared.js"></script>
 <script>
 let currentUser, myRequests=[], prQuotations=[], allPMs=[], allProjects=[];
+function addPhaseTimestamp(pr, phaseName) {
+  var existing = (pr && pr.phase_timestamps) ? pr.phase_timestamps : {};
+  var ts = Object.assign({}, existing);
+  ts[phaseName] = new Date().toISOString();
+  return ts;
+}
 let activeTab='all', selectedPMApproval=null, currentPR=null;
 let selectedQuotationId=null, screenshotBase64=null, selectedApprovalPath=null;
 let isEditMode=false, editingParentId=null;
@@ -522,6 +532,24 @@ function renderAttachList() {
 }
 function removeAttach(i){attachedFiles.splice(i,1);renderAttachList();}
 
+// ── BOM TEMPLATE DOWNLOAD ────────────────────────────────────
+function downloadBOMTemplate(e) {
+  e.preventDefault();
+  const rows = [
+    ['Sr. No.','Part Number','Part Name','Material Specifications','Department','Quantity (per Set)','Unit of Measurement','Total Qty','Unit of Measurement','Vendor Name','Vendor Contact Details','Country','Cost','Purchase Link','Attachment (if Any)'],
+    ['1','NA','Example Part — M Size Gloves','Nitrile Latex Powder Free','Mech','8','Box','400','Pair','Surgical House','NA','India','NA','NA','NA'],
+    ['2','NA','Example Part — Steel Rod','SS 304, 6mm dia x 500mm','ID','4','pcs','4','pcs','','','','NA','',''],
+    ['3','','Enter your part here','Enter material spec / grade / finish','Electronics','1','pcs','1','pcs','','','','','',''],
+  ];
+  const csv = rows.map(r => r.map(c => '"'+String(c).replace(/"/g,'""')+'"').join(',')).join('');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'BOM_Template.csv';
+  document.body.appendChild(a); a.click();
+  setTimeout(()=>{ URL.revokeObjectURL(url); a.remove(); }, 1000);
+}
+
 // ── BOM UPLOAD ───────────────────────────────────────────────
 function handleBOMDrop(e){e.preventDefault();document.getElementById('bomZone').classList.remove('dragover');handleBOMFile({target:{files:e.dataTransfer.files}});}
 async function handleBOMFile(e) {
@@ -541,7 +569,7 @@ async function handleBOMFile(e) {
 }
 
 // ── NEW / EDIT PR ─────────────────────────────────────────────
-function openNewPR() {
+ function openNewPR() {
   isEditMode=false; editingParentId=null;
   selectedPMApproval=null; selectedSourcing=[]; attachedFiles=[]; pmScreenshotBase64=null;
   document.getElementById('prFormTitle').textContent='New Procurement Request';
@@ -651,7 +679,8 @@ async function submitPR() {
     initial_pm_approval:isEditMode?'already_approved':(isVI?null:selectedPMApproval),
     is_modification:isEditMode,
     parent_request_id:isEditMode?editingParentId:null,
-    modification_note:isEditMode?document.getElementById('fModNote').value.trim():null
+    modification_note:isEditMode?document.getElementById('fModNote').value.trim():null,
+    phase_timestamps:(function(){var ts={'submitted':new Date().toISOString()};var ph=isVI?'procurement_active':(isEditMode||selectedPMApproval==='already_approved')?'procurement_active':'pending_initial_pm_approval';if(ph!=='submitted')ts[ph]=new Date().toISOString();return ts;})()
   };
   if(!isVI) vals.order_type=orderType;
   showLoader(true);
@@ -662,6 +691,7 @@ async function submitPR() {
   showLoader(false);
   if(error){showToast('Submit failed: '+error.message,'error');return;}
   showToast(isEditMode?'↺ Resubmitted as a new modified request!':isVI?'Vendor Info request sent to Procurement!':'Request submitted!','success');
+  if(newPR?.id) notifyPhaseChange(newPR.id, newPR.phase||'submitted', currentUser?.id);
   closeModal('prFormModal');
   await loadRequests();
 }
@@ -706,33 +736,94 @@ async function openPR(id) {
 
   if(currentPR.phase==='grn_pending') {
     const qcCriteria=currentPR.qc_criteria;
+    const parts=currentPR.parts||[];
+    const today=new Date().toLocaleDateString('en-GB');
+    // build GRN rows from PR parts
+    const grnRows=parts.map((p,i)=>`
+      <tr>
+        <td style="text-align:center;font-family:var(--font-mono);font-weight:600;color:var(--gray-3);font-size:0.8rem">${i+1}</td>
+        <td><input class="form-control" style="min-width:90px;font-size:0.78rem" placeholder="Item code" id="grnCode_${i}"/></td>
+        <td style="font-size:0.82rem;font-weight:500">${p.name||'—'}</td>
+        <td style="text-align:center;font-family:var(--font-mono);font-size:0.8rem">${p.spec?p.spec.split('Unit:')[1]?.split('|')[0]?.trim()||'pcs':'pcs'}</td>
+        <td style="text-align:center;font-family:var(--font-mono);font-weight:700;color:#6366f1">${p.qty||1}</td>
+        <td><input class="form-control" type="number" min="0" style="font-size:0.82rem" placeholder="0" id="grnRcvd_${i}" oninput="calcGRNRow(${i})"/></td>
+        <td><input class="form-control" type="number" min="0" style="font-size:0.82rem" placeholder="0" id="grnAccpt_${i}" oninput="calcGRNRow(${i})"/></td>
+        <td><input class="form-control" type="number" min="0" style="background:rgba(239,68,68,0.05);font-size:0.82rem" placeholder="0" id="grnRejct_${i}" readonly/></td>
+      </tr>`).join('');
+
     actionSection=`<div class="action-section">
-      <div class="action-section-title">📦 Quality Check <span class="action-badge">ACTION REQUIRED</span></div>
+      <div class="action-section-title">📦 Goods Receipt Note (GRN) &amp; Quality Check <span class="action-badge">ACTION REQUIRED</span></div>
+
+      <!-- GRN Header Info -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;padding:12px;background:var(--off-white);border:1px solid var(--border);border-radius:var(--radius)">
+        <div><label class="form-label" style="font-size:0.7rem">GRN NUMBER *</label>
+          <input class="form-control" id="grnNumber" placeholder="e.g. GRN/25-26/0001" style="font-family:var(--font-mono);font-size:0.82rem"/></div>
+        <div><label class="form-label" style="font-size:0.7rem">GRN DATE</label>
+          <input class="form-control" id="grnDate" value="${today}" style="font-family:var(--font-mono);font-size:0.82rem"/></div>
+        <div><label class="form-label" style="font-size:0.7rem">INVOICE NO</label>
+          <input class="form-control" id="grnInvoice" placeholder="Invoice number" style="font-size:0.82rem"/></div>
+        <div><label class="form-label" style="font-size:0.7rem">TRANSPORTER</label>
+          <input class="form-control" id="grnTransport" placeholder="Transporter name" style="font-size:0.82rem"/></div>
+        <div><label class="form-label" style="font-size:0.7rem">GATE INWARD NO</label>
+          <input class="form-control" id="grnGateNo" placeholder="Gate inward number" style="font-size:0.82rem"/></div>
+        <div><label class="form-label" style="font-size:0.7rem">GATE INWARD DATE</label>
+          <input class="form-control" id="grnGateDate" placeholder="${today}" style="font-family:var(--font-mono);font-size:0.82rem"/></div>
+      </div>
+
       ${qcCriteria&&(qcCriteria.preferred_color||qcCriteria.preferred_material||qcCriteria.custom)?`
       <div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.18);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:12px">
-        <div style="font-size:0.78rem;font-weight:600;color:#6366f1;margin-bottom:5px">🔍 Expected QC Criteria</div>
+        <div style="font-size:0.75rem;font-weight:600;color:#6366f1;margin-bottom:4px">🔍 Expected QC Criteria</div>
         ${qcCriteria.preferred_color?`<div style="font-size:0.78rem">Color/Finish: <strong>${qcCriteria.preferred_color}</strong></div>`:''}
         ${qcCriteria.preferred_material?`<div style="font-size:0.78rem">Material: <strong>${qcCriteria.preferred_material}</strong></div>`:''}
         ${qcCriteria.custom?`<div style="font-size:0.78rem">Other: ${qcCriteria.custom}</div>`:''}
       </div>`:''}
-      ${currentPR.order_notes?`<div style="background:var(--off-white);border:1px solid var(--border);border-radius:var(--radius-sm);padding:9px 12px;margin-bottom:12px;font-size:0.8rem"><strong>Order Notes:</strong> ${currentPR.order_notes}</div>`:''}
-      <div class="form-grid">
+      <!-- GRN Items Matrix -->
+      <div style="margin-bottom:14px;overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
+          <thead>
+            <tr style="background:var(--gray-6)">
+              <th style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-size:0.7rem;width:42px">SR#</th>
+              <th style="padding:7px 10px;border:1px solid var(--border);font-size:0.7rem">ITEM CODE</th>
+              <th style="padding:7px 10px;border:1px solid var(--border);font-size:0.7rem">ITEM NAME &amp; DESCRIPTION</th>
+              <th style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-size:0.7rem">UOM</th>
+              <th style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-size:0.7rem;background:rgba(99,102,241,0.06)">PO QTY</th>
+              <th style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-size:0.7rem">QTY RECEIVED</th>
+              <th style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-size:0.7rem;background:rgba(34,197,94,0.06)">QTY ACCEPTED</th>
+              <th style="padding:7px 10px;text-align:center;border:1px solid var(--border);font-size:0.7rem;background:rgba(239,68,68,0.06)">QTY REJECTED</th>
+            </tr>
+          </thead>
+          <tbody id="grnTableBody">
+            ${parts.length?grnRows:`<tr><td colspan="8" style="padding:16px;text-align:center;color:var(--gray-4);font-size:0.82rem">No parts found on this PR</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+
+      <!-- QC Result + Remarks -->
+      <div class="form-grid" style="margin-bottom:12px">
         <div class="form-group">
           <label class="form-label">QC Result *</label>
           <select class="form-control" id="qcResult">
-            <option value="">Select</option>
-            <option value="qc_passed"> QC Passed — meets all specs</option>
-            <option value="rejected"> Rejected — does not meet specs</option>
+            <option value="">Select result</option>
+            <option value="qc_passed">✔ QC Passed — meets all specs</option>
+            <option value="rejected">✖ Rejected — does not meet specs</option>
           </select>
         </div>
         <div class="form-group full">
-          <label class="form-label">Inspection Notes *</label>
-          <textarea class="form-control" id="qcNotes" placeholder="Quantities verified, specs checked, dimensions, defects..."></textarea>
+          <label class="form-label">Inspection Notes / Remarks *</label>
+          <textarea class="form-control" id="qcNotes" rows="3" placeholder="Quantities verified, dimensions checked, defects noted..."></textarea>
         </div>
+      </div>
+
+      <!-- Signatures row -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:10px 12px;background:var(--off-white);border:1px solid var(--border);border-radius:var(--radius)">
+        <div><label class="form-label" style="font-size:0.7rem">RECEIVED BY</label>
+          <input class="form-control" id="grnReceivedBy" placeholder="Name / Signature" style="font-size:0.82rem"/></div>
+        <div><label class="form-label" style="font-size:0.7rem">QC CHECKED BY</label>
+          <input class="form-control" id="grnQCBy" placeholder="Name / Signature" style="font-size:0.82rem"/></div>
       </div>
     </div>`;
     footer.innerHTML=`<button class="btn btn-secondary" onclick="closeModal('prModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="submitQC()">Submit QC →</button>`;
+      <button class="btn btn-primary" onclick="submitQC()">Submit GRN &amp; QC →</button>`;
   }
 
   document.getElementById('prModalBody').innerHTML=
@@ -751,7 +842,7 @@ async function openPR(id) {
 async function resolveVendorInfo(action) {
   showLoader(true);
   let updates={updated_at:new Date().toISOString()},comment='';
-  if(action==='close'){updates.phase='qc_passed';comment='✓ Engineer closed request after reviewing vendor information.';}
+  if(action==='close'){updates.phase='qc_passed';updates.phase_timestamps=addPhaseTimestamp(currentPR,'qc_passed');comment='✓ Engineer closed request after reviewing vendor information.';}
   else if(action==='more_vendors'){updates.phase='procurement_active';updates.vendor_info_details=null;comment='↻ Engineer requested more vendor options.';}
   else if(action==='convert_to_rfq'){updates.phase='procurement_active';updates.request_category='RFQ';comment='→ Engineer converted to RFQ.';}
   const{error}=await db.from('procurement_requests').update(updates).eq('id',currentPR.id);
@@ -871,23 +962,67 @@ async function submitApprovalPath() {
   closeModal('prModal');await loadRequests();
 }
 
+// Calculate rejected = received - accepted for a GRN row
+function calcGRNRow(i) {
+  const rcvd = parseInt(document.getElementById('grnRcvd_'+i)?.value||'0')||0;
+  const acpt = parseInt(document.getElementById('grnAccpt_'+i)?.value||'0')||0;
+  const rjEl = document.getElementById('grnRejct_'+i);
+  if(rjEl) rjEl.value = Math.max(0, rcvd - acpt);
+}
+
 async function submitQC() {
-  const result=document.getElementById('qcResult').value; // 'qc_passed' or 'rejected'
+  const result=document.getElementById('qcResult').value;
   const notes=document.getElementById('qcNotes').value.trim();
   if(!result){showToast('Please select QC result','error');return;}
   if(!notes){showToast('Please add inspection notes','error');return;}
+
+  // Collect GRN header fields
+  const grnNumber = document.getElementById('grnNumber')?.value.trim()||'';
+  const grnDate   = document.getElementById('grnDate')?.value.trim()||'';
+  const grnInvoice= document.getElementById('grnInvoice')?.value.trim()||'';
+  const grnTransport=document.getElementById('grnTransport')?.value.trim()||'';
+  const grnGateNo = document.getElementById('grnGateNo')?.value.trim()||'';
+  const grnGateDate=document.getElementById('grnGateDate')?.value.trim()||'';
+  const grnRecvBy = document.getElementById('grnReceivedBy')?.value.trim()||'';
+  const grnQCBy   = document.getElementById('grnQCBy')?.value.trim()||'';
+  if(!grnNumber){showToast('Please enter a GRN Number','error');return;}
+
+  // Collect GRN rows
+  const parts = currentPR.parts||[];
+  const grnLines = parts.map((p,i)=>({
+    sr: i+1,
+    item_code: document.getElementById('grnCode_'+i)?.value.trim()||'—',
+    item_name: p.name,
+    uom: p.spec?p.spec.split('Unit:')[1]?.split('|')[0]?.trim()||'pcs':'pcs',
+    po_qty: p.qty||1,
+    received: parseInt(document.getElementById('grnRcvd_'+i)?.value||'0')||0,
+    accepted: parseInt(document.getElementById('grnAccpt_'+i)?.value||'0')||0,
+    rejected: parseInt(document.getElementById('grnRejct_'+i)?.value||'0')||0
+  }));
+
+  const grnData = {
+    grn_number: grnNumber, grn_date: grnDate,
+    invoice_no: grnInvoice, transporter: grnTransport,
+    gate_inward_no: grnGateNo, gate_inward_date: grnGateDate,
+    received_by: grnRecvBy, qc_checked_by: grnQCBy,
+    lines: grnLines
+  };
+
   showLoader(true);
-  // DB constraint: qc_result only allows 'accepted'|'rejected'; phase drives workflow separately
   const qcResultValue = result==='qc_passed' ? 'accepted' : 'rejected';
+  const fullNotes = `GRN# ${grnNumber} | ${notes}`;
   const{error}=await db.from('procurement_requests').update({
     phase: result,
     qc_result: qcResultValue,
-    qc_notes: notes,
-    updated_at: new Date().toISOString()
+    qc_notes: fullNotes,
+    qc_criteria: Object.assign({}, currentPR.qc_criteria||{}, {grn: grnData}),
+    updated_at: new Date().toISOString(),
+    phase_timestamps: addPhaseTimestamp(currentPR, result)
   }).eq('id',currentPR.id);
   showLoader(false);
   if(error){showToast('Error: '+error.message,'error');return;}
-  showToast(result==='qc_passed'?' QC Passed — great!':'QC failed — request closed.','success');
+  notifyPhaseChange(currentPR.id,result,currentUser?.id);
+  showToast(result==='qc_passed'?'✔ GRN submitted & QC Passed!':'✖ GRN submitted — QC rejected.','success');
   closeModal('prModal');await loadRequests();
 }
 

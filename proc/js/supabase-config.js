@@ -3,8 +3,8 @@
 // Replace with your actual Supabase project URL and anon key
 // ============================================================
 
-const SUPABASE_URL = 'https://nxhvxfvfhvbkymgvmwwi.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im54aHZ4ZnZmaHZia3ltZ3Ztd3dpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5OTg5MjQsImV4cCI6MjA4NzU3NDkyNH0.U5lrYtTXBEbqpF5ZO7GcMWQ8IGhsGqWsvGiDZ4FQnK0';
+const SUPABASE_URL = 'https://i.supabase.co';
+const SUPABASE_ANON_KEY = 'lZiI6Im54aHZ4ZnZmaHZia3ltZ3Ztd3dpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5OTg5MjQsImV4cCI6MjA4NzU3NDkyNH0.U5lrYtTXBEbqpF5ZO7GcMWQ8IGhsGqWsvGiDZ4FQnK0';
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // ============================================================
@@ -43,14 +43,10 @@ const PHASES = {
   advance_requested:            { label: 'Advance Requested',        color: '#f59e0b', icon: '💳' },
   advance_approved:             { label: 'Advance Approved',         color: '#22c55e', icon: '💳' },
   advance_rejected:             { label: 'Advance Rejected',         color: '#ef4444', icon: '💳' },
-  advance_raised_to_accounts:   { label: 'Advance Raised',           color: '#f59e0b', icon: '📤' },
-  advance_payment_received:     { label: 'Advance Received',         color: '#22c55e', icon: '💳' },
   order_placed:                 { label: 'Order Placed',             color: '#14b8a6', icon: '🛒' },
   grn_pending:                  { label: 'GRN / QC Pending',         color: '#f59e0b', icon: '📦' },
   qc_passed:                    { label: 'QC Passed',                color: '#22c55e', icon: '✔️'  },
   payment_requested:            { label: 'Payment Requested',        color: '#8b5cf6', icon: '💰' },
-  payment_raised_to_accounts:   { label: 'Payment Raised',           color: '#8b5cf6', icon: '📤' },
-  payment_received:             { label: 'Payment Received',         color: '#22c55e', icon: '✅' },
   accepted:                     { label: 'Accepted & Closed',        color: '#22c55e', icon: '✔️'  },
   rejected:                     { label: 'Rejected & Closed',        color: '#ef4444', icon: '✖️' }
 };
@@ -72,14 +68,11 @@ const PHASE_ORDER = [
   'quotations_shared',
   'pending_pm_final_approval',
   'approved',
-  'advance_raised_to_accounts',
-  'advance_payment_received',
   'order_placed',
   'grn_pending',
   'qc_passed',
-  'payment_raised_to_accounts',
-  'payment_received',
-  'accepted'
+  'payment_requested',
+  'accepted' 
 ];
 
 function formatDate(d) {

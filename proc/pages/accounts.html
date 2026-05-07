@@ -53,7 +53,7 @@
 
   <div class="tabs">
     <button class="tab-btn active" onclick="switchTab('due')">💰 Payment Due</button>
-    <button class="tab-btn" onclick="switchTab('advance')">📤 Smartsheet Advances <span id="advBadge" style="display:none;background:var(--red);color:white;border-radius:10px;padding:0 6px;font-size:0.65rem;font-family:var(--font-mono);margin-left:4px"></span></button>
+    <button class="tab-btn" onclick="switchTab('advance')">📤 Advance Requests <span id="advBadge" style="display:none;background:var(--red);color:white;border-radius:10px;padding:0 6px;font-size:0.65rem;font-family:var(--font-mono);margin-left:4px"></span></button>
     <button class="tab-btn" onclick="switchTab('all')">All Payments</button>
   </div>
 
@@ -344,16 +344,8 @@ function renderAdvanceTab() {
 }
 
 function advCardHTML(a) {
-  const stColor={
-    pending:'#f59e0b', raised:'#f59e0b',
-    approved:'#22c55e', payment_received:'#22c55e',
-    rejected:'var(--red)'
-  }[a.status]||'#6b7280';
-  const stLabel={
-    pending:'⏳ Pending', raised:'📤 Raised via Smartsheet',
-    approved:'✅ Approved', payment_received:'💳 Payment Received',
-    rejected:'✗ Rejected'
-  }[a.status]||a.status;
+  const stColor={pending:'#f59e0b',approved:'#22c55e',rejected:'var(--red)'}[a.status]||'#6b7280';
+  const stLabel={pending:'⏳ Pending',approved:' Approved',rejected:'✗ Rejected'}[a.status]||a.status;
   const projectName=a.procurement_requests?.project_name||'Unknown Project';
   const prNum=a.procurement_requests?.request_number?`PR-${String(a.procurement_requests.request_number).padStart(4,'0')}`:'';
   const reqName=a.users?.name||'Procurement';
@@ -371,13 +363,13 @@ function advCardHTML(a) {
         <div style="font-weight:800;font-size:1rem;font-family:var(--font-mono)">AED ${Number(a.amount||0).toLocaleString()}</div>
         ${a.notes?`<div style="font-size:0.76rem;color:var(--gray-3);flex:1">${a.notes}</div>`:''}
       </div>
-      ${a.smartsheet_payment_id?`<div style="font-size:0.72rem;color:#6366f1;margin-top:4px;font-family:var(--font-mono)">📋 Smartsheet ID: ${a.smartsheet_payment_id}</div>`:''}
+      ${a.status==='pending'?`
       <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
-        ${a.pr_id?`<button class="btn btn-ghost btn-sm" onclick="openAdvancePRDetail('${a.pr_id}')">📋 View PR</button>`:''}
-        ${a.smartsheet_screenshot?`<button class="btn btn-ghost btn-sm" onclick="openAttPreview('${a.smartsheet_screenshot}','Smartsheet Screenshot')">🖼 View Screenshot</button>`:''}
-      </div>
-      ${(a.status==='payment_received')?`<div style="font-size:0.72rem;color:#16a34a;font-weight:600;margin-top:6px">✅ Payment received confirmed by Procurement</div>`:''}
-      ${(a.status==='rejected')?`<div style="font-size:0.72rem;color:var(--red);margin-top:6px">✗ Rejected — ${fmtDate(a.confirmed_at)}</div>`:''}
+        <button class="btn btn-success btn-sm" onclick="openAdvanceConfirm('${a.id}','approved')">✓ Approve</button>
+        <button class="btn btn-danger btn-sm" onclick="openAdvanceConfirm('${a.id}','rejected')">✗ Reject</button>
+        ${a.pr_id?`<button class="btn btn-ghost btn-sm" onclick="openAdvancePRDetail('${a.pr_id}')">📋 View Full PR</button>`:''}
+      </div>`:''}
+      ${a.status!=='pending'?`<div style="font-size:0.72rem;color:var(--gray-4);margin-top:6px">Processed ${fmtDate(a.confirmed_at)}</div>`:''}
     </div>
   </div>`;
 }
@@ -523,16 +515,13 @@ async function confirmAdvanceDecision() {
   if (advErr) { showLoader(false); showToast('Error updating advance: ' + advErr.message, 'error'); return; }
 
   if (adv?.pr_id) {
-    // approved = accounts confirms the Smartsheet raise is valid (advance_payment_received comes when vendor confirms)
-    const newPhase = decision === 'approved' ? 'advance_raised_to_accounts' : 'advance_raised_to_accounts';
+    const newPhase = decision === 'approved' ? 'advance_approved' : 'advance_rejected';
     const { data: prData } = await db.from('procurement_requests').select('phase_timestamps').eq('id', adv.pr_id).single();
-    const newTs = addPhaseTimestamp(prData?.phase_timestamps, decision === 'approved' ? 'advance_raised_to_accounts' : 'advance_raised_to_accounts');
     const { error: prErr } = await db.from('procurement_requests').update({
-      phase: decision === 'rejected' ? 'approved' : 'advance_raised_to_accounts',
-      updated_at: new Date().toISOString(),
-      phase_timestamps: newTs
+      phase: newPhase, updated_at: new Date().toISOString(),
+      phase_timestamps: addPhaseTimestamp(prData?.phase_timestamps, newPhase)
     }).eq('id', adv.pr_id);
-    notifyPhaseChange(adv.pr_id, decision === 'approved' ? 'advance_raised_to_accounts' : 'approved', currentUser?.id);
+    notifyPhaseChange(adv.pr_id, newPhase, currentUser?.id);
     if (prErr) { showLoader(false); showToast('Advance saved but PR update failed: ' + prErr.message, 'error'); return; }
 
     try {
@@ -683,19 +672,17 @@ async function openPayDetail(id) {
     <!-- ── ADVANCE PAYMENT RECORD ── -->
     ${advanceData?`<div class="detail-section">
       <div class="detail-section-title">💳 Advance Payment Record</div>
-      <div style="padding:12px 14px;border-radius:var(--radius-sm);background:${['payment_received','approved'].includes(advanceData.status)?'rgba(22,163,74,0.06)':advanceData.status==='rejected'?'rgba(214,43,43,0.06)':'rgba(245,158,11,0.06)'};border:1px solid ${['payment_received','approved'].includes(advanceData.status)?'rgba(22,163,74,0.22)':advanceData.status==='rejected'?'rgba(214,43,43,0.22)':'rgba(245,158,11,0.22)'}">
+      <div style="padding:10px 12px;border-radius:var(--radius-sm);background:${advanceData.status==='approved'?'rgba(22,163,74,0.06)':advanceData.status==='rejected'?'rgba(214,43,43,0.06)':'rgba(245,158,11,0.06)'};border:1px solid ${advanceData.status==='approved'?'rgba(22,163,74,0.22)':advanceData.status==='rejected'?'rgba(214,43,43,0.22)':'rgba(245,158,11,0.22)'}">
         <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
           <div>
             <div style="font-weight:700;font-family:var(--font-mono)">AED ${Number(advanceData.amount||0).toLocaleString()}</div>
             ${advanceData.notes?`<div style="font-size:0.73rem;color:var(--gray-3);margin-top:2px">${advanceData.notes}</div>`:''}
-            ${advanceData.smartsheet_payment_id?`<div style="font-size:0.72rem;color:#6366f1;margin-top:3px;font-family:var(--font-mono)">📋 Smartsheet ID: ${advanceData.smartsheet_payment_id}</div>`:''}
           </div>
-          <span style="font-size:0.72rem;font-weight:700;color:${{payment_received:'#16a34a',approved:'#22c55e',rejected:'var(--red)',raised:'#b45309',pending:'#b45309'}[advanceData.status]||'#6b7280'}">
-            ${{payment_received:'💳 Payment Received',approved:'✅ Confirmed',rejected:'✗ Rejected',raised:'📤 Raised via Smartsheet',pending:'⏳ Pending'}[advanceData.status]||advanceData.status}
+          <span style="font-size:0.72rem;font-weight:700;color:${advanceData.status==='approved'?'#16a34a':advanceData.status==='rejected'?'var(--red)':'#b45309'}">
+            ${{approved:' Approved',rejected:'✗ Rejected',pending:'⏳ Pending'}[advanceData.status]||advanceData.status}
           </span>
         </div>
-        ${advanceData.raised_at?`<div style="font-size:0.71rem;color:var(--gray-4);margin-top:4px">Raised: ${fmtDate(advanceData.raised_at)}</div>`:''}
-        ${advanceData.confirmed_at?`<div style="font-size:0.71rem;color:var(--gray-4);margin-top:2px">Processed: ${fmtDate(advanceData.confirmed_at)}</div>`:''}
+        ${advanceData.confirmed_at?`<div style="font-size:0.71rem;color:var(--gray-4);margin-top:4px">Processed ${fmtDate(advanceData.confirmed_at)}</div>`:''}
       </div>
     </div>`:''}
 
@@ -775,28 +762,34 @@ async function openPayDetail(id) {
       </div>
     </div>`:''}
 
-    <!-- ── SMARTSHEET PAYMENT INFO (view only for accounts) ── -->
-    ${pay.smartsheet_payment_id?`<div class="detail-section">
-      <div class="detail-section-title">📋 Smartsheet Payment Details</div>
-      <div style="padding:10px 12px;background:rgba(99,102,241,0.04);border:1px solid rgba(99,102,241,0.18);border-radius:var(--radius-sm)">
-        <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:0.84rem">
-          <div><span class="detail-key">Smartsheet ID</span><div style="font-weight:700;color:#4f46e5;font-family:var(--font-mono)">${pay.smartsheet_payment_id}</div></div>
-          ${pay.raised_at?`<div><span class="detail-key">Raised On</span><div style="font-weight:600">${fmtDate(pay.raised_at)}</div></div>`:''}
-          ${pay.paid_at?`<div><span class="detail-key">Received On</span><div style="font-weight:600">${fmtDate(pay.paid_at)}</div></div>`:''}
+    <!-- ── RECORD PAYMENT SECTION ── -->
+    ${!isPaid?`<div class="detail-section">
+      <div class="detail-section-title">💳 Record Payment</div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label class="form-label">Amount Paid (${pay.currency||'AED'})</label>
+          <input class="form-control" id="paidAmt" type="number" placeholder="${pay.invoice_amount||'0.00'}" value="${pay.amount_paid||''}"/>
         </div>
-        ${pay.smartsheet_screenshot?`<div style="margin-top:10px"><button class="btn btn-ghost btn-sm" onclick="openAttPreview('${pay.smartsheet_screenshot}','Payment Screenshot')">🖼 View Payment Screenshot</button></div>`:''}
-      </div>
-      <div style="margin-top:8px;font-size:0.75rem;color:var(--gray-4)">ℹ️ Payment raised and confirmed by Procurement Manager via Smartsheet. This is view-only for Accounts.</div>
-    </div>`:''}
-    ${!pay.smartsheet_payment_id && !isPaid?`<div class="detail-section">
-      <div style="font-size:0.8rem;color:var(--gray-3);padding:10px;background:var(--off-white);border-radius:var(--radius-sm);border:1px solid var(--border)">
-        ⏳ Awaiting Procurement Manager to raise payment via Smartsheet.
+        <div class="form-group">
+          <label class="form-label">Payment Type</label>
+          <select class="form-control" id="paidType">
+            <option value="full">Full Payment</option>
+            <option value="partial" ${isPartial?'selected':''}>Partial Payment</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label class="form-label">Transaction Notes</label>
+          <textarea class="form-control" id="paidNotes" placeholder="Transaction ID, bank reference, date, remarks...">${pay.payment_notes||''}</textarea>
+        </div>
       </div>
     </div>`:''}
   `;
 
   const footer = document.getElementById('payDetailFooter');
   footer.innerHTML = `<button class="btn btn-secondary" onclick="closeModal('payDetailModal')">Close</button>`;
+  if (!isPaid) {
+    footer.innerHTML += `<button class="btn btn-primary" onclick="recordPayment('${id}')">Save Payment Record</button>`;
+  }
 }
 
 async function recordPayment(payId) {
@@ -811,40 +804,21 @@ async function recordPayment(payId) {
     paid_at:new Date().toISOString(), confirmed_by:currentUser.id
   }).eq('id',payId);
   if(error){showLoader(false);showToast('Error: '+error.message,'error');return;}
-  // Note: phase transitions (payment_received → accepted) are now handled
-  // by the Procurement Manager via markFullPaymentReceived().
-  // Accounts only logs the payment amount for financial records.
-  showLoader(false);
-  showToast(status==='paid'?'✅ Payment received & PR closed!':'Partial payment recorded.','success');
-  closeModal('payDetailModal');
-  await loadPayments();
-}
-
-// ── ACCOUNTS: CONFIRM ADVANCE PAYMENT RECEIVED ────────────────
-async function confirmAdvanceReceived(advId) {
-  if (!confirm('Confirm that the advance payment has been received by the vendor?')) return;
-  const adv = allAdvances.find(a=>a.id===advId);
-  if (!adv) return;
-  showLoader(true);
-  await db.from('advance_payment_requests').update({
-    status: 'payment_received', confirmed_by: currentUser.id,
-    confirmed_at: new Date().toISOString()
-  }).eq('id', advId);
-  if (adv.pr_id) {
-    const { data: prRow } = await db.from('procurement_requests').select('phase_timestamps').eq('id', adv.pr_id).single();
-    const newTs = addPhaseTimestamp(prRow?.phase_timestamps, 'advance_payment_received');
-    await db.from('procurement_requests').update({
-      phase: 'advance_payment_received', updated_at: new Date().toISOString(),
-      phase_timestamps: newTs
-    }).eq('id', adv.pr_id);
-    notifyPhaseChange(adv.pr_id, 'advance_payment_received', currentUser?.id);
-    try { await window.postComment(adv.pr_id, currentUser.id,
-      `💳 Advance payment of AED ${Number(adv.amount||0).toLocaleString()} confirmed received by Accounts.`);
-    } catch(e) {}
+  if(status==='paid'){
+    const pay=allPayments.find(p=>p.id===payId);
+    if(pay?.pr_id){
+      const { data: payPR } = await db.from('procurement_requests').select('phase_timestamps').eq('id',pay.pr_id).single();
+      await db.from('procurement_requests').update({
+        phase:'accepted', updated_at:new Date().toISOString(),
+        phase_timestamps: addPhaseTimestamp(payPR?.phase_timestamps, 'accepted')
+      }).eq('id',pay.pr_id);
+      notifyPhaseChange(pay.pr_id,'accepted',currentUser?.id);
+    }
   }
   showLoader(false);
-  showToast('✅ Advance payment received confirmed!', 'success');
-  await loadAdvances(); renderAdvanceBanner();
+  showToast(status==='paid'?' Payment marked as fully paid!':'Partial payment recorded.','success');
+  closeModal('payDetailModal');
+  await loadPayments();
 }
 
 init();

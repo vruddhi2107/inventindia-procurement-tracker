@@ -436,7 +436,7 @@
     <div class="modal-body" id="payReqBody" style="max-height:78vh;overflow-y:auto"></div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('payReqModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="submitPaymentRequest()">📤 Raise Payment to Accounts via Smartsheet →</button>
+      <button class="btn btn-primary" onclick="submitPaymentRequest()">Submit to Accounts →</button>
     </div>
   </div>
 </div>
@@ -762,64 +762,41 @@ async function openPR(id) {
     actionSection = buildApprovedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, existingPO);
   }
 
-  // ── ADVANCE RAISED TO ACCOUNTS: PM marks received ──
-  if(currentPR.phase==='advance_raised_to_accounts') {
-    const {data:advRec} = await db.from('advance_payment_requests')
-      .select('*').eq('pr_id',currentPR.id).order('created_at',{ascending:false}).limit(1).maybeSingle();
-    actionSection=`<div class="action-section" style="border:1px solid rgba(245,158,11,0.3);background:rgba(245,158,11,0.04);border-radius:var(--radius);padding:16px">
-      <div class="action-section-title" style="color:#b45309">📤 Advance Raised via Smartsheet <span class="action-badge">AWAITING RECEIPT</span></div>
-      ${advRec ? `<div style="margin:10px 0;padding:10px 12px;background:var(--off-white);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:0.84rem">
-        <div style="display:flex;gap:18px;flex-wrap:wrap">
-          <div><span class="detail-key">Amount</span><div style="font-weight:700;font-family:var(--font-mono)">AED ${Number(advRec.amount||0).toLocaleString()}</div></div>
-          ${advRec.smartsheet_payment_id?`<div><span class="detail-key">Smartsheet ID</span><div style="font-weight:700;color:#6366f1;font-family:var(--font-mono)">${advRec.smartsheet_payment_id}</div></div>`:''}
-          <div><span class="detail-key">Raised On</span><div style="font-weight:600">${fmtDate(advRec.raised_at||advRec.created_at)}</div></div>
-        </div>
-        ${advRec.notes?`<div style="margin-top:6px;font-size:0.76rem;color:var(--gray-3)">${advRec.notes}</div>`:''}
-      </div>` : ''}
-      <div style="margin-top:14px;padding:14px;background:white;border:1px solid var(--border);border-radius:var(--radius-sm)">
-        <div style="font-size:0.82rem;font-weight:700;margin-bottom:8px">✅ Mark Advance Payment Received</div>
-        <p style="font-size:0.78rem;color:var(--gray-3);margin-bottom:12px">Once the vendor confirms receipt of the advance, attach a confirmation screenshot and mark received.</p>
-        <div class="form-group" style="margin-bottom:10px">
-          <label class="form-label">Confirmation Screenshot *</label>
-          <div class="drop-zone" style="min-height:60px;cursor:pointer" onclick="document.getElementById('advReceivedFile').click()">
-            <input type="file" id="advReceivedFile" accept=".png,.jpg,.jpeg,.pdf" style="display:none" onchange="previewGenericScreenshot(this,'advReceivedLabel','advReceivedPreview')"/>
-            <div class="drop-zone-label" id="advReceivedLabel">📎 Click to upload receipt confirmation screenshot</div>
-            <div class="drop-zone-hint">PNG, JPG or PDF — max 5MB</div>
-          </div>
-          <div id="advReceivedPreview" style="display:none;margin-top:8px"></div>
-        </div>
-        <div class="form-group" style="margin-bottom:12px">
-          <label class="form-label">Notes (optional)</label>
-          <input class="form-control" id="advReceivedNote" placeholder="e.g. Vendor confirmed receipt on DD/MM/YYYY"/>
-        </div>
-        <button class="btn btn-success" onclick="markAdvanceReceived('${currentPR.id}','${advRec?.id||''}')">💳 Mark Advance Received →</button>
-      </div>
-    </div>`;
-  }
-
-  // ── ADVANCE PAYMENT RECEIVED → place order ──
-  if(currentPR.phase==='advance_payment_received') {
-    const selectedQ = quotations.find(q=>q.is_selected||q.id===currentPR.selected_quotation_id);
-    const vendorObj = vd?.data;
-    const pt = PAYMENT_TERMS_OPTIONS.find(p=>p.value===vendorObj?.payment_terms);
-    actionSection = buildAdvanceApprovedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, null, existingPO);
-  }
-
-  // ── ADVANCE REQUESTED / APPROVED / REJECTED (legacy compat) ──
+  // ── ADVANCE REQUESTED: waiting for accounts ──
   if(currentPR.phase==='advance_requested') {
+    const selectedQ=quotations.find(q=>q.is_selected||q.id===currentPR.selected_quotation_id);
+    const vendorObj=vd?.data;
+    const pt=PAYMENT_TERMS_OPTIONS.find(p=>p.value===vendorObj?.payment_terms);
+    const{data:advRec}=await db.from('advance_payment_requests')
+      .select('*').eq('pr_id',currentPR.id).order('created_at',{ascending:false}).limit(1).single();
     actionSection=`<div class="action-section" style="border:1px solid rgba(245,158,11,0.25);background:rgba(245,158,11,0.04);border-radius:var(--radius);padding:14px">
-      <div class="action-section-title" style="color:#b45309">⏳ Advance — Legacy Status</div>
-      <p style="font-size:0.8rem;color:var(--gray-3)">This PR uses the old advance flow. Please ask admin to update the phase to <code>advance_raised_to_accounts</code>.</p>
+      <div class="action-section-title" style="color:#b45309">
+        ⏳ Advance Payment — Awaiting Accounts <span class="action-badge">PENDING</span>
+      </div>
+      ${selectedQ?`<div style="margin:10px 0;padding:9px 12px;background:var(--off-white);border:1px solid var(--border);border-radius:var(--radius-sm)">
+        <div class="detail-key" style="margin-bottom:3px">Selected Quote</div>
+        <div style="font-weight:600;font-size:0.88rem">${selectedQ.vendor_name||vendorObj?.name||'—'} — ${selectedQ.currency||'INR'} ${Number(selectedQ.amount||0).toLocaleString()}</div>
+        ${pt?`<div style="font-size:0.72rem;color:#6366f1;margin-top:2px">💳 ${pt.label}</div>`:''}
+      </div>`:''}
+      ${advRec?`<div style="margin-bottom:12px;font-family:var(--font-mono);font-size:0.9rem">
+        Advance requested: <strong>AED ${Number(advRec.amount||0).toLocaleString()}</strong>
+        ${advRec.notes?`<span style="font-size:0.75rem;color:var(--gray-3);margin-left:8px">${advRec.notes}</span>`:''}
+      </div>`:''}
+      <p style="font-size:0.8rem;color:var(--gray-3)">Waiting for accounts team to approve. This page will reflect the decision once accounts acts on it.</p>
     </div>`;
   }
+
+  // ── ADVANCE APPROVED by accounts ──
   if(currentPR.phase==='advance_approved') {
     const selectedQ = quotations.find(q=>q.is_selected||q.id===currentPR.selected_quotation_id);
     const vendorObj = vd?.data;
     const pt = PAYMENT_TERMS_OPTIONS.find(p=>p.value===vendorObj?.payment_terms);
-    const{data:advRec} = await db.from('advance_payment_requests').select('*').eq('pr_id',currentPR.id).order('created_at',{ascending:false}).limit(1).maybeSingle();
+    const{data:advRec} = await db.from('advance_payment_requests').select('*').eq('pr_id',currentPR.id).order('created_at',{ascending:false}).limit(1).single();
     actionSection = buildAdvanceApprovedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, advRec, existingPO);
   }
-  if(currentPR.phase==='advance_rejected') {
+
+  // ── ADVANCE REJECTED by accounts ──
+ if(currentPR.phase==='advance_rejected') {
     const selectedQ = quotations.find(q=>q.is_selected||q.id===currentPR.selected_quotation_id);
     const vendorObj = vd?.data;
     const pt = PAYMENT_TERMS_OPTIONS.find(p=>p.value===vendorObj?.payment_terms);
@@ -847,50 +824,21 @@ async function openPR(id) {
   // ── QC PASSED ──
   if(currentPR.phase==='qc_passed') {
     actionSection=`<div class="action-section" style="background:rgba(22,163,74,0.04);border:1px solid rgba(22,163,74,0.2);border-radius:var(--radius);padding:14px">
-      <div class="action-section-title" style="color:#16a34a">✅ QC Passed — Raise Full Payment</div>
-      <p style="font-size:0.82rem;color:var(--gray-3);margin-bottom:12px">QC is complete. Raise the full payment via Smartsheet — attach the screenshot and Payment ID.</p>
+      <div class="action-section-title" style="color:#16a34a"> QC Passed — Ready for Payment</div>
+      <p style="font-size:0.82rem;color:var(--gray-3);margin-bottom:12px">The engineer has passed QC. You can now create a payment request for the accounts team.</p>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn btn-primary" onclick="openPaymentRequestModal('${id}')">💰 Raise Full Payment via Smartsheet</button>
+        <button class="btn btn-primary" onclick="openPaymentRequestModal('${id}')">💰 Create Payment Request</button>
         ${currentPR.assigned_vendor_id?`<button class="btn btn-secondary" onclick="openRateModal('${currentPR.id}','${currentPR.assigned_vendor_id}')">⭐ Rate Vendor</button>`:''}
       </div>
     </div>`;
   }
 
-  // ── PAYMENT RAISED TO ACCOUNTS: PM marks received ──
-  if(currentPR.phase==='payment_raised_to_accounts'||currentPR.phase==='payment_requested') {
-    const {data:payRec} = await db.from('payment_requests')
-      .select('*').eq('pr_id',currentPR.id).order('request_date',{ascending:false}).limit(1).maybeSingle();
-    actionSection=`<div class="action-section" style="border:1px solid rgba(139,92,246,0.3);background:rgba(139,92,246,0.04);border-radius:var(--radius);padding:16px">
-      <div class="action-section-title" style="color:#7c3aed">💰 Full Payment Raised via Smartsheet <span class="action-badge">AWAITING RECEIPT</span></div>
-      ${payRec?`<div style="margin:10px 0;padding:10px 12px;background:var(--off-white);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:0.84rem">
-        <div style="display:flex;gap:18px;flex-wrap:wrap">
-          <div><span class="detail-key">Invoice Amount</span><div style="font-weight:700;font-family:var(--font-mono)">${payRec.currency||'AED'} ${Number(payRec.invoice_amount||0).toLocaleString()}</div></div>
-          ${payRec.smartsheet_payment_id?`<div><span class="detail-key">Smartsheet ID</span><div style="font-weight:700;color:#6366f1;font-family:var(--font-mono)">${payRec.smartsheet_payment_id}</div></div>`:''}
-          <div><span class="detail-key">Raised On</span><div style="font-weight:600">${fmtDate(payRec.raised_at||payRec.request_date)}</div></div>
-        </div>
-        ${payRec.notes?`<div style="margin-top:6px;font-size:0.76rem;color:var(--gray-3)">${payRec.notes}</div>`:''}
-      </div>`:''}
-      <div style="margin-top:14px;padding:14px;background:white;border:1px solid var(--border);border-radius:var(--radius-sm)">
-        <div style="font-size:0.82rem;font-weight:700;margin-bottom:8px">✅ Mark Full Payment Received & Close PR</div>
-        <p style="font-size:0.78rem;color:var(--gray-3);margin-bottom:12px">Once payment is confirmed, attach the Smartsheet confirmation screenshot below. This will close the PR.</p>
-        <div class="form-group" style="margin-bottom:10px">
-          <label class="form-label">Confirmation Screenshot *</label>
-          <div class="drop-zone" style="min-height:60px;cursor:pointer" onclick="document.getElementById('payReceivedFile').click()">
-            <input type="file" id="payReceivedFile" accept=".png,.jpg,.jpeg,.pdf" style="display:none" onchange="previewGenericScreenshot(this,'payReceivedLabel','payReceivedPreview')"/>
-            <div class="drop-zone-label" id="payReceivedLabel">📎 Click to upload payment confirmation screenshot</div>
-            <div class="drop-zone-hint">PNG, JPG or PDF — max 5MB</div>
-          </div>
-          <div id="payReceivedPreview" style="display:none;margin-top:8px"></div>
-        </div>
-        <div class="form-group" style="margin-bottom:12px">
-          <label class="form-label">Notes (optional)</label>
-          <input class="form-control" id="payReceivedNote" placeholder="e.g. Transaction confirmed on DD/MM/YYYY"/>
-        </div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap">
-          <button class="btn btn-success" onclick="markFullPaymentReceived('${currentPR.id}','${payRec?.id||''}')">✅ Mark Payment Received & Close PR →</button>
-          ${currentPR.assigned_vendor_id?`<button class="btn btn-secondary" onclick="openRateModal('${currentPR.id}','${currentPR.assigned_vendor_id}')">⭐ Rate Vendor</button>`:''}
-        </div>
-      </div>
+  // ── PAYMENT REQUESTED ──
+  if(currentPR.phase==='payment_requested') {
+    actionSection=`<div style="margin-top:14px;padding:12px;background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.18);border-radius:var(--radius)">
+      <div style="font-size:0.82rem;font-weight:600;color:#7c3aed">💰 Payment Request Submitted</div>
+      <p style="font-size:0.78rem;color:var(--gray-3);margin-top:4px">Awaiting processing by accounts team.</p>
+      ${currentPR.assigned_vendor_id?`<button class="btn btn-secondary btn-sm" style="margin-top:8px" onclick="openRateModal('${currentPR.id}','${currentPR.assigned_vendor_id}')">⭐ Rate Vendor</button>`:''}
     </div>`;
   }
 
@@ -899,7 +847,7 @@ async function openPR(id) {
     actionSection=`<div style="margin-top:14px;padding:16px;background:rgba(22,163,74,0.05);border:1px solid rgba(22,163,74,0.2);border-radius:var(--radius);text-align:center">
       <div style="font-size:2rem;margin-bottom:8px">✔️</div>
       <div style="font-size:0.95rem;font-weight:700;color:#16a34a;margin-bottom:4px">Order Complete &amp; Closed</div>
-      <p style="font-size:0.8rem;color:var(--gray-3);margin:0">This procurement request has been fully processed and payment confirmed.</p>
+      <p style="font-size:0.8rem;color:var(--gray-3);margin:0">This procurement request has been fully processed and payment confirmed by accounts.</p>
       ${currentPR.assigned_vendor_id?`<div style="margin-top:12px"><button class="btn btn-secondary btn-sm" onclick="openRateModal('${currentPR.id}','${currentPR.assigned_vendor_id}')">⭐ Rate Vendor</button></div>`:''}
     </div>`;
   }
@@ -1079,9 +1027,8 @@ async function submitVendorInfo() {
   showLoader(true);
   const { error } = await db.from('procurement_requests').update({
     phase:'vendor_info_shared', vendor_info_details:details, updated_at:new Date().toISOString(), phase_timestamps:addPhaseTimestamp(currentPR,'vendor_info_shared')
+  notifyPhaseChange(currentPR.id,'vendor_info_shared',currentUser?.id);
   }).eq('id',currentPR.id);
-    notifyPhaseChange(currentPR.id,'vendor_info_shared',currentUser?.id);
-
   if (!error) {
     await window.postComment(currentPR.id, currentUser?.id, '🏢 Vendor information provided to engineer.');
   }
@@ -1107,50 +1054,26 @@ function selectAdvanceOption(opt) {
 }
 
 async function requestAdvance() {
-  // LEGACY - replaced by submitAdvanceViaSmartsheet
-  await submitAdvanceViaSmartsheet();
-}
-
-// ── SMARTSHEET ADVANCE PAYMENT ───────────────────────────────
-async function submitAdvanceViaSmartsheet() {
   if (!currentPR) return;
   const amtEl = document.getElementById('advanceAmt');
   const noteEl = document.getElementById('advanceNote');
-  const payIdEl = document.getElementById('advSmartsheetPayId');
-  const screenshotEl = document.getElementById('advSmartsheetFile');
   const amt = amtEl?.value ? parseFloat(amtEl.value) : null;
   const note = noteEl?.value ? noteEl.value.trim() : null;
-  const payId = payIdEl?.value ? payIdEl.value.trim() : null;
-  if (!amt) { showToast('Please enter advance amount', 'error'); return; }
-  if (!payId) { showToast('Please enter the Smartsheet Payment ID', 'error'); return; }
-
-  let screenshotData = null;
-  if (screenshotEl?.files?.length) {
-    try { screenshotData = await fileToBase64(screenshotEl.files[0]); }
-    catch(e) { showToast('Screenshot error: ' + e.message, 'error'); return; }
-  }
-
+  if (!amt) { showToast('Please enter advance amount','error'); return; }
   showLoader(true);
   const { error } = await db.from('advance_payment_requests').insert({
     pr_id: currentPR.id, amount: amt, notes: note,
-    requested_by: currentUser?.id, status: 'raised',
-    smartsheet_payment_id: payId,
-    smartsheet_screenshot: screenshotData,
-    raised_at: new Date().toISOString()
+    requested_by: currentUser?.id, status:'pending'
   });
   if (!error) {
     await db.from('procurement_requests').update({
-      phase: 'advance_raised_to_accounts',
-      updated_at: new Date().toISOString(),
-      phase_timestamps: addPhaseTimestamp(currentPR, 'advance_raised_to_accounts')
-    }).eq('id', currentPR.id);
-    notifyPhaseChange(currentPR.id, 'advance_raised_to_accounts', currentUser?.id);
-    await window.postComment(currentPR.id, currentUser?.id,
-      `📤 Advance payment of AED ${amt.toLocaleString()} raised via Smartsheet. Payment ID: ${payId}`);
+      phase:'advance_requested', updated_at:new Date().toISOString(), phase_timestamps:addPhaseTimestamp(currentPR,'advance_requested')
+    }).eq('id',currentPR.id);
+    await window.postComment(currentPR.id, currentUser?.id, `💳 Advance payment request of ${amt} sent to accounts.`);
   }
   showLoader(false);
-  if (error) { showToast('Error: ' + error.message, 'error'); return; }
-  showToast('Advance raised to accounts via Smartsheet!', 'success');
+  if (error) { showToast('Error: '+error.message,'error'); return; }
+  showToast('Advance request sent to accounts!','success');
   closeModal('prModal'); await loadRequests();
 }
 
@@ -1944,25 +1867,6 @@ async function openPaymentRequestModal(prId) {
           <label class="form-label">Additional Notes to Accounts</label>
           <textarea class="form-control" id="prPayNotes" placeholder="Any special instructions, partial payment status..."></textarea>
         </div>
-        <!-- Smartsheet Payment Fields -->
-        <div class="form-group full" style="margin-top:8px;padding:14px;background:rgba(99,102,241,0.04);border:1px solid rgba(99,102,241,0.2);border-radius:var(--radius-sm)">
-          <div style="font-size:0.8rem;font-weight:700;color:#4f46e5;margin-bottom:10px">📋 Smartsheet Payment — Required</div>
-          <div class="form-grid">
-            <div class="form-group">
-              <label class="form-label">Smartsheet Payment ID *</label>
-              <input class="form-control" id="prSmartsheetPayId" placeholder="e.g. SS-2024-001"/>
-            </div>
-          </div>
-          <div class="form-group" style="margin-top:8px">
-            <label class="form-label">Smartsheet Screenshot *</label>
-            <div class="drop-zone" style="min-height:60px;cursor:pointer" onclick="document.getElementById('prSmartsheetFile').click()">
-              <input type="file" id="prSmartsheetFile" accept=".png,.jpg,.jpeg,.pdf" style="display:none" onchange="previewPayScreenshot(this)"/>
-              <div class="drop-zone-label" id="prScreenshotLabel">📎 Click to upload Smartsheet screenshot</div>
-              <div class="drop-zone-hint">PNG, JPG or PDF — max 5MB</div>
-            </div>
-            <div id="prScreenshotPreview" style="display:none;margin-top:8px"></div>
-          </div>
-        </div>
         <div class="form-group full" style="margin-top:4px">
           <label class="form-label">📎 Attach Documents (Invoice, Delivery Note, etc.)</label>
           <div style="border:2px dashed var(--border);border-radius:var(--radius);padding:14px 16px;text-align:center;cursor:pointer;transition:border-color .15s" onclick="document.getElementById('prAttachInput').click()" onmouseenter="this.style.borderColor='#6366f1'" onmouseleave="this.style.borderColor=''">
@@ -1993,190 +1897,27 @@ async function submitPaymentRequest() {
     shipping_included:shipping,payment_terms:vendor?.payment_terms||null,urgency,
     notes,requested_by:currentUser.id,status:'pending',request_date:new Date().toISOString()
   });
-  // Smartsheet fields
-  const ssPayId = document.getElementById('prSmartsheetPayId')?.value?.trim() || null;
-  const ssFileEl = document.getElementById('prSmartsheetFile');
-  let ssScreenshot = null;
-  if (ssFileEl?.files?.length) {
-    try { ssScreenshot = await fileToBase64(ssFileEl.files[0]); }
-    catch(e) { showLoader(false); showToast('Screenshot error: ' + e.message, 'error'); return; }
-  }
-  if (!ssPayId) { showLoader(false); showToast('Please enter the Smartsheet Payment ID', 'error'); return; }
-
   if(!error){
-    await db.from('procurement_requests').update({
-      phase: 'payment_raised_to_accounts',
-      updated_at: new Date().toISOString(),
-      phase_timestamps: addPhaseTimestamp(currentPR, 'payment_raised_to_accounts')
-    }).eq('id', currentPR.id);
-    notifyPhaseChange(currentPR.id, 'payment_raised_to_accounts', currentUser?.id);
-    await window.postComment(currentPR.id, currentUser.id,
-      `💰 Full payment of ${invCur} ${invAmt.toLocaleString()} raised to accounts via Smartsheet. Payment ID: ${ssPayId}`);
+    await db.from('procurement_requests').update({phase:'payment_requested',updated_at:new Date().toISOString(),phase_timestamps:addPhaseTimestamp(currentPR,'payment_requested')}).eq('id',currentPR.id);
+  notifyPhaseChange(currentPR.id,'payment_requested',currentUser?.id);
+    await window.postComment(currentPR.id,currentUser.id,`💰 Payment request of ${invCur} ${invAmt.toLocaleString()} submitted to accounts.`);
     if (paymentRequestFiles.length) {
       for (const f of paymentRequestFiles) {
         await db.from('pr_attachments').insert({
-          pr_id: currentPR.id, uploaded_by: currentUser.id,
-          attachment_type: 'other', file_name: f.name, file_url: f.data
+          pr_id: currentPR.id,
+          uploaded_by: currentUser.id,
+          attachment_type: 'other',
+          file_name: f.name,
+          file_url: f.data
         });
       }
       paymentRequestFiles = [];
     }
-    // Store Smartsheet info on the payment_request row
-    const { data: prRow } = await db.from('payment_requests')
-      .select('id').eq('pr_id', currentPR.id).order('request_date', {ascending:false}).limit(1).maybeSingle();
-    if (prRow?.id) {
-      await db.from('payment_requests').update({
-        smartsheet_payment_id: ssPayId,
-        smartsheet_screenshot: ssScreenshot,
-        raised_at: new Date().toISOString()
-      }).eq('id', prRow.id);
-    }
   }
   showLoader(false);
   if(error){showToast('Error: '+error.message,'error');return;}
-  showToast('Payment raised to accounts via Smartsheet!','success');
+  showToast('Payment request sent to accounts!','success');
   closeModal('payReqModal');closeModal('prModal');await loadRequests();
-}
-
-function previewAdvScreenshot(input) {
-  const label = document.getElementById('advScreenshotLabel');
-  const preview = document.getElementById('advScreenshotPreview');
-  if (!input.files?.length) return;
-  const file = input.files[0];
-  if (label) label.textContent = '✅ ' + file.name;
-  if (preview) {
-    if (file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = e => {
-        preview.style.display = 'block';
-        preview.innerHTML = `<img src="${e.target.result}" style="max-width:100%;max-height:120px;border-radius:4px;border:1px solid var(--border)"/>`;
-      };
-      reader.readAsDataURL(file);
-    } else {
-      preview.style.display = 'block';
-      preview.innerHTML = `<div style="font-size:0.76rem;color:#6366f1">📄 ${file.name}</div>`;
-    }
-  }
-}
-
-function previewPayScreenshot(input) {
-  const label = document.getElementById('prScreenshotLabel');
-  const preview = document.getElementById('prScreenshotPreview');
-  if (!input.files?.length) return;
-  const file = input.files[0];
-  if (label) label.textContent = '✅ ' + file.name;
-  if (preview) {
-    if (file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = e => {
-        preview.style.display = 'block';
-        preview.innerHTML = `<img src="${e.target.result}" style="max-width:100%;max-height:120px;border-radius:4px;border:1px solid var(--border)"/>`;
-      };
-      reader.readAsDataURL(file);
-    } else {
-      preview.style.display = 'block';
-      preview.innerHTML = `<div style="font-size:0.76rem;color:#6366f1">📄 ${file.name}</div>`;
-    }
-  }
-}
-
-// ── SHARED SCREENSHOT PREVIEW HELPER ─────────────────────────
-function previewGenericScreenshot(input, labelId, previewId) {
-  const label = document.getElementById(labelId);
-  const preview = document.getElementById(previewId);
-  if (!input.files?.length) return;
-  const file = input.files[0];
-  if (label) label.textContent = '✅ ' + file.name;
-  if (preview) {
-    if (file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = e => {
-        preview.style.display = 'block';
-        preview.innerHTML = `<img src="${e.target.result}" style="max-width:100%;max-height:140px;border-radius:6px;border:1px solid var(--border)"/>`;
-      };
-      reader.readAsDataURL(file);
-    } else {
-      preview.style.display = 'block';
-      preview.innerHTML = `<div style="font-size:0.76rem;color:#6366f1;padding:6px 8px;background:rgba(99,102,241,0.06);border-radius:4px">📄 ${file.name}</div>`;
-    }
-  }
-}
-
-// ── PM: MARK ADVANCE PAYMENT RECEIVED ────────────────────────
-async function markAdvanceReceived(prId, advId) {
-  const fileEl = document.getElementById('advReceivedFile');
-  const note = document.getElementById('advReceivedNote')?.value?.trim() || null;
-  if (!fileEl?.files?.length) { showToast('Please attach a confirmation screenshot', 'error'); return; }
-  showLoader(true);
-  let screenshot = null;
-  try { screenshot = await fileToBase64(fileEl.files[0]); } catch(e) { showLoader(false); showToast('Screenshot error: ' + e.message, 'error'); return; }
-
-  const now = new Date().toISOString();
-  // Update the advance_payment_requests record
-  if (advId) {
-    await db.from('advance_payment_requests').update({
-      status: 'payment_received',
-      confirmed_by: currentUser.id,
-      confirmed_at: now,
-      smartsheet_screenshot: screenshot
-    }).eq('id', advId);
-  }
-  // Stamp phase + timestamp
-  const newTs = addPhaseTimestamp(currentPR, 'advance_payment_received');
-  const { error } = await db.from('procurement_requests').update({
-    phase: 'advance_payment_received',
-    updated_at: now,
-    phase_timestamps: newTs
-  }).eq('id', prId);
-  if (!error) {
-    notifyPhaseChange(prId, 'advance_payment_received', currentUser?.id);
-    await window.postComment(prId, currentUser.id,
-      `💳 Advance payment confirmed received.${note ? ' ' + note : ''}`);
-  }
-  showLoader(false);
-  if (error) { showToast('Error: ' + error.message, 'error'); return; }
-  showToast('✅ Advance payment marked as received!', 'success');
-  closeModal('prModal'); await loadRequests();
-}
-
-// ── PM: MARK FULL PAYMENT RECEIVED & CLOSE PR ────────────────
-async function markFullPaymentReceived(prId, payId) {
-  const fileEl = document.getElementById('payReceivedFile');
-  const note = document.getElementById('payReceivedNote')?.value?.trim() || null;
-  if (!fileEl?.files?.length) { showToast('Please attach a confirmation screenshot', 'error'); return; }
-  showLoader(true);
-  let screenshot = null;
-  try { screenshot = await fileToBase64(fileEl.files[0]); } catch(e) { showLoader(false); showToast('Screenshot error: ' + e.message, 'error'); return; }
-
-  const now = new Date().toISOString();
-  // Update payment_requests record
-  if (payId) {
-    await db.from('payment_requests').update({
-      status: 'paid',
-      paid_at: now,
-      confirmed_by: currentUser.id,
-      smartsheet_screenshot: screenshot,
-      payment_notes: note
-    }).eq('id', payId);
-  }
-  // Stamp both payment_received + accepted timestamps
-  const ts1 = addPhaseTimestamp(currentPR, 'payment_received');
-  const ts2 = Object.assign({}, ts1, { accepted: now });
-  const { error } = await db.from('procurement_requests').update({
-    phase: 'accepted',
-    updated_at: now,
-    phase_timestamps: ts2
-  }).eq('id', prId);
-  if (!error) {
-    notifyPhaseChange(prId, 'payment_received', currentUser?.id);
-    notifyPhaseChange(prId, 'accepted', currentUser?.id);
-    await window.postComment(prId, currentUser.id,
-      `✅ Full payment confirmed received. PR closed.${note ? ' ' + note : ''}`);
-  }
-  showLoader(false);
-  if (error) { showToast('Error: ' + error.message, 'error'); return; }
-  showToast('✅ Payment received — PR closed!', 'success');
-  closeModal('prModal'); await loadRequests();
 }
 
 // ── VENDOR RATING ────────────────────────────────────────────
@@ -2350,7 +2091,7 @@ function buildApprovedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, existin
 
   return `<div class="action-section">
     <div class="action-section-title">🛒 Place Order <span class="action-badge">ACTION REQUIRED</span></div>
-    <p style="font-size:0.82rem;color:var(--gray-3);margin-bottom:12px">Generate the PO, confirm the order, then optionally raise an advance via Smartsheet.</p>
+    <p style="font-size:0.82rem;color:var(--gray-3);margin-bottom:12px">Follow the two steps below: first generate the PO, then confirm the order.</p>
 
     ${selectedQ ? `<div style="margin-bottom:14px;padding:10px 12px;background:var(--off-white);border:1px solid var(--border);border-radius:var(--radius-sm)">
       <div class="detail-key" style="margin-bottom:4px">Selected Quote</div>
@@ -2362,74 +2103,59 @@ function buildApprovedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, existin
     <div style="border:1px solid ${hasPO ? 'rgba(22,163,74,0.3)' : 'var(--border)'};border-radius:var(--radius);padding:14px;margin-bottom:14px;background:${hasPO ? 'rgba(22,163,74,0.04)' : 'white'}">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:${hasPO ? '0' : '10px'}">
         <div style="font-size:0.82rem;font-weight:700;color:${hasPO ? '#16a34a' : '#111'}">
-          ${hasPO ? '&#x2705; Step 1 — PO Generated' : '&#x1F4CB; Step 1 — Generate Purchase Order (Required)'}
+          ${hasPO ? `✅ Step 1 — PO Generated` : '📋 Step 1 — Generate Purchase Order (Required)'}
         </div>
         ${hasPO ? `<div style="font-family:var(--font-mono);font-size:0.78rem;font-weight:700;color:#16a34a">${existingPO.po_number}</div>` : ''}
       </div>
       ${hasPO
-        ? `<div style="font-size:0.72rem;color:var(--gray-3)">Generated ${fmtDate(existingPO.po_date || existingPO.created_at)} &middot; ${existingPO.currency || 'AED'} ${Number(existingPO.total_amount || 0).toLocaleString()}</div>`
+        ? `<div style="font-size:0.72rem;color:var(--gray-3)">
+            Generated ${fmtDate(existingPO.po_date || existingPO.created_at)} · 
+            ${existingPO.currency || 'INR'} ${Number(existingPO.total_amount || 0).toLocaleString()}
+           </div>`
         : `<p style="font-size:0.78rem;color:var(--gray-3);margin-bottom:10px">Generate and save the PO before confirming the order.</p>
-           <button class="btn btn-secondary" onclick="openPOModal('${id}')">&#x1F4C4; Preview &amp; Generate PO</button>`
+           <button class="btn btn-secondary" onclick="openPOModal('${id}')">📄 Preview &amp; Generate PO</button>`
       }
     </div>
 
     <!-- STEP 2: Place Order -->
-    <div id="poPlaceOrderSection" style="border:1px solid var(--border);border-radius:var(--radius);padding:14px;background:white;margin-bottom:14px;${!hasPO ? 'opacity:0.45;pointer-events:none' : ''}">
+    <div style="border:1px solid var(--border);border-radius:var(--radius);padding:14px;background:white;${!hasPO ? 'opacity:0.45;pointer-events:none' : ''}">
       <div style="font-size:0.82rem;font-weight:700;margin-bottom:10px;color:${hasPO ? '#111' : 'var(--gray-4)'}">
-        &#x1F6D2; Step 2 — Confirm Order Placed ${!hasPO ? '<span style="font-size:0.72rem;font-weight:400">(generate PO first)</span>' : ''}
+        🛒 Step 2 — Confirm Order Placed ${!hasPO ? '<span style="font-size:0.72rem;font-weight:400">(generate PO first)</span>' : ''}
       </div>
       <div class="form-group" style="margin-bottom:12px">
         <label class="form-label">Order Notes</label>
         <textarea class="form-control" id="orderNotes" placeholder="PO number, confirmation reference, expected delivery..."></textarea>
       </div>
-      <button class="btn btn-primary" onclick="placeOrder()" ${!hasPO ? 'disabled' : ''}>Confirm Order Placed &#x2192;</button>
+      <button class="btn btn-primary" onclick="placeOrder()" ${!hasPO ? 'disabled' : ''}>Confirm Order Placed →</button>
     </div>
 
-    <!-- STEP 3: Advance via Smartsheet -->
-    <div style="border:1px solid var(--border);border-radius:var(--radius);padding:14px;background:white;">
-      <div style="font-size:0.82rem;font-weight:700;margin-bottom:10px;">&#x1F4B3; Step 3 — Advance Payment via Smartsheet (optional)</div>
+    <!-- STEP 3: Advance Options -->
+    <div style="margin-top:16px">
+      <div class="form-label" style="margin-bottom:8px">💳 Step 3 — Advance Payment Options (optional)</div>
       <div class="advance-options">
         <div class="advance-option" id="advOptNone" onclick="selectAdvanceOption('none')">
-          <div style="font-size:1.2rem;margin-bottom:4px">&#x2713;</div>
+          <div style="font-size:1.2rem;margin-bottom:4px">✓</div>
           <div style="font-weight:600;font-size:0.8rem">No Advance Required</div>
-          <div style="font-size:0.72rem;color:var(--gray-4)">Pay on delivery / full payment later</div>
+          <div style="font-size:0.72rem;color:var(--gray-4)">Pay on delivery</div>
         </div>
+
         <div class="advance-option" id="advOptRequest" onclick="selectAdvanceOption('request')">
-          <div style="font-size:1.2rem;margin-bottom:4px">&#x1F4E4;</div>
-          <div style="font-weight:600;font-size:0.8rem">Raise Advance via Smartsheet</div>
-          <div style="font-size:0.72rem;color:var(--gray-4)">Upload screenshot + Payment ID</div>
+          <div style="font-size:1.2rem;margin-bottom:4px">📤</div>
+          <div style="font-weight:600;font-size:0.8rem">Request Advance from Accounts</div>
+          <div style="font-size:0.72rem;color:var(--gray-4)">Send request to accounts first</div>
         </div>
       </div>
-      <div id="advRequestDetails" style="display:none;margin-top:12px;padding:14px;background:rgba(245,158,11,0.04);border:1px solid rgba(245,158,11,0.25);border-radius:var(--radius-sm)">
-        <div style="font-size:0.78rem;font-weight:600;color:#b45309;margin-bottom:10px">&#x1F4E4; Advance via Smartsheet — raised directly by Procurement Manager</div>
+      <div id="advRequestDetails" style="display:none;margin-top:10px;padding:12px;background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.18);border-radius:var(--radius-sm)">
         <div class="form-grid">
-          <div class="form-group">
-            <label class="form-label">Advance Amount (${currency}) *</label>
-            <input class="form-control" id="advanceAmt" type="number" placeholder="0.00"/>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Smartsheet Payment ID *</label>
-            <input class="form-control" id="advSmartsheetPayId" placeholder="e.g. SS-2024-001"/>
-          </div>
+          <div class="form-group"><label class="form-label">Advance Amount (${currency})</label><input class="form-control" id="advanceAmt" type="number" placeholder="0.00"/></div>
+          <div class="form-group"><label class="form-label">Notes to Accounts</label><input class="form-control" id="advanceNote" placeholder="Reason, urgency..."/></div>
         </div>
-        <div class="form-group">
-          <label class="form-label">Notes to Accounts</label>
-          <input class="form-control" id="advanceNote" placeholder="Reason, urgency, vendor details..."/>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Smartsheet Screenshot *</label>
-          <div class="drop-zone" style="min-height:60px;cursor:pointer" onclick="document.getElementById('advSmartsheetFile').click()">
-            <input type="file" id="advSmartsheetFile" accept=".png,.jpg,.jpeg,.pdf" style="display:none" onchange="previewAdvScreenshot(this)"/>
-            <div class="drop-zone-label" id="advScreenshotLabel">&#x1F4CE; Click to upload Smartsheet screenshot</div>
-            <div class="drop-zone-hint">PNG, JPG or PDF — max 5MB</div>
-          </div>
-          <div id="advScreenshotPreview" style="display:none;margin-top:8px"></div>
-        </div>
-        <button class="btn btn-sm" style="background:#f59e0b;border:1px solid #d97706;color:white;font-weight:700" onclick="submitAdvanceViaSmartsheet()">&#x1F4E4; Raise Advance to Accounts &#x2192;</button>
+        <button class="btn btn-primary btn-sm" onclick="requestAdvance()">Send Request to Accounts →</button>
       </div>
     </div>
   </div>`;
 }
+
 init();
 </script>
 </body>
