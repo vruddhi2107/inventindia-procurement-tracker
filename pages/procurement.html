@@ -248,6 +248,7 @@
         <option value="qc_passed">QC Passed</option>
         <option value="accepted">Accepted</option>
         <option value="rejected">Rejected</option>
+        <option value="declined">Declined</option>
         <option value="payment_requested">Payment Requested</option>
       </select>
       <button class="btn btn-ghost btn-sm" onclick="clearFilters()">✕</button>
@@ -718,7 +719,8 @@ async function openPR(id) {
         <textarea class="form-control" id="vendorInfoDetails" placeholder="Vendor name, contact, email, phone, specialization, lead times..." style="min-height:120px"></textarea>
       </div>
       <div style="margin-top:12px"><button class="btn btn-primary" onclick="submitVendorInfo()">Send to Engineer →</button></div>
-    </div>`;
+    </div>
+    ${buildDeclineSection()}`;
   }
 
   // ── RFQ: assign vendor + upload quotations ──
@@ -747,7 +749,8 @@ async function openPR(id) {
       <div id="quoteUploadList" class="upload-list"></div>
       ${buildQuoteFieldsHTML()}
       <div style="margin-top:14px"><button class="btn btn-primary" onclick="shareQuotations()">Share Quotations with Engineer →</button></div>
-    </div>`;
+    </div>
+    ${buildDeclineSection()}`;
     if(currentPR.assigned_vendor_id&&selectedVendorObj) {
       setTimeout(()=>showVendorInfoChip(selectedVendorObj),0);
     }
@@ -894,6 +897,16 @@ async function openPR(id) {
     </div>`;
   }
 
+  // ── DECLINED ──
+  if(currentPR.phase==='declined') {
+    actionSection=`<div style="margin-top:14px;padding:16px;background:rgba(214,43,43,0.05);border:1px solid rgba(214,43,43,0.2);border-radius:var(--radius);text-align:center">
+      <div style="font-size:2rem;margin-bottom:8px">🚫</div>
+      <div style="font-size:0.95rem;font-weight:700;color:var(--red);margin-bottom:4px">Request Declined by Procurement</div>
+      ${currentPR.rejection_reason?`<div style="display:inline-block;margin:8px 0;padding:6px 14px;background:rgba(214,43,43,0.08);border:1px solid rgba(214,43,43,0.2);border-radius:var(--radius-sm);font-size:0.82rem;font-weight:600;color:var(--red)">${currentPR.rejection_reason}</div>`:''}
+      ${currentPR.pm_final_approval_notes?`<p style="font-size:0.8rem;color:var(--gray-3);margin:6px 0 0">${currentPR.pm_final_approval_notes}</p>`:''}
+    </div>`;
+  }
+
   // ── ACCEPTED (CLOSED) ──
   if(currentPR.phase==='accepted') {
     actionSection=`<div style="margin-top:14px;padding:16px;background:rgba(22,163,74,0.05);border:1px solid rgba(22,163,74,0.2);border-radius:var(--radius);text-align:center">
@@ -943,6 +956,50 @@ function showVendorInfoChip(v) {
     <div>${starRating(v.avg_rating,v.rating_count)}</div>
     <button class="btn btn-ghost btn-sm" onclick="openVendorHistory('${v.id}')">📋 History</button>
   </div>`;
+}
+
+// ── DECLINE REQUEST ───────────────────────────────────────────
+const DECLINE_REASONS = [
+  'Incomplete or unclear request details',
+  'Duplicate request — already submitted',
+];
+
+function buildDeclineSection() {
+  return `<div style="margin-top:10px;padding:14px 16px;background:rgba(214,43,43,0.04);border:1px solid rgba(214,43,43,0.18);border-radius:var(--radius)">
+    <div style="font-size:0.82rem;font-weight:700;color:var(--red);margin-bottom:10px;display:flex;align-items:center;gap:6px">🚫 Decline this Request</div>
+    <div class="form-group" style="margin-bottom:10px">
+      <label class="form-label" style="font-size:0.78rem">Reason for Declining *</label>
+      <select class="form-control" id="declineReasonSelect" style="font-size:0.82rem">
+        <option value="">— Select a reason —</option>
+        ${DECLINE_REASONS.map(r=>`<option value="${r}">${r}</option>`).join('')}
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:10px">
+      <label class="form-label" style="font-size:0.78rem">Additional Notes <span style="color:var(--gray-4);font-weight:400">(optional)</span></label>
+      <textarea class="form-control" id="declineNotesInput" placeholder="Any extra context for the engineer..." style="min-height:60px;font-size:0.82rem"></textarea>
+    </div>
+    <button class="btn btn-sm" style="background:var(--red);color:#fff;border:none" onclick="declinePR()">Decline Request</button>
+  </div>`;
+}
+
+async function declinePR() {
+  const reason = document.getElementById('declineReasonSelect')?.value;
+  const notes  = document.getElementById('declineNotesInput')?.value?.trim();
+  if(!reason) { showToast('Please select a reason for declining.','error'); return; }
+  if(!confirm(`Decline this request?\n\nReason: ${reason}\n\nThis will notify the engineer.`)) return;
+  showLoader(true);
+  const { error } = await db.from('procurement_requests').update({
+    phase: 'declined',
+    rejection_reason: reason,
+    pm_final_approval_notes: notes || null,
+    updated_at: new Date().toISOString(),
+    phase_timestamps: addPhaseTimestamp(currentPR, 'declined')
+  }).eq('id', currentPR.id);
+  showLoader(false);
+  if(error) { showToast('Error declining request: ' + error.message, 'error'); return; }
+  showToast('Request declined.', 'success');
+  closeModal('prModal');
+  await loadRequests();
 }
 
 // ── QUOTATION UPLOAD ──────────────────────────────────────────
@@ -2434,4 +2491,3 @@ init();
 </script>
 </body>
 </html>
-

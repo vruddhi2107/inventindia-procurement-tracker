@@ -1021,21 +1021,53 @@ async function shareQuotations() {
 // ── VENDOR INFO RESPONSE ─────────────────────────────────────
 async function submitVendorInfo() {
   if (!currentPR) return;
+
   const detailsEl = document.getElementById('vendorInfoDetails');
   const details = detailsEl?.value ? detailsEl.value.trim() : '';
-  if (!details) { showToast('Please enter vendor details','error'); return; }
-  showLoader(true);
-  const { error } = await db.from('procurement_requests').update({
-    phase:'vendor_info_shared', vendor_info_details:details, updated_at:new Date().toISOString(), phase_timestamps:addPhaseTimestamp(currentPR,'vendor_info_shared')
-  notifyPhaseChange(currentPR.id,'vendor_info_shared',currentUser?.id);
-  }).eq('id',currentPR.id);
-  if (!error) {
-    await window.postComment(currentPR.id, currentUser?.id, '🏢 Vendor information provided to engineer.');
+
+  if (!details) {
+    showToast('Please enter vendor details', 'error');
+    return;
   }
+
+  showLoader(true);
+
+  const { error } = await db
+    .from('procurement_requests')
+    .update({
+      phase: 'vendor_info_shared',
+      vendor_info_details: details,
+      updated_at: new Date().toISOString(),
+      phase_timestamps: addPhaseTimestamp(currentPR, 'vendor_info_shared')
+    })
+    .eq('id', currentPR.id);
+
+  // Notify after successful update
+  if (!error) {
+    await notifyPhaseChange(
+      currentPR.id,
+      'vendor_info_shared',
+      currentUser?.id
+    );
+
+    await window.postComment(
+      currentPR.id,
+      currentUser?.id,
+      '🏢 Vendor information provided to engineer.'
+    );
+  }
+
   showLoader(false);
-  if (error) { showToast('Error: '+error.message,'error'); return; }
-  showToast('Vendor info sent!','success');
-  closeModal('prModal'); await loadRequests();
+
+  if (error) {
+    showToast('Error: ' + error.message, 'error');
+    return;
+  }
+
+  showToast('Vendor info sent!', 'success');
+
+  closeModal('prModal');
+  await loadRequests();
 }
 
 // ── ADVANCE PAYMENT ───────────────────────────────────────────

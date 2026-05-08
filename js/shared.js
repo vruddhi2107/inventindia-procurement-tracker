@@ -1,4 +1,3 @@
-
 // ══════════════════════════════════════════════════════════════
 // SAFE FILE REGISTRY — eliminates base64-in-HTML-attribute bugs
 // All large file URLs are stored here; buttons reference by index only.
@@ -118,6 +117,7 @@ function getPhaseBadge(phase){
     advance_requested:['Advance Requested','badge-orange'],
     advance_approved:['Advance Approved','badge-green'],
     advance_rejected:['Advance Rejected','badge-red'],
+    declined:['Declined','badge-red'],
   };
   const[label,cls]=map[phase]||[phase,'badge-gray'];
   return `<span class="badge ${cls}">${label}</span>`;
@@ -964,4 +964,4 @@ function getPartsFromEditor() {
   }));
 }
 
-} 
+}
