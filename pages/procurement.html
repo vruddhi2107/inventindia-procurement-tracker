@@ -687,12 +687,14 @@ async function openPR(id) {
   document.getElementById('prModalSub').textContent=`${currentPR.request_category==='vendor_info'?'Vendor Info':'RFQ'} · ${DEPARTMENTS[currentPR.department]} · ${currentPR.users?.name||''}`;
   showLoader(true);
   await loadVendors();
-  const[comments,quotations,vd,poRes,attRes]=await Promise.all([
+  const[comments,quotations,vd,poRes,attRes,advRes,payRes]=await Promise.all([
     loadComments(id),
     db.from('pr_quotations').select('*').eq('pr_id',id).order('created_at').then(r=>r.data||[]),
     currentPR.assigned_vendor_id?db.from('vendors').select('*').eq('id',currentPR.assigned_vendor_id).single():Promise.resolve({data:null}),
     db.from('purchase_orders').select('*').eq('pr_id',id).order('created_at',{ascending:false}).limit(1).maybeSingle(),
-    db.from('pr_attachments').select('*').eq('pr_id',id).order('created_at')
+    db.from('pr_attachments').select('*').eq('pr_id',id).order('created_at'),
+    db.from('advance_payment_requests').select('*').eq('pr_id',id).order('created_at',{ascending:false}).limit(1).maybeSingle(),
+    db.from('payment_requests').select('*').eq('pr_id',id).order('request_date',{ascending:false}).limit(1).maybeSingle()
   ]);
   const existingPO = poRes.data || null;
   // Normalize engineer's JSONB attachments (stored in procurement_requests.attachments)
@@ -920,7 +922,7 @@ async function openPR(id) {
   const attachmentsSectionHTML = _buildAttsSection(attachments, 'Attachments');
 
   document.getElementById('prModalBody').innerHTML=
-    buildPRDetailHTML(currentPR,quotations,vd?.data?.name||'',currentPR.project_manager_name||'')
+    buildPRDetailHTML(currentPR,quotations,vd?.data?.name||'',currentPR.project_manager_name||'',{poData:existingPO,advPayRec:advRes.data||null,payRec:payRes.data||null})
     +attachmentsSectionHTML
     +actionSection+
     `<div style="margin-top:22px;border-top:1px solid var(--border);padding-top:16px">

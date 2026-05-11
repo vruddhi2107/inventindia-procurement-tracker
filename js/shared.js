@@ -422,7 +422,11 @@ function renderPartsTable(parts) {
 }
 
 // ── PR DETAIL HTML ──────────────────────────────────────────
-function buildPRDetailHTML(pr, quotations=[], vendorName='', pmName='') {
+function buildPRDetailHTML(pr, quotations=[], vendorName='', pmName='', extras={}) {
+  // extras: { poData, advPayRec, payRec }
+  // poData       = purchase_orders row (or null)
+  // advPayRec    = advance_payment_requests row (or null)
+  // payRec       = payment_requests row (or null)
   const parts = pr.parts||[];
   return `
     <div class="detail-grid">
@@ -501,7 +505,132 @@ function buildPRDetailHTML(pr, quotations=[], vendorName='', pmName='') {
     ${pr.qc_notes?`<div style="margin-top:14px;padding:12px;background:${pr.qc_result==='qc_passed'||pr.qc_result==='accepted'?'rgba(22,163,74,0.06)':'rgba(214,43,43,0.06)'};border:1px solid ${pr.qc_result==='qc_passed'||pr.qc_result==='accepted'?'rgba(22,163,74,0.2)':'rgba(214,43,43,0.2)'};border-radius:var(--radius)">
       <div class="detail-key" style="color:${pr.qc_result==='qc_passed'||pr.qc_result==='accepted'?'#16a34a':'var(--red)'};margin-bottom:4px">QC — ${pr.qc_result==='qc_passed'||pr.qc_result==='accepted'?'Passed ✓':'Failed ✗'}</div>
       <p style="font-size:0.83rem">${pr.qc_notes}</p>
-    </div>`:''}`;
+    </div>`:''}
+
+    ${(()=>{
+      /* ── GRN / QC FORM (stored in qc_criteria.grn after engineer submits) ── */
+      const grn = pr.qc_criteria?.grn;
+      if (!grn) return '';
+      const lines = grn.lines||[];
+      const resultVal = pr.qc_result;
+      const isPassed = resultVal==='accepted'||resultVal==='qc_passed';
+      return `<div style="margin-top:16px;border:1px solid ${isPassed?'rgba(22,163,74,0.25)':'rgba(214,43,43,0.25)'};border-radius:var(--radius);overflow:hidden">
+        <div style="padding:10px 14px;background:${isPassed?'rgba(22,163,74,0.08)':'rgba(214,43,43,0.08)'};display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+          <div style="font-weight:700;font-size:0.85rem;color:${isPassed?'#16a34a':'var(--red)'}">📋 GRN / QC Form — ${isPassed?'Passed ✓':'Rejected ✗'}</div>
+          <span style="font-family:var(--font-mono);font-size:0.72rem;font-weight:600;padding:2px 8px;border-radius:3px;background:${isPassed?'rgba(22,163,74,0.12)':'rgba(214,43,43,0.12)'};color:${isPassed?'#16a34a':'var(--red)'}">GRN# ${grn.grn_number||'—'}</span>
+        </div>
+        <div style="padding:12px 14px;background:white">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px 14px;margin-bottom:12px">
+            ${grn.grn_date?`<div><div class="detail-key">GRN Date</div><div class="detail-value" style="font-family:var(--font-mono);font-size:0.82rem">${grn.grn_date}</div></div>`:''}
+            ${grn.invoice_no?`<div><div class="detail-key">Invoice No</div><div class="detail-value" style="font-family:var(--font-mono);font-size:0.82rem">${grn.invoice_no}</div></div>`:''}
+            ${grn.transporter?`<div><div class="detail-key">Transporter</div><div class="detail-value" style="font-size:0.82rem">${grn.transporter}</div></div>`:''}
+            ${grn.gate_inward_no?`<div><div class="detail-key">Gate Inward No</div><div class="detail-value" style="font-family:var(--font-mono);font-size:0.82rem">${grn.gate_inward_no}</div></div>`:''}
+            ${grn.gate_inward_date?`<div><div class="detail-key">Gate Inward Date</div><div class="detail-value" style="font-family:var(--font-mono);font-size:0.82rem">${grn.gate_inward_date}</div></div>`:''}
+            ${grn.received_by?`<div><div class="detail-key">Received By</div><div class="detail-value" style="font-size:0.82rem">${grn.received_by}</div></div>`:''}
+            ${grn.qc_checked_by?`<div><div class="detail-key">QC Checked By</div><div class="detail-value" style="font-size:0.82rem">${grn.qc_checked_by}</div></div>`:''}
+          </div>
+          ${lines.length?`<div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:0.78rem">
+              <thead><tr style="background:var(--gray-6)">
+                <th style="padding:5px 8px;border:1px solid var(--border);text-align:center;font-size:0.68rem">SR#</th>
+                <th style="padding:5px 8px;border:1px solid var(--border);font-size:0.68rem">ITEM CODE</th>
+                <th style="padding:5px 8px;border:1px solid var(--border);font-size:0.68rem">ITEM NAME</th>
+                <th style="padding:5px 8px;border:1px solid var(--border);text-align:center;font-size:0.68rem">UOM</th>
+                <th style="padding:5px 8px;border:1px solid var(--border);text-align:center;font-size:0.68rem;background:rgba(99,102,241,0.06)">PO QTY</th>
+                <th style="padding:5px 8px;border:1px solid var(--border);text-align:center;font-size:0.68rem">RCVD</th>
+                <th style="padding:5px 8px;border:1px solid var(--border);text-align:center;font-size:0.68rem;background:rgba(34,197,94,0.06)">ACCEPTED</th>
+                <th style="padding:5px 8px;border:1px solid var(--border);text-align:center;font-size:0.68rem;background:rgba(239,68,68,0.06)">REJECTED</th>
+              </tr></thead>
+              <tbody>${lines.map(l=>`<tr>
+                <td style="padding:5px 8px;border:1px solid var(--border);text-align:center;font-family:var(--font-mono);font-size:0.72rem">${l.sr}</td>
+                <td style="padding:5px 8px;border:1px solid var(--border);font-family:var(--font-mono);font-size:0.72rem">${l.item_code||'—'}</td>
+                <td style="padding:5px 8px;border:1px solid var(--border);font-size:0.78rem;font-weight:500">${l.item_name||'—'}</td>
+                <td style="padding:5px 8px;border:1px solid var(--border);text-align:center;font-family:var(--font-mono);font-size:0.72rem">${l.uom||'pcs'}</td>
+                <td style="padding:5px 8px;border:1px solid var(--border);text-align:center;font-family:var(--font-mono);font-weight:700;color:#6366f1">${l.po_qty}</td>
+                <td style="padding:5px 8px;border:1px solid var(--border);text-align:center;font-family:var(--font-mono)">${l.received}</td>
+                <td style="padding:5px 8px;border:1px solid var(--border);text-align:center;font-family:var(--font-mono);color:#16a34a;font-weight:600">${l.accepted}</td>
+                <td style="padding:5px 8px;border:1px solid var(--border);text-align:center;font-family:var(--font-mono);color:var(--red);font-weight:600">${l.rejected}</td>
+              </tr>`).join('')}</tbody>
+            </table>
+          </div>`:''}
+        </div>
+      </div>`;
+    })()}
+
+    ${(()=>{
+      /* ── GENERATED PURCHASE ORDER ── */
+      const po = extras.poData;
+      if (!po) return '';
+      return `<div style="margin-top:16px;border:1px solid rgba(99,102,241,0.25);border-radius:var(--radius);overflow:hidden">
+        <div style="padding:10px 14px;background:rgba(99,102,241,0.07);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+          <div style="font-weight:700;font-size:0.85rem;color:#4f46e5">📄 Purchase Order</div>
+          <span style="font-family:var(--font-mono);font-size:0.75rem;font-weight:700;padding:3px 10px;border-radius:3px;background:rgba(99,102,241,0.12);color:#4f46e5">${po.po_number}</span>
+        </div>
+        <div style="padding:12px 14px;background:white;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px 14px">
+          <div><div class="detail-key">PO Date</div><div class="detail-value" style="font-family:var(--font-mono);font-size:0.82rem">${fmtDate(po.po_date||po.created_at)}</div></div>
+          <div><div class="detail-key">Total Amount</div><div class="detail-value" style="font-family:var(--font-mono);font-weight:700;font-size:0.9rem">${po.currency||'AED'} ${Number(po.total_amount||0).toLocaleString()}</div></div>
+          ${po.ship_to?`<div style="grid-column:1/-1"><div class="detail-key">Ship To</div><div class="detail-value" style="font-size:0.82rem">${po.ship_to}</div></div>`:''}
+        </div>
+      </div>`;
+    })()}
+
+    ${(()=>{
+      /* ── SMARTSHEET PAYMENT SCREENSHOTS ── */
+      const adv = extras.advPayRec;
+      const pay = extras.payRec;
+      if (!adv && !pay) return '';
+      let html = `<div style="margin-top:16px">`;
+      if (adv && (adv.smartsheet_screenshot || adv.smartsheet_payment_id)) {
+        html += `<div style="margin-bottom:10px;border:1px solid rgba(245,158,11,0.3);border-radius:var(--radius);overflow:hidden">
+          <div style="padding:9px 14px;background:rgba(245,158,11,0.07);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+            <div style="font-weight:700;font-size:0.83rem;color:#b45309">🧾 Advance Payment — Smartsheet</div>
+            ${adv.smartsheet_payment_id?`<span style="font-family:var(--font-mono);font-size:0.72rem;font-weight:700;padding:2px 8px;background:rgba(245,158,11,0.12);color:#b45309;border-radius:3px">ID: ${adv.smartsheet_payment_id}</span>`:''}
+          </div>
+          <div style="padding:10px 14px;background:white">
+            <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:${adv.smartsheet_screenshot?'10px':'0'}">
+              <div><div class="detail-key">Amount</div><div class="detail-value" style="font-family:var(--font-mono);font-weight:700">${adv.currency||'AED'} ${Number(adv.amount||0).toLocaleString()}</div></div>
+              <div><div class="detail-key">Raised On</div><div class="detail-value" style="font-size:0.82rem">${fmtDate(adv.raised_at||adv.created_at)}</div></div>
+              <div><div class="detail-key">Status</div><div class="detail-value"><span style="font-size:0.72rem;font-weight:600;padding:2px 8px;border-radius:3px;background:${adv.status==='payment_received'?'rgba(22,163,74,0.1)':'rgba(245,158,11,0.1)'};color:${adv.status==='payment_received'?'#16a34a':'#b45309'}">${(adv.status||'').replace(/_/g,' ').toUpperCase()}</span></div></div>
+            </div>
+            ${adv.smartsheet_screenshot?`<div>
+              <div class="detail-key" style="margin-bottom:6px">Screenshot</div>
+              <img src="${adv.smartsheet_screenshot}" style="max-width:100%;max-height:220px;object-fit:contain;border-radius:6px;border:1px solid var(--border);display:block" onerror="this.style.display='none'"/>
+              <div style="margin-top:6px;display:flex;gap:6px">
+                <button class="btn btn-secondary btn-sm" onclick="_previewByIdx(${_regFile(adv.smartsheet_screenshot,'adv_smartsheet_screenshot')})">👁 Preview</button>
+                <button class="btn btn-secondary btn-sm" onclick="_downloadByIdx(${_regFile(adv.smartsheet_screenshot,'adv_smartsheet_screenshot')})">⬇ Download</button>
+              </div>
+            </div>`:''}
+            ${adv.notes?`<p style="font-size:0.78rem;color:var(--gray-3);margin-top:6px">${adv.notes}</p>`:''}
+          </div>
+        </div>`;
+      }
+      if (pay && (pay.smartsheet_screenshot || pay.smartsheet_payment_id)) {
+        html += `<div style="border:1px solid rgba(139,92,246,0.3);border-radius:var(--radius);overflow:hidden">
+          <div style="padding:9px 14px;background:rgba(139,92,246,0.07);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+            <div style="font-weight:700;font-size:0.83rem;color:#7c3aed">💰 Full Payment — Smartsheet</div>
+            ${pay.smartsheet_payment_id?`<span style="font-family:var(--font-mono);font-size:0.72rem;font-weight:700;padding:2px 8px;background:rgba(139,92,246,0.12);color:#7c3aed;border-radius:3px">ID: ${pay.smartsheet_payment_id}</span>`:''}
+          </div>
+          <div style="padding:10px 14px;background:white">
+            <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:${pay.smartsheet_screenshot?'10px':'0'}">
+              <div><div class="detail-key">Invoice Amount</div><div class="detail-value" style="font-family:var(--font-mono);font-weight:700">${pay.currency||'AED'} ${Number(pay.invoice_amount||0).toLocaleString()}</div></div>
+              <div><div class="detail-key">Raised On</div><div class="detail-value" style="font-size:0.82rem">${fmtDate(pay.raised_at||pay.request_date)}</div></div>
+              <div><div class="detail-key">Status</div><div class="detail-value"><span style="font-size:0.72rem;font-weight:600;padding:2px 8px;border-radius:3px;background:${pay.status==='paid'?'rgba(22,163,74,0.1)':'rgba(139,92,246,0.1)'};color:${pay.status==='paid'?'#16a34a':'#7c3aed'}">${(pay.status||'').replace(/_/g,' ').toUpperCase()}</span></div></div>
+            </div>
+            ${pay.smartsheet_screenshot?`<div>
+              <div class="detail-key" style="margin-bottom:6px">Screenshot</div>
+              <img src="${pay.smartsheet_screenshot}" style="max-width:100%;max-height:220px;object-fit:contain;border-radius:6px;border:1px solid var(--border);display:block" onerror="this.style.display='none'"/>
+              <div style="margin-top:6px;display:flex;gap:6px">
+                <button class="btn btn-secondary btn-sm" onclick="_previewByIdx(${_regFile(pay.smartsheet_screenshot,'pay_smartsheet_screenshot')})">👁 Preview</button>
+                <button class="btn btn-secondary btn-sm" onclick="_downloadByIdx(${_regFile(pay.smartsheet_screenshot,'pay_smartsheet_screenshot')})">⬇ Download</button>
+              </div>
+            </div>`:''}
+            ${pay.notes||pay.payment_notes?`<p style="font-size:0.78rem;color:var(--gray-3);margin-top:6px">${pay.notes||pay.payment_notes}</p>`:''}
+          </div>
+        </div>`;
+      }
+      html += `</div>`;
+      return html;
+    })()}`;
 }
 
 // ── QUOTATION CARD ──────────────────────────────────────────

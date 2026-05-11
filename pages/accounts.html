@@ -385,11 +385,13 @@ function advCardHTML(a) {
 // ── ADVANCE: VIEW FULL PR CONTEXT ────────────────────────────
 async function openAdvancePRDetail(prId) {
   showLoader(true);
-  const [prRes, quotesRes, poRes, attRes] = await Promise.all([
+  const [prRes, quotesRes, poRes, attRes, advRes, payRes] = await Promise.all([
     db.from('procurement_requests').select('*, users!procurement_requests_created_by_fkey(name)').eq('id', prId).single(),
     db.from('pr_quotations').select('*').eq('pr_id', prId).order('created_at'),
     db.from('purchase_orders').select('*').eq('pr_id', prId).order('created_at', {ascending:false}).limit(1).maybeSingle(),
-    db.from('pr_attachments').select('*').eq('pr_id', prId).order('created_at')
+    db.from('pr_attachments').select('*').eq('pr_id', prId).order('created_at'),
+    db.from('advance_payment_requests').select('*').eq('pr_id', prId).order('created_at', {ascending:false}).limit(1).maybeSingle(),
+    db.from('payment_requests').select('*').eq('pr_id', prId).order('request_date', {ascending:false}).limit(1).maybeSingle()
   ]);
   showLoader(false);
 
@@ -418,7 +420,7 @@ async function openAdvancePRDetail(prId) {
       <button class="modal-close" onclick="document.getElementById('_advPRDetailModal').classList.remove('active')">✕</button>
     </div>
     <div class="modal-body" style="max-height:78vh;overflow-y:auto">
-      ${buildPRDetailHTML(pr, quotes, '', pr.project_manager_name||'')}
+      ${buildPRDetailHTML(pr, quotes, '', pr.project_manager_name||'', {poData:po||null, advPayRec:advRes.data||null, payRec:payRes.data||null})}
       ${po ? `<div class="detail-section">
         <div class="detail-section-title">📄 Purchase Order</div>
         <div class="po-summary-card">
