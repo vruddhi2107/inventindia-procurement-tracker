@@ -9,6 +9,15 @@
 .currency-amount-wrap{display:flex;gap:0}
 .currency-select{width:90px;border-radius:var(--radius-sm) 0 0 var(--radius-sm);border-right:none}
 .currency-input{border-radius:0 var(--radius-sm) var(--radius-sm) 0;flex:1}
+/* ETA badge styles */
+.eta-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:20px;font-size:0.72rem;font-weight:700;font-family:var(--font-mono)}
+.eta-badge.eta-ok{background:rgba(34,197,94,0.12);color:#16a34a;border:1px solid rgba(34,197,94,0.3)}
+.eta-badge.eta-soon{background:rgba(245,158,11,0.12);color:#b45309;border:1px solid rgba(245,158,11,0.3)}
+.eta-badge.eta-overdue{background:rgba(214,43,43,0.12);color:#dc2626;border:1px solid rgba(214,43,43,0.3)}
+.eta-badge.eta-none{background:rgba(245,158,11,0.08);color:#b45309;border:1px dashed rgba(245,158,11,0.4)}
+/* ETA prompt modal */
+#etaPromptModal .modal{max-width:420px}
+.eta-prompt-box{border:2px dashed rgba(245,158,11,0.4);border-radius:var(--radius);padding:18px;background:rgba(245,158,11,0.04);text-align:center;margin:8px 0 16px}
 .po-preview{background:white;border:1px solid var(--border);border-radius:var(--radius);padding:20px;font-size:0.82rem;line-height:1.6}
 .po-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid #1a1a1a}
 .po-company{font-size:1rem;font-weight:700}
@@ -256,7 +265,7 @@
     <div class="card">
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>PR #</th><th>Project</th><th>Type</th><th>Phase</th><th>PM</th><th>Engineer</th><th>Lead Time</th><th>Updated</th><th></th></tr></thead>
+          <thead><tr><th>PR #</th><th>Project</th><th>Type</th><th>Phase</th><th>PM</th><th>Engineer</th><th>Lead Time</th><th>Quote ETA</th><th>Updated</th><th></th></tr></thead>
           <tbody id="requestsBody"></tbody>
         </table>
       </div>
@@ -407,6 +416,35 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('poBrandingModal')">Close</button>
       <button class="btn btn-primary" onclick="saveBrandingAndClose()">✓ Save &amp; Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- ETA PROMPT MODAL -->
+<div class="modal-overlay" id="etaPromptModal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div><div class="modal-title">📅 Set Quote ETA</div><div class="modal-title-sub">One-time — cannot be changed after saving</div></div>
+    </div>
+    <div class="modal-body">
+      <div class="eta-prompt-box">
+        <div style="font-size:2rem;margin-bottom:8px">📅</div>
+        <div style="font-size:0.9rem;font-weight:700;color:#b45309;margin-bottom:6px">When will you attach the quotation?</div>
+        <p style="font-size:0.78rem;color:var(--gray-3);line-height:1.5">This ETA is visible to the engineer and PM. It is <strong>locked once saved</strong> and cannot be edited.</p>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Expected Date for Quotation Attachment <span style="color:var(--red)">*</span></label>
+        <input class="form-control" type="date" id="etaDateInput" style="font-family:var(--font-mono);font-size:0.88rem"/>
+        <div style="font-size:0.72rem;color:var(--gray-4);margin-top:4px">Select the date by which you will upload quotations for this PR.</div>
+      </div>
+      <div class="form-group" style="margin-top:10px">
+        <label class="form-label">Internal Note <span style="font-weight:400;color:var(--gray-4)">(optional)</span></label>
+        <input class="form-control" id="etaNoteInput" placeholder="e.g. waiting for 2 vendors, delay due to holiday..."/>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="skipEtaPrompt()">Skip for now</button>
+      <button class="btn btn-primary" onclick="saveQuoteEta()">📅 Save ETA & Continue →</button>
     </div>
   </div>
 </div>
@@ -599,7 +637,7 @@ function filterTable(){
 
 function renderTable(reqs) {
   const tbody=document.getElementById('requestsBody');
-  if(!reqs.length){tbody.innerHTML=`<tr><td colspan="8"><div class="empty-state"><div class="empty-state-icon">📭</div><h3>${activeTab==='active'?'All caught up!':'No requests'}</h3></div></td></tr>`;return;}
+  if(!reqs.length){tbody.innerHTML=`<tr><td colspan="9"><div class="empty-state"><div class="empty-state-icon">📭</div><h3>${activeTab==='active'?'All caught up!':'No requests'}</h3></div></td></tr>`;return;}
   tbody.innerHTML=reqs.map(r=>{
     const needsAction=['procurement_active','approved','grn_pending','qc_passed'].includes(r.phase);
     const lbl={procurement_active:'Work on it',approved:'Place Order',advance_requested:'View Advance',grn_pending:'Invoke GRN',qc_passed:'Payment Req'}[r.phase]||'View';
@@ -611,6 +649,7 @@ function renderTable(reqs) {
       <td style="font-size:0.78rem">${r.project_manager_name||'—'}</td>
       <td style="font-size:0.78rem">${r.users?.name||'—'}</td>
       <td>${leadTimeBadge(r.created_at)}</td>
+      <td>${renderEtaBadge(r.quote_eta, r.phase)}</td>
       <td style="font-family:var(--font-mono);font-size:0.72rem;color:var(--gray-4)">${fmtDate(r.updated_at||r.created_at)}</td>
       <td><button class="btn ${needsAction?'btn-primary':'btn-ghost'} btn-sm" onclick='openPR("${r.id}")'>${lbl}</button></td>
     </tr>`;
@@ -764,7 +803,7 @@ async function openPR(id) {
     const vendorObj = vd?.data;
     const pt = PAYMENT_TERMS_OPTIONS.find(p=>p.value===vendorObj?.payment_terms);
     // Also fetch advRec for advance_requested
-    actionSection = buildApprovedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, existingPO);
+    actionSection = buildApprovedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, existingPO) + buildDeclineSection();
   }
 
   // ── ADVANCE RAISED TO ACCOUNTS: PM marks received ──
@@ -799,7 +838,8 @@ async function openPR(id) {
         </div>
         <button class="btn btn-success" onclick="markAdvanceReceived('${currentPR.id}','${advRec?.id||''}')">💳 Mark Advance Received →</button>
       </div>
-    </div>`;
+    </div>
+    ${buildDeclineSection()}`;
   }
 
   // ── ADVANCE PAYMENT RECEIVED → place order ──
@@ -807,7 +847,7 @@ async function openPR(id) {
     const selectedQ = quotations.find(q=>q.is_selected||q.id===currentPR.selected_quotation_id);
     const vendorObj = vd?.data;
     const pt = PAYMENT_TERMS_OPTIONS.find(p=>p.value===vendorObj?.payment_terms);
-    actionSection = buildAdvanceApprovedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, null, existingPO);
+    actionSection = buildAdvanceApprovedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, null, existingPO) + buildDeclineSection();
   }
 
   // ── ADVANCE REQUESTED / APPROVED / REJECTED (legacy compat) ──
@@ -815,20 +855,21 @@ async function openPR(id) {
     actionSection=`<div class="action-section" style="border:1px solid rgba(245,158,11,0.25);background:rgba(245,158,11,0.04);border-radius:var(--radius);padding:14px">
       <div class="action-section-title" style="color:#b45309">⏳ Advance — Legacy Status</div>
       <p style="font-size:0.8rem;color:var(--gray-3)">This PR uses the old advance flow. Please ask admin to update the phase to <code>advance_raised_to_accounts</code>.</p>
-    </div>`;
+    </div>
+    ${buildDeclineSection()}`;
   }
   if(currentPR.phase==='advance_approved') {
     const selectedQ = quotations.find(q=>q.is_selected||q.id===currentPR.selected_quotation_id);
     const vendorObj = vd?.data;
     const pt = PAYMENT_TERMS_OPTIONS.find(p=>p.value===vendorObj?.payment_terms);
     const{data:advRec} = await db.from('advance_payment_requests').select('*').eq('pr_id',currentPR.id).order('created_at',{ascending:false}).limit(1).maybeSingle();
-    actionSection = buildAdvanceApprovedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, advRec, existingPO);
+    actionSection = buildAdvanceApprovedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, advRec, existingPO) + buildDeclineSection();
   }
   if(currentPR.phase==='advance_rejected') {
     const selectedQ = quotations.find(q=>q.is_selected||q.id===currentPR.selected_quotation_id);
     const vendorObj = vd?.data;
     const pt = PAYMENT_TERMS_OPTIONS.find(p=>p.value===vendorObj?.payment_terms);
-    actionSection = buildAdvanceRejectedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, existingPO);
+    actionSection = buildAdvanceRejectedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, existingPO) + buildDeclineSection();
   }
 
   // ── ORDER PLACED: invoke GRN ──
@@ -837,7 +878,8 @@ async function openPR(id) {
       <div class="action-section-title">📦 Invoke GRN <span class="action-badge">ACTION REQUIRED</span></div>
       <p style="font-size:0.82rem;color:var(--gray-3);margin-bottom:12px">Once goods have arrived, invoke GRN to notify the engineer for QC.</p>
       <button class="btn btn-primary" onclick="invokeGRN()">Goods Received — Notify Engineer for QC →</button>
-    </div>`;
+    </div>
+    ${buildDeclineSection()}`;
   }
 
   // ── GRN PENDING ──
@@ -846,7 +888,8 @@ async function openPR(id) {
       <div class="action-section-title">📦 GRN in Progress</div>
       <p style="font-size:0.82rem;color:var(--gray-3)">Waiting for engineer to complete QC.</p>
       <button class="btn btn-secondary btn-sm" style="margin-top:10px" onclick="openRateModal('${currentPR.id}','${currentPR.assigned_vendor_id}')">⭐ Rate Vendor</button>
-    </div>`;
+    </div>
+    ${buildDeclineSection()}`;
   }
 
   // ── QC PASSED ──
@@ -858,7 +901,8 @@ async function openPR(id) {
         <button class="btn btn-primary" onclick="openPaymentRequestModal('${id}')">💰 Raise Full Payment via Smartsheet</button>
         ${currentPR.assigned_vendor_id?`<button class="btn btn-secondary" onclick="openRateModal('${currentPR.id}','${currentPR.assigned_vendor_id}')">⭐ Rate Vendor</button>`:''}
       </div>
-    </div>`;
+    </div>
+    ${buildDeclineSection()}`;
   }
 
   // ── PAYMENT RAISED TO ACCOUNTS: PM marks received ──
@@ -896,6 +940,18 @@ async function openPR(id) {
           ${currentPR.assigned_vendor_id?`<button class="btn btn-secondary" onclick="openRateModal('${currentPR.id}','${currentPR.assigned_vendor_id}')">⭐ Rate Vendor</button>`:''}
         </div>
       </div>
+    </div>
+    ${buildDeclineSection()}`;
+  }
+
+  // ── PENDING DECLINE APPROVAL ──
+  if(currentPR.phase==='pending_decline_approval') {
+    actionSection=`<div style="margin-top:14px;padding:16px;background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.2);border-radius:var(--radius);text-align:center">
+      <div style="font-size:2rem;margin-bottom:8px">⚠️</div>
+      <div style="font-size:0.95rem;font-weight:700;color:#f59e0b;margin-bottom:4px">Awaiting PM Approval for Decline</div>
+      <p style="font-size:0.8rem;color:var(--gray-3);margin:8px 0">Procurement has requested to decline this request. The Project Manager must approve this action.</p>
+      ${currentPR.rejection_reason?`<div style="display:inline-block;margin:8px 0;padding:6px 14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:var(--radius-sm);font-size:0.82rem;font-weight:600;color:#d97706">Reason: ${currentPR.rejection_reason}</div>`:''}
+      ${currentPR.pm_final_approval_notes?`<p style="font-size:0.8rem;color:var(--gray-3);margin:6px 0 0">${currentPR.pm_final_approval_notes}</p>`:''}
     </div>`;
   }
 
@@ -923,6 +979,7 @@ async function openPR(id) {
 
   document.getElementById('prModalBody').innerHTML=
     buildPRDetailHTML(currentPR,quotations,vd?.data?.name||'',currentPR.project_manager_name||'',{poData:existingPO,advPayRec:advRes.data||null,payRec:payRes.data||null})
+    +renderEtaInDetail(currentPR)
     +attachmentsSectionHTML
     +actionSection+
     `<div style="margin-top:22px;border-top:1px solid var(--border);padding-top:16px">
@@ -934,6 +991,17 @@ async function openPR(id) {
       </div>
     </div>`;
   openModal('prModal');
+
+  // ── ETA PROMPT: show once when procurement manager gets a new active request ──
+  const etaActivePhases = ['procurement_active','submitted'];
+  if (etaActivePhases.includes(currentPR.phase) && !currentPR.quote_eta) {
+    _etaCurrentPRId = currentPR.id;
+    const minDate = new Date(); minDate.setDate(minDate.getDate()+1);
+    document.getElementById('etaDateInput').min = minDate.toISOString().split('T')[0];
+    document.getElementById('etaDateInput').value = '';
+    document.getElementById('etaNoteInput').value = '';
+    setTimeout(() => openModal('etaPromptModal'), 300);
+  }
 }
 
 // ── VENDOR SELECTOR CHIP ─────────────────────────────────────
@@ -967,6 +1035,7 @@ const DECLINE_REASONS = [
 ];
 
 function buildDeclineSection() {
+  // Decline can be done at any stage - no phase restrictions
   return `<div style="margin-top:10px;padding:14px 16px;background:rgba(214,43,43,0.04);border:1px solid rgba(214,43,43,0.18);border-radius:var(--radius)">
     <div style="font-size:0.82rem;font-weight:700;color:var(--red);margin-bottom:10px;display:flex;align-items:center;gap:6px">🚫 Decline this Request</div>
     <div class="form-group" style="margin-bottom:10px">
@@ -988,18 +1057,19 @@ async function declinePR() {
   const reason = document.getElementById('declineReasonSelect')?.value;
   const notes  = document.getElementById('declineNotesInput')?.value?.trim();
   if(!reason) { showToast('Please select a reason for declining.','error'); return; }
-  if(!confirm(`Decline this request?\n\nReason: ${reason}\n\nThis will notify the engineer.`)) return;
+  if(!confirm(`Submit decline request for PM approval?\n\nReason: ${reason}\n\nThis will notify the Project Manager for approval.`)) return;
   showLoader(true);
   const { error } = await db.from('procurement_requests').update({
-    phase: 'declined',
+    phase: 'pending_decline_approval',
     rejection_reason: reason,
     pm_final_approval_notes: notes || null,
     updated_at: new Date().toISOString(),
-    phase_timestamps: addPhaseTimestamp(currentPR, 'declined')
+    phase_timestamps: addPhaseTimestamp(currentPR, 'pending_decline_approval')
   }).eq('id', currentPR.id);
   showLoader(false);
-  if(error) { showToast('Error declining request: ' + error.message, 'error'); return; }
-  showToast('Request declined.', 'success');
+  if(error) { showToast('Error submitting decline request: ' + error.message, 'error'); return; }
+  showToast('Decline request submitted for PM approval.', 'success');
+  notifyPhaseChange(currentPR.id, 'pending_decline_approval', currentUser?.id);
   closeModal('prModal');
   await loadRequests();
 }
@@ -2489,6 +2559,61 @@ function buildApprovedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, existin
     </div>
   </div>`;
 }
+// ── QUOTE ETA HELPERS ────────────────────────────────────────
+function renderEtaBadge(etaDate, phase) {
+  const activePhases = ['procurement_active','quotations_shared','pending_pm_final_approval','approved',
+    'advance_requested','advance_raised_to_accounts','advance_approved','advance_rejected',
+    'advance_payment_received','order_placed','grn_pending','qc_passed','payment_requested','payment_raised_to_accounts'];
+  if (!activePhases.includes(phase)) return '<span style="color:var(--gray-5);font-size:0.72rem">—</span>';
+  if (!etaDate) return `<span class="eta-badge eta-none">📅 Not set</span>`;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const eta = new Date(etaDate); eta.setHours(0,0,0,0);
+  const diff = Math.round((eta - today) / 86400000);
+  const fmt = eta.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
+  if (diff < 0) return `<span class="eta-badge eta-overdue">⚠ ${fmt} overdue</span>`;
+  if (diff <= 2) return `<span class="eta-badge eta-soon">⏰ ${fmt}</span>`;
+  return `<span class="eta-badge eta-ok">📅 ${fmt}</span>`;
+}
+
+function renderEtaInDetail(pr) {
+  if (!pr.quote_eta) return '';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const eta = new Date(pr.quote_eta); eta.setHours(0,0,0,0);
+  const diff = Math.round((eta - today) / 86400000);
+  const fmt = eta.toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
+  let color='#16a34a', bg='rgba(34,197,94,0.08)', border='rgba(34,197,94,0.25)', icon='📅';
+  if (diff < 0) { color='#dc2626'; bg='rgba(214,43,43,0.08)'; border='rgba(214,43,43,0.3)'; icon='⚠️'; }
+  else if (diff <= 2) { color='#b45309'; bg='rgba(245,158,11,0.08)'; border='rgba(245,158,11,0.3)'; icon='⏰'; }
+  const label = diff < 0 ? `${Math.abs(diff)} day${Math.abs(diff)>1?'s':''} overdue` : diff === 0 ? 'Due today' : `${diff} day${diff>1?'s':''} remaining`;
+  return `<div style="margin:14px 0;padding:12px 16px;background:${bg};border:2px solid ${border};border-radius:var(--radius);display:flex;align-items:center;gap:12px">
+    <div style="font-size:1.6rem">${icon}</div>
+    <div style="flex:1">
+      <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;color:${color};margin-bottom:2px">Quote Attachment ETA</div>
+      <div style="font-size:0.95rem;font-weight:800;font-family:var(--font-mono);color:${color}">${fmt}</div>
+      <div style="font-size:0.72rem;color:${color};opacity:0.8;margin-top:2px">${label}</div>
+    </div>
+    <div style="font-size:0.68rem;color:var(--gray-4);background:white;padding:3px 8px;border-radius:20px;border:1px solid var(--border)">🔒 Locked</div>
+  </div>`;
+}
+
+let _etaCurrentPRId = null;
+function skipEtaPrompt() { closeModal('etaPromptModal'); }
+
+async function saveQuoteEta() {
+  const date = document.getElementById('etaDateInput').value;
+  if (!date) { showToast('Please select a date','error'); return; }
+  showLoader(true);
+  const { error } = await db.from('procurement_requests').update({ quote_eta: date }).eq('id', _etaCurrentPRId);
+  showLoader(false);
+  if (error) { showToast('Error saving ETA: ' + error.message, 'error'); return; }
+  // Update local cache
+  const idx = allRequests.findIndex(r => r.id === _etaCurrentPRId);
+  if (idx !== -1) { allRequests[idx].quote_eta = date; if(currentPR) currentPR.quote_eta = date; }
+  showToast('Quote ETA saved!', 'success');
+  closeModal('etaPromptModal');
+  filterTable();
+}
+
 init();
 </script>
 </body>

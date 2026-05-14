@@ -118,6 +118,7 @@ function getPhaseBadge(phase){
     advance_approved:['Advance Approved','badge-green'],
     advance_rejected:['Advance Rejected','badge-red'],
     declined:['Declined','badge-red'],
+    pending_decline_approval:['Pending Decline Approval','badge-orange'],
   };
   const[label,cls]=map[phase]||[phase,'badge-gray'];
   return `<span class="badge ${cls}">${label}</span>`;

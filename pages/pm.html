@@ -43,7 +43,7 @@
     <div class="card">
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>PR #</th><th>Project</th><th>Requester</th><th>Dept</th><th>Type</th><th>Phase</th><th>Submitted</th><th></th></tr></thead>
+          <thead><tr><th>PR #</th><th>Project</th><th>Requester</th><th>Dept</th><th>Type</th><th>Phase</th><th>Quote ETA</th><th>Submitted</th><th></th></tr></thead>
           <tbody id="requestsBody"></tbody>
         </table>
       </div>
@@ -123,14 +123,14 @@ async function loadRequests() {
 
 function updateStats() {
   document.getElementById('sClearance').textContent=allRequests.filter(r=>r.phase==='pending_initial_pm_approval').length;
-  document.getElementById('sFinal').textContent=allRequests.filter(r=>r.phase==='pending_pm_final_approval').length;
+  document.getElementById('sFinal').textContent=allRequests.filter(r=>['pending_pm_final_approval','pending_decline_approval'].includes(r.phase)).length;
   document.getElementById('sApproved').textContent=allRequests.filter(r=>r.pm_final_approval_status==='approved').length;
   document.getElementById('sRejected').textContent=allRequests.filter(r=>r.pm_final_approval_status==='rejected').length;
 }
 
 function renderBanner() {
   const clearance=allRequests.filter(r=>r.phase==='pending_initial_pm_approval');
-  const final=allRequests.filter(r=>r.phase==='pending_pm_final_approval');
+  const final=allRequests.filter(r=>['pending_pm_final_approval','pending_decline_approval'].includes(r.phase));
   const total=clearance.length+final.length;
   const b=document.getElementById('pendingBanner');
   if(!total){b.style.display='none';return;}
@@ -156,28 +156,60 @@ function filterTable() {
   const s=document.getElementById('searchInput').value.toLowerCase();
   let reqs=allRequests;
   if(activeTab==='clearance') reqs=reqs.filter(r=>r.phase==='pending_initial_pm_approval');
-  else if(activeTab==='final') reqs=reqs.filter(r=>r.phase==='pending_pm_final_approval');
+  else if(activeTab==='final') reqs=reqs.filter(r=>['pending_pm_final_approval','pending_decline_approval'].includes(r.phase));
   if(s) reqs=reqs.filter(r=>r.project_name.toLowerCase().includes(s)||String(r.request_number).includes(s));
   renderTable(reqs);
 }
 
 function renderTable(reqs) {
   const tbody=document.getElementById('requestsBody');
-  if(!reqs.length){tbody.innerHTML=`<tr><td colspan="8"><div class="empty-state"><div class="empty-state-icon">${activeTab==='clearance'?'🔐':'✍️'}</div><h3>No requests here</h3><p>${activeTab==='clearance'?'No pending clearance requests.':activeTab==='final'?'No final approvals pending.':'No requests assigned to you yet.'}</p></div></td></tr>`;return;}
+  if(!reqs.length){tbody.innerHTML=`<tr><td colspan="9"><div class="empty-state"><div class="empty-state-icon">${activeTab==='clearance'?'🔐':'✍️'}</div><h3>No requests here</h3><p>${activeTab==='clearance'?'No pending clearance requests.':activeTab==='final'?'No final approvals or decline requests pending.':'No requests assigned to you yet.'}</p></div></td></tr>`;return;}
   tbody.innerHTML=reqs.map(r=>{
-    const needsAction=['pending_initial_pm_approval','pending_pm_final_approval'].includes(r.phase);
-    const isClearance=r.phase==='pending_initial_pm_approval', isFinal=r.phase==='pending_pm_final_approval';
-    return `<tr style="${needsAction?'background:rgba(214,43,43,0.025)':''}">
+    const needsAction=['pending_initial_pm_approval','pending_pm_final_approval','pending_decline_approval'].includes(r.phase);
+    const isClearance=r.phase==='pending_initial_pm_approval', isFinal=r.phase==='pending_pm_final_approval', isDecline=r.phase==='pending_decline_approval';
+    return `<tr style="${needsAction?'background:rgba(214,43,43,0.025)':''}${isDecline?' outline:1.5px solid rgba(245,158,11,0.4);outline-offset:-2px':''}">
       <td><span class="pr-number${r.is_modification?' modified':''}">${r.is_modification?'↺ ':''} PR-${String(r.request_number).padStart(4,'0')}</span></td>
       <td><div style="font-weight:600;font-size:0.82rem">${r.project_name}</div><div style="font-size:0.72rem;color:var(--gray-4)">${r.project_phase}</div></td>
       <td style="font-size:0.8rem">${r.users?.name||'—'}</td>
       <td style="font-size:0.78rem">${DEPARTMENTS[r.department]||r.department}</td>
       <td><span style="font-size:0.72rem;background:var(--off-white);border:1px solid var(--border);padding:1px 7px;border-radius:3px">${r.request_category==='vendor_info'?'Vendor Info':'RFQ'}</span></td>
       <td>${getPhaseBadge(r.phase)}</td>
+      <td>${renderPmTableEta(r.quote_eta, r.phase)}</td>
       <td style="font-family:var(--font-mono);font-size:0.72rem;color:var(--gray-4)">${fmtDate(r.created_at)}</td>
-      <td><button class="btn ${needsAction?'btn-primary':'btn-ghost'} btn-sm" onclick='openPR("${r.id}")'>${isClearance?'Approve/Deny':isFinal?'Review':'View'}</button></td>
+      <td><button class="btn ${needsAction?'btn-primary':'btn-ghost'} btn-sm" onclick='openPR("${r.id}")'>${isClearance?'Approve/Deny':isFinal?'Review':isDecline?'Review Decline':'View'}</button></td>
     </tr>`;
   }).join('');
+}
+
+function renderPmTableEta(etaDate, phase) {
+  if (!etaDate) return '<span style="font-size:0.72rem;color:var(--gray-5)">—</span>';
+  const today=new Date();today.setHours(0,0,0,0);
+  const eta=new Date(etaDate);eta.setHours(0,0,0,0);
+  const diff=Math.round((eta-today)/86400000);
+  const fmt=eta.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
+  if(diff<0) return `<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;font-family:var(--font-mono);background:rgba(214,43,43,0.1);color:#dc2626;border:1px solid rgba(214,43,43,0.25)">⚠ ${fmt}</span>`;
+  if(diff<=2) return `<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;font-family:var(--font-mono);background:rgba(245,158,11,0.1);color:#b45309;border:1px solid rgba(245,158,11,0.25)">⏰ ${fmt}</span>`;
+  return `<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;font-family:var(--font-mono);background:rgba(34,197,94,0.1);color:#16a34a;border:1px solid rgba(34,197,94,0.25)">📅 ${fmt}</span>`;
+}
+
+function renderPmEtaDetail(pr) {
+  if (!pr.quote_eta) return '';
+  const today=new Date();today.setHours(0,0,0,0);
+  const eta=new Date(pr.quote_eta);eta.setHours(0,0,0,0);
+  const diff=Math.round((eta-today)/86400000);
+  const fmt=eta.toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
+  let color='#16a34a',bg='rgba(34,197,94,0.07)',border='rgba(34,197,94,0.22)',icon='📅';
+  if(diff<0){color='#dc2626';bg='rgba(214,43,43,0.07)';border='rgba(214,43,43,0.3)';icon='⚠️';}
+  else if(diff<=2){color='#b45309';bg='rgba(245,158,11,0.07)';border='rgba(245,158,11,0.3)';icon='⏰';}
+  const label=diff<0?`Overdue by ${Math.abs(diff)} day${Math.abs(diff)>1?'s':''}`:diff===0?'Due today':`${diff} day${diff>1?'s':''} remaining`;
+  return `<div style="margin:14px 0;padding:12px 16px;background:${bg};border:2px solid ${border};border-radius:8px;display:flex;align-items:center;gap:12px">
+    <div style="font-size:1.5rem">${icon}</div>
+    <div>
+      <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:${color};margin-bottom:1px">Procurement Quote ETA</div>
+      <div style="font-size:0.92rem;font-weight:800;font-family:var(--font-mono);color:${color}">${fmt}</div>
+      <div style="font-size:0.72rem;color:${color};opacity:0.8">${label}</div>
+    </div>
+  </div>`;
 }
 
 async function openPR(id) {
@@ -269,8 +301,30 @@ async function openPR(id) {
     }
   }
 
+  // ── DECLINE APPROVAL ──
+  if(currentPR.phase==='pending_decline_approval') {
+    actionSection=`<div class="action-section">
+      <div class="action-section-title">🚫 Decline Approval <span class="action-badge">ACTION REQUIRED</span></div>
+      <p style="font-size:0.82rem;color:var(--gray-3);margin-bottom:12px">Procurement has requested to decline this request. Review the reason and decide whether to approve or reject the decline.</p>
+      ${currentPR.rejection_reason?`<div style="margin-bottom:14px;padding:12px;background:rgba(214,43,43,0.06);border:1px solid rgba(214,43,43,0.2);border-radius:var(--radius)">
+        <div class="detail-key" style="color:var(--red);margin-bottom:6px">Procurement's Reason for Decline</div>
+        <div style="font-size:0.82rem;color:#dc2626;font-weight:600">${currentPR.rejection_reason}</div>
+        ${currentPR.pm_final_approval_notes?`<p style="font-size:0.8rem;color:var(--gray-3);margin:6px 0 0">${currentPR.pm_final_approval_notes}</p>`:''}
+      </div>`:''}
+      <div class="form-group" style="margin-bottom:12px">
+        <label class="form-label">Your Decision Notes *</label>
+        <textarea class="form-control" id="declineApprovalNotes" placeholder="State your rationale for approving or rejecting this decline request..."></textarea>
+      </div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn btn-success" onclick="approveDecline()" style="flex:1"> Approve Decline</button>
+        <button class="btn btn-danger" onclick="rejectDecline()" style="flex:1">✗ Reject Decline</button>
+      </div>
+    </div>`;
+  }
+
   document.getElementById('prModalBody').innerHTML=
     buildPRDetailHTML(currentPR,quotations,vd?.data?.name||'',currentPR.project_manager_name||'',{poData:poRes.data||null,advPayRec:advRes.data||null,payRec:payRes.data||null})
+    +renderPmEtaDetail(currentPR)
     +actionSection+
     `<div style="margin-top:22px;border-top:1px solid var(--border);padding-top:16px">
       <div class="section-title" style="margin-bottom:10px">💬 Comments</div>
@@ -369,6 +423,51 @@ async function finalDecision(decision) {
   showLoader(false);
   if(error){showToast('Error: '+error.message,'error');return;}
   showToast(decision==='approved'?' Approved! Procurement may now place the order.':needsMoreVendors?'Rejected — Procurement will find more vendors.':'Rejected — request closed.',decision==='approved'?'success':'error');
+  closeModal('prModal'); await loadRequests();
+}
+
+async function approveDecline() {
+  const notes = document.getElementById('declineApprovalNotes')?.value.trim();
+  if(!notes) { showToast('Please add decision notes','error'); return; }
+  if(!confirm('Approve this decline request? The procurement request will be declined and the engineer will be notified.')) return;
+  showLoader(true);
+  const { error } = await db.from('procurement_requests').update({
+    phase: 'declined',
+    pm_final_approval_status: 'approved',
+    pm_final_approval_notes: notes,
+    updated_at: new Date().toISOString(),
+    phase_timestamps: addPhaseTimestamp(currentPR, 'declined')
+  }).eq('id', currentPR.id);
+  notifyPhaseChange(currentPR.id, 'declined', currentUser?.id);
+  if(!error) await postComment(currentPR.id, currentUser.id, `PM Approved Decline: ${notes}`);
+  showLoader(false);
+  if(error) { showToast('Error approving decline: ' + error.message, 'error'); return; }
+  showToast('Decline approved. Engineer has been notified.', 'success');
+  closeModal('prModal'); await loadRequests();
+}
+
+async function rejectDecline() {
+  const notes = document.getElementById('declineApprovalNotes')?.value.trim();
+  if(!notes) { showToast('Please add decision notes','error'); return; }
+  if(!confirm('Reject this decline request? The request will return to procurement for further action.')) return;
+  showLoader(true);
+  // Revert to previous phase - need to determine what the previous phase was
+  const previousPhase = currentPR.phase_timestamps && Object.keys(currentPR.phase_timestamps).length > 1 
+    ? Object.keys(currentPR.phase_timestamps).sort((a,b) => new Date(currentPR.phase_timestamps[b]) - new Date(currentPR.phase_timestamps[a]))[1]
+    : 'procurement_active'; // fallback
+  const { error } = await db.from('procurement_requests').update({
+    phase: previousPhase,
+    pm_final_approval_status: 'rejected',
+    pm_final_approval_notes: notes,
+    rejection_reason: null, // Clear the decline reason
+    updated_at: new Date().toISOString(),
+    phase_timestamps: addPhaseTimestamp(currentPR, previousPhase)
+  }).eq('id', currentPR.id);
+  notifyPhaseChange(currentPR.id, previousPhase, currentUser?.id);
+  if(!error) await postComment(currentPR.id, currentUser.id, `PM Rejected Decline Request: ${notes} — Request returned to procurement.`);
+  showLoader(false);
+  if(error) { showToast('Error rejecting decline: ' + error.message, 'error'); return; }
+  showToast('Decline rejected. Request returned to procurement.', 'success');
   closeModal('prModal'); await loadRequests();
 }
 

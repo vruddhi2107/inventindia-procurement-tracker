@@ -52,7 +52,9 @@ const PHASES = {
   payment_raised_to_accounts:   { label: 'Payment Raised',           color: '#8b5cf6', icon: '📤' },
   payment_received:             { label: 'Payment Received',         color: '#22c55e', icon: '✅' },
   accepted:                     { label: 'Accepted & Closed',        color: '#22c55e', icon: '✔️'  },
-  rejected:                     { label: 'Rejected & Closed',        color: '#ef4444', icon: '✖️' }
+  rejected:                     { label: 'Rejected & Closed',        color: '#ef4444', icon: '✖️' },
+  pending_decline_approval:     { label: 'Pending Decline Approval', color: '#f59e0b', icon: '⚠️' },
+  declined:                     { label: 'Declined',                 color: '#ef4444', icon: '🚫' }
 };
 
 const ORDER_TYPES = {

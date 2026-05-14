@@ -75,13 +75,15 @@
         <option value="qc_passed">QC Passed</option>
         <option value="accepted">Accepted</option>
         <option value="rejected">Rejected</option>
+        <option value="pending_decline_approval">Pending Decline Approval</option>
+        <option value="declined">Declined</option>
       </select>
       <button class="btn btn-ghost btn-sm" onclick="clearFilters()">✕ Clear</button>
     </div>
     <div class="card">
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>PR #</th><th>Project</th><th>Type</th><th>Phase</th><th>PM</th><th>Updated</th><th></th></tr></thead>
+          <thead><tr><th>PR #</th><th>Project</th><th>Type</th><th>Phase</th><th>PM</th><th>Quote ETA</th><th>Updated</th><th></th></tr></thead>
           <tbody id="requestsBody"></tbody>
         </table>
       </div>
@@ -446,7 +448,7 @@ function filterTable() {
 
 function renderTable(reqs) {
   const tbody=document.getElementById('requestsBody');
-  if(!reqs.length){tbody.innerHTML=`<tr><td colspan="7"><div class="empty-state"><div class="empty-state-icon">📭</div><h3>${activeTab==='action'?'All caught up!':'No requests found'}</h3><p>${activeTab==='action'?'No actions needed right now.':'Submit a new request to get started.'}</p></div></td></tr>`;return;}
+  if(!reqs.length){tbody.innerHTML=`<tr><td colspan="8"><div class="empty-state"><div class="empty-state-icon">📭</div><h3>${activeTab==='action'?'All caught up!':'No requests found'}</h3><p>${activeTab==='action'?'No actions needed right now.':'Submit a new request to get started.'}</p></div></td></tr>`;return;}
   tbody.innerHTML=reqs.map(r=>{
     const needsAction=['quotations_shared','grn_pending','vendor_info_shared'].includes(r.phase);
     const pmName=r.users?.name||r.project_manager_name||'—';
@@ -459,6 +461,7 @@ function renderTable(reqs) {
       <td><span style="font-size:0.72rem;background:var(--off-white);border:1px solid var(--border);padding:1px 7px;border-radius:3px">${r.request_category==='vendor_info'?'Vendor Info':'RFQ'}</span></td>
       <td>${getPhaseBadge(r.phase)}</td>
       <td style="font-size:0.78rem;color:var(--gray-3)">${pmName}</td>
+      <td>${renderEngineerEtaBadge(r.quote_eta, r.phase)}</td>
       <td style="font-family:var(--font-mono);font-size:0.72rem;color:var(--gray-4)">${fmtDate(r.updated_at||r.created_at)}</td>
       <td style="white-space:nowrap">
         <button class="btn ${needsAction?'btn-primary':'btn-ghost'} btn-sm" onclick='openPR("${r.id}")'>${needsAction?'Action':'View'}</button>
@@ -466,6 +469,18 @@ function renderTable(reqs) {
       </td>
     </tr>`;
   }).join('');
+}
+
+function renderEngineerEtaBadge(etaDate, phase) {
+  const donePhases=['accepted','rejected','declined','qc_passed','payment_received'];
+  if(donePhases.includes(phase)||!etaDate) return etaDate?'':'<span style="font-size:0.72rem;color:var(--gray-5)">—</span>';
+  const today=new Date();today.setHours(0,0,0,0);
+  const eta=new Date(etaDate);eta.setHours(0,0,0,0);
+  const diff=Math.round((eta-today)/86400000);
+  const fmt=eta.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
+  if(diff<0) return `<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;font-family:var(--font-mono);background:rgba(214,43,43,0.1);color:#dc2626;border:1px solid rgba(214,43,43,0.25)">⚠ ${fmt} overdue</span>`;
+  if(diff<=2) return `<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;font-family:var(--font-mono);background:rgba(245,158,11,0.1);color:#b45309;border:1px solid rgba(245,158,11,0.25)">⏰ ${fmt}</span>`;
+  return `<span style="display:inline-block;padding:2px 8px;border-radius:12px;font-size:0.7rem;font-weight:700;font-family:var(--font-mono);background:rgba(34,197,94,0.1);color:#16a34a;border:1px solid rgba(34,197,94,0.25)">📅 ${fmt}</span>`;
 }
 
 // ── FORM HELPERS ─────────────────────────────────────────────
@@ -819,8 +834,35 @@ async function openPR(id) {
       <button class="btn btn-primary" onclick="submitQC()">Submit GRN &amp; QC →</button>`;
   }
 
+  // ── PENDING DECLINE APPROVAL (engineer sees it's under review) ──
+  if(currentPR.phase==='pending_decline_approval') {
+    actionSection=`<div style="margin-top:14px;padding:16px;background:rgba(245,158,11,0.05);border:1.5px solid rgba(245,158,11,0.25);border-radius:var(--radius)">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span style="font-size:1.6rem">⏳</span>
+        <div>
+          <div style="font-size:0.9rem;font-weight:700;color:#b45309">Decline Pending PM Review</div>
+          <div style="font-size:0.75rem;color:var(--gray-3)">Procurement has requested to decline this request. Awaiting Project Manager approval.</div>
+        </div>
+      </div>
+      ${currentPR.rejection_reason?`<div style="padding:8px 12px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:var(--radius-sm);font-size:0.82rem;color:#92400e"><strong>Procurement's Reason:</strong> ${currentPR.rejection_reason}</div>`:''}
+    </div>`;
+  }
+
+  // ── DECLINED ──
+  if(currentPR.phase==='declined') {
+    actionSection=`<div style="margin-top:14px;padding:18px;background:rgba(214,43,43,0.05);border:1.5px solid rgba(214,43,43,0.22);border-radius:var(--radius);text-align:center">
+      <div style="font-size:2rem;margin-bottom:8px">🚫</div>
+      <div style="font-size:0.95rem;font-weight:700;color:var(--red);margin-bottom:6px">Request Declined</div>
+      ${currentPR.rejection_reason?`<div style="display:inline-block;margin:6px 0;padding:6px 14px;background:rgba(214,43,43,0.08);border:1px solid rgba(214,43,43,0.2);border-radius:var(--radius-sm);font-size:0.82rem;font-weight:600;color:var(--red)">${currentPR.rejection_reason}</div>`:''}
+      ${currentPR.pm_final_approval_notes?`<p style="font-size:0.8rem;color:var(--gray-3);margin:8px 0 0">${currentPR.pm_final_approval_notes}</p>`:''}
+      <div style="margin-top:14px"><button class="btn btn-secondary btn-sm" onclick="openNewPR()">+ Submit a New Request</button></div>
+    </div>`;
+  }
+
   document.getElementById('prModalBody').innerHTML=
-    buildPRDetailHTML(currentPR,quotations,vd?.data?.name||'',pmName,{poData:poRes.data||null,advPayRec:advRes.data||null,payRec:payRes.data||null})+actionSection+
+    buildPRDetailHTML(currentPR,quotations,vd?.data?.name||'',pmName,{poData:poRes.data||null,advPayRec:advRes.data||null,payRec:payRes.data||null})
+    +renderEngineerEtaDetail(currentPR)
+    +actionSection+
     `<div style="margin-top:22px;border-top:1px solid var(--border);padding-top:16px">
       <div class="section-title" style="margin-bottom:10px">💬 Comments</div>
       <div id="commentsList">${renderComments(comments)}</div>
@@ -1017,6 +1059,27 @@ async function addComment() {
   const input=document.getElementById('commentInput'),text=input?.value.trim();
   if(!text||!currentPR)return;
   try{await postComment(currentPR.id,currentUser.id,text);input.value='';const c=await loadComments(currentPR.id);document.getElementById('commentsList').innerHTML=renderComments(c);}catch(e){showToast('Comment failed','error');}
+}
+
+function renderEngineerEtaDetail(pr) {
+  const skipPhases=['submitted','pending_initial_pm_approval','accepted','rejected','declined'];
+  if (skipPhases.includes(pr.phase) || !pr.quote_eta) return '';
+  const today=new Date();today.setHours(0,0,0,0);
+  const eta=new Date(pr.quote_eta);eta.setHours(0,0,0,0);
+  const diff=Math.round((eta-today)/86400000);
+  const fmt=eta.toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
+  let color='#16a34a',bg='rgba(34,197,94,0.07)',border='rgba(34,197,94,0.22)',icon='📅';
+  if(diff<0){color='#dc2626';bg='rgba(214,43,43,0.07)';border='rgba(214,43,43,0.3)';icon='⚠️';}
+  else if(diff<=2){color='#b45309';bg='rgba(245,158,11,0.07)';border='rgba(245,158,11,0.3)';icon='⏰';}
+  const label=diff<0?`Overdue by ${Math.abs(diff)} day${Math.abs(diff)>1?'s':''}`:diff===0?'Due today':`${diff} day${diff>1?'s':''} remaining`;
+  return `<div style="margin:14px 0;padding:12px 16px;background:${bg};border:2px solid ${border};border-radius:8px;display:flex;align-items:center;gap:12px">
+    <div style="font-size:1.5rem">${icon}</div>
+    <div>
+      <div style="font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:${color};margin-bottom:1px">Procurement Quote ETA</div>
+      <div style="font-size:0.92rem;font-weight:800;font-family:var(--font-mono);color:${color}">${fmt}</div>
+      <div style="font-size:0.72rem;color:${color};opacity:0.8">${label}</div>
+    </div>
+  </div>`;
 }
 
 init();
