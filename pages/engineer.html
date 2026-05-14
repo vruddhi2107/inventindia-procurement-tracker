@@ -758,19 +758,9 @@ async function openPR(id) {
       <div class="action-section-title">📦 Goods Receipt Note (GRN) &amp; Quality Check <span class="action-badge">ACTION REQUIRED</span></div>
 
       <!-- GRN Header Info -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;padding:12px;background:var(--off-white);border:1px solid var(--border);border-radius:var(--radius)">
-        <div><label class="form-label" style="font-size:0.7rem">GRN NUMBER *</label>
-          <input class="form-control" id="grnNumber" placeholder="e.g. GRN/25-26/0001" style="font-family:var(--font-mono);font-size:0.82rem"/></div>
+      <div style="display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:14px;padding:12px;background:var(--off-white);border:1px solid var(--border);border-radius:var(--radius)">
         <div><label class="form-label" style="font-size:0.7rem">GRN DATE</label>
           <input class="form-control" id="grnDate" value="${today}" style="font-family:var(--font-mono);font-size:0.82rem"/></div>
-        <div><label class="form-label" style="font-size:0.7rem">INVOICE NO</label>
-          <input class="form-control" id="grnInvoice" placeholder="Invoice number" style="font-size:0.82rem"/></div>
-        <div><label class="form-label" style="font-size:0.7rem">TRANSPORTER</label>
-          <input class="form-control" id="grnTransport" placeholder="Transporter name" style="font-size:0.82rem"/></div>
-        <div><label class="form-label" style="font-size:0.7rem">GATE INWARD NO</label>
-          <input class="form-control" id="grnGateNo" placeholder="Gate inward number" style="font-size:0.82rem"/></div>
-        <div><label class="form-label" style="font-size:0.7rem">GATE INWARD DATE</label>
-          <input class="form-control" id="grnGateDate" placeholder="${today}" style="font-family:var(--font-mono);font-size:0.82rem"/></div>
       </div>
 
       ${qcCriteria&&(qcCriteria.preferred_color||qcCriteria.preferred_material||qcCriteria.custom)?`
@@ -819,10 +809,10 @@ async function openPR(id) {
 
       <!-- Signatures row -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:10px 12px;background:var(--off-white);border:1px solid var(--border);border-radius:var(--radius)">
-        <div><label class="form-label" style="font-size:0.7rem">RECEIVED BY</label>
-          <input class="form-control" id="grnReceivedBy" placeholder="Name / Signature" style="font-size:0.82rem"/></div>
-        <div><label class="form-label" style="font-size:0.7rem">QC CHECKED BY</label>
-          <input class="form-control" id="grnQCBy" placeholder="Name / Signature" style="font-size:0.82rem"/></div>
+        <div><label class="form-label" style="font-size:0.7rem">RECEIVED BY *</label>
+          <input class="form-control" id="grnReceivedBy" value="${currentUser?.name||''}" placeholder="Name / Signature" required style="font-size:0.82rem"/></div>
+        <div><label class="form-label" style="font-size:0.7rem">QC CHECKED BY *</label>
+          <input class="form-control" id="grnQCBy" value="${currentUser?.name||''}" placeholder="Name / Signature" required style="font-size:0.82rem"/></div>
       </div>
     </div>`;
     footer.innerHTML=`<button class="btn btn-secondary" onclick="closeModal('prModal')">Cancel</button>
@@ -980,15 +970,11 @@ async function submitQC() {
   if(!notes){showToast('Please add inspection notes','error');return;}
 
   // Collect GRN header fields
-  const grnNumber = document.getElementById('grnNumber')?.value.trim()||'';
   const grnDate   = document.getElementById('grnDate')?.value.trim()||'';
-  const grnInvoice= document.getElementById('grnInvoice')?.value.trim()||'';
-  const grnTransport=document.getElementById('grnTransport')?.value.trim()||'';
-  const grnGateNo = document.getElementById('grnGateNo')?.value.trim()||'';
-  const grnGateDate=document.getElementById('grnGateDate')?.value.trim()||'';
   const grnRecvBy = document.getElementById('grnReceivedBy')?.value.trim()||'';
   const grnQCBy   = document.getElementById('grnQCBy')?.value.trim()||'';
-  if(!grnNumber){showToast('Please enter a GRN Number','error');return;}
+  if(!grnRecvBy){showToast('Please enter who received the goods','error');return;}
+  if(!grnQCBy){showToast('Please enter who checked QC','error');return;}
 
   // Collect GRN rows
   const parts = currentPR.parts||[];
@@ -1004,16 +990,14 @@ async function submitQC() {
   }));
 
   const grnData = {
-    grn_number: grnNumber, grn_date: grnDate,
-    invoice_no: grnInvoice, transporter: grnTransport,
-    gate_inward_no: grnGateNo, gate_inward_date: grnGateDate,
+    grn_date: grnDate,
     received_by: grnRecvBy, qc_checked_by: grnQCBy,
     lines: grnLines
   };
 
   showLoader(true);
   const qcResultValue = result==='qc_passed' ? 'accepted' : 'rejected';
-  const fullNotes = `GRN# ${grnNumber} | ${notes}`;
+  const fullNotes = `GRN Date ${grnDate} | ${notes}`;
   const{error}=await db.from('procurement_requests').update({
     phase: result,
     qc_result: qcResultValue,
