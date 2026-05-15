@@ -14,6 +14,7 @@
   <div class="page-header">
     <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:12px">
       <div><h1 class="page-title">Project Manager <span>Portal</span></h1><p class="page-sub">Review, approve, and track procurement requests assigned to you</p></div>
+      <button class="btn btn-primary" onclick="openNewPR()">+ New Request</button>
     </div>
   </div>
 
@@ -477,6 +478,11 @@ async function addComment(){
   try{await postComment(currentPR.id,currentUser.id,text);input.value='';
     const c=await loadComments(currentPR.id);document.getElementById('commentsList').innerHTML=renderComments(c);
   }catch(e){showToast('Comment failed','error');}
+}
+function openNewPR() {
+  // Redirect to engineer page which has the full request creation form
+  // The engineer.html page handles request creation for all roles
+  window.location.href = 'engineer.html?action=new';
 }
 function goToProjects() {
   window.location.href = 'projects.html';

@@ -354,7 +354,7 @@ function handleAttachmentDownload(e, url, fileName) {
 
 // ── INIT ─────────────────────────────────────────────────────
 async function init() {
-  currentUser=Session.require(['engineer']); if(!currentUser) return;
+  currentUser=Session.require(['engineer', 'project_manager']); if(!currentUser) return;
   document.getElementById('navbarMount').innerHTML=buildNavbar(currentUser);
   document.getElementById('footerMount').innerHTML=buildFooter();
   initNavbar(currentUser);
@@ -364,6 +364,12 @@ async function init() {
   showLoader(true);
   await Promise.all([loadRequests(), loadPMs(), loadProjects()]);
   showLoader(false);
+  
+  // Auto-open new request form if ?action=new is in URL
+  const params = new URLSearchParams(window.location.search);
+  if(params.get('action')==='new') {
+    openNewPR();
+  }
 }
 
 async function loadRequests() {
