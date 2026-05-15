@@ -109,10 +109,10 @@
   <!-- ANALYTICS TAB -->
   <div id="tab-analytics" style="display:none">
     <!-- KPI Row -->
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:22px" id="analyticsKPIs"></div>
+    <div id="analyticsKPIs" class="analytics-grid analytics-kpis"></div>
 
     <!-- Row 1: Phase donut + Dept bar -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px">
+    <div class="analytics-grid analytics-2">
       <div class="card">
         <div class="card-header" style="display:flex;align-items:center;justify-content:space-between">
           <span class="section-title">Requests by Phase</span>
@@ -131,7 +131,7 @@
     </div>
 
     <!-- Row 2: Lead Time histogram + Top requesters -->
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px">
+    <div class="analytics-grid analytics-2">
       <div class="card">
         <div class="card-header"><span class="section-title">Lead Time Distribution</span></div>
         <div class="card-body" style="padding:10px 16px 16px">
@@ -147,7 +147,7 @@
     </div>
 
     <!-- Row 3: Monthly trend + Recent activity -->
-    <div style="display:grid;grid-template-columns:2fr 1fr;gap:18px">
+    <div class="analytics-grid analytics-wide">
       <div class="card">
         <div class="card-header"><span class="section-title">Monthly Requests (Last 6 Months)</span></div>
         <div class="card-body" style="padding:10px 16px 16px">
@@ -260,7 +260,7 @@ async function loadRequests() {
   allRequests=data||[];
   updateStats();
   filterRequests();
-  renderAnalytics();
+  if(activeTab==='analytics') renderAnalytics();
 }
 
 async function loadUsers() {
@@ -290,7 +290,7 @@ function switchTab(tab) {
     document.getElementById(`tab-${t}`).style.display=t===tab?'':'none';
     document.querySelectorAll('.tab-btn')[i].classList.toggle('active',t===tab);
   });
-  if(tab==='analytics') renderAnalytics();
+  if(tab==='analytics') requestAnimationFrame(renderAnalytics);
 }
 
 function clearFilters() {
