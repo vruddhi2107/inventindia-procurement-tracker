@@ -648,7 +648,7 @@ function renderTable(reqs) {
       <td>${getPhaseBadge(r.phase)}</td>
       <td style="font-size:0.78rem">${r.project_manager_name||'—'}</td>
       <td style="font-size:0.78rem">${r.users?.name||'—'}</td>
-      <td>${leadTimeBadge(r.created_at)}</td>
+      <td>${leadTimeBadge(r.created_at, (r.phase_timestamps||{})['rejected']||(r.phase_timestamps||{})['declined']||(r.phase_timestamps||{})['accepted']||null)}</td>
       <td>${renderEtaBadge(r.quote_eta, r.phase)}</td>
       <td style="font-family:var(--font-mono);font-size:0.72rem;color:var(--gray-4)">${fmtDate(r.updated_at||r.created_at)}</td>
       <td><button class="btn ${needsAction?'btn-primary':'btn-ghost'} btn-sm" onclick='openPR("${r.id}")'>${lbl}</button></td>

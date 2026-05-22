@@ -392,12 +392,16 @@ function renderWorkflowTrack(phase, phaseTimestamps, createdAt) {
 }
 
 // ── LEAD TIME HELPERS ────────────────────────────────────────
-function calcLeadTimeDays(createdAt) {
+// endAt: optional ISO string — if provided (e.g. rejection/decline/acceptance date),
+// the timer is frozen at that moment instead of counting up to today.
+function calcLeadTimeDays(createdAt, endAt) {
   if (!createdAt) return null;
-  return Math.floor((Date.now() - new Date(createdAt)) / 86400000);
+  var end = endAt ? new Date(endAt).getTime() : Date.now();
+  return Math.floor((end - new Date(createdAt)) / 86400000);
 }
-function leadTimeBadge(createdAt) {
-  var days = calcLeadTimeDays(createdAt);
+// terminalTimestamp: optional ISO string for closed/rejected/declined requests
+function leadTimeBadge(createdAt, terminalTimestamp) {
+  var days = calcLeadTimeDays(createdAt, terminalTimestamp);
   if (days === null) return '';
   var color = days <= 7 ? '#22c55e' : days <= 21 ? '#f59e0b' : '#ef4444';
   return '<span style="font-family:var(--font-mono);font-size:0.7rem;padding:1px 7px;border-radius:10px;background:'+color+'15;color:'+color+';border:1px solid '+color+'35">'+days+'d</span>';
@@ -461,11 +465,19 @@ function buildPRDetailHTML(pr, quotations=[], vendorName='', pmName='', extras={
     </div>`:''}
 
     ${renderPartsTable(parts)}
-    <div style="margin-top:12px;display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--off-white);border:1px solid var(--border);border-radius:var(--radius)">
-      <span style="font-size:0.8rem;color:var(--gray-3)">Total Lead Time:</span>
-      <strong style="font-family:var(--font-mono);font-size:0.88rem">${calcLeadTimeDays(pr.created_at)} days</strong>
-      <span style="font-size:0.75rem;color:var(--gray-4)">(from ${fmtDate(pr.created_at)} to today)</span>
-    </div>
+    ${(function(){
+      var ts = pr.phase_timestamps || {};
+      var terminalTs = ts['rejected'] || ts['declined'] || ts['accepted'] || null;
+      var terminalLabel = ts['rejected'] ? 'rejected' : ts['declined'] ? 'declined' : ts['accepted'] ? 'closed' : null;
+      var endLabel = terminalTs ? fmtDate(terminalTs) : 'today';
+      var statusNote = terminalLabel ? ' <span style="font-size:0.72rem;color:var(--gray-4);font-style:italic">(closed — '+terminalLabel+')</span>' : '';
+      return '<div style="margin-top:12px;display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--off-white);border:1px solid var(--border);border-radius:var(--radius)">'
+        + '<span style="font-size:0.8rem;color:var(--gray-3)">Total Lead Time:</span>'
+        + '<strong style="font-family:var(--font-mono);font-size:0.88rem">'+calcLeadTimeDays(pr.created_at, terminalTs)+' days</strong>'
+        + '<span style="font-size:0.75rem;color:var(--gray-4)">(from '+fmtDate(pr.created_at)+' to '+endLabel+')</span>'
+        + statusNote
+        + '</div>';
+    })()}
     <div style="margin-top:16px">${renderWorkflowTrack(pr.phase, pr.phase_timestamps, pr.created_at)}</div>
 
     ${(pr.phase==='advance_requested'||pr.phase==='advance_approved'||pr.phase==='advance_rejected')?`<div style="margin-top:14px;padding:12px 14px;background:${pr.phase==='advance_approved'?'rgba(22,163,74,0.06)':pr.phase==='advance_rejected'?'rgba(214,43,43,0.06)':'rgba(245,158,11,0.06)'};border:1px solid ${pr.phase==='advance_approved'?'rgba(22,163,74,0.25)':pr.phase==='advance_rejected'?'rgba(214,43,43,0.25)':'rgba(245,158,11,0.25)'};border-radius:var(--radius)">
