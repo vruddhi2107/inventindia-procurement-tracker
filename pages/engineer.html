@@ -712,7 +712,7 @@ async function submitPR() {
   showLoader(false);
   if(error){showToast('Submit failed: '+error.message,'error');return;}
   showToast(isEditMode?'↺ Resubmitted as a new modified request!':isVI?'Vendor Info request sent to Procurement!':'Request submitted!','success');
-  if(newPR?.id) notifyPhaseChange(newPR.id, newPR.phase||'submitted', currentUser?.id);
+  if(data?.id) notifyPhaseChange(data.id, data.phase||'submitted', currentUser?.id);
   closeModal('prFormModal');
   await loadRequests();
 }
