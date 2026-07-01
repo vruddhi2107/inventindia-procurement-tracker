@@ -987,6 +987,7 @@ async function submitApprovalPath() {
     }).eq('id',currentPR.id);
     showLoader(false);
     if(error){showToast('Error: '+error.message,'error');return;}
+    notifyPhaseChange(currentPR.id,'pending_pm_final_approval',currentUser?.id);
     showToast('Client approval submitted — forwarded to PM.','success');
   } else {
     showLoader(true);
@@ -997,6 +998,7 @@ async function submitApprovalPath() {
     await db.from('pr_quotations').update({is_selected:false}).eq('pr_id',currentPR.id);
     showLoader(false);
     if(error){showToast('Error: '+error.message,'error');return;}
+    notifyPhaseChange(currentPR.id,'pending_pm_final_approval',currentUser?.id);
     showToast('Forwarded directly to Project Manager.','success');
   }
   screenshotBase64=null;selectedQuotationId=null;selectedApprovalPath=null;
