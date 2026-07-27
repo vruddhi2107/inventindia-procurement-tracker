@@ -340,8 +340,8 @@ async function openPR(id) {
 
 function rejectOptionsHTML() {
   return `<div id="rejectionExtra" style="display:none;margin-bottom:12px;padding:12px;background:rgba(214,43,43,0.05);border:1px solid rgba(214,43,43,0.18);border-radius:var(--radius)">
-    <div class="form-label" style="margin-bottom:8px">What should happen next?</div>
-    <div style="display:flex;flex-direction:column;gap:8px">
+    <div class="form-label" style="margin-bottom:8px">What should happen next? *</div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:0.82rem">
         <input type="radio" name="rejectAction" value="more_vendors" style="accent-color:var(--red)"/> Request more vendor options
       </label>
@@ -349,10 +349,22 @@ function rejectOptionsHTML() {
         <input type="radio" name="rejectAction" value="close" style="accent-color:var(--red)"/> Close the request
       </label>
     </div>
+    <button class="btn btn-danger" style="width:100%" onclick="finalDecision('rejected')">✗ Confirm Rejection</button>
   </div>`;
 }
 
-function showRejectionOptions(){const e=document.getElementById('rejectionExtra');if(e)e.style.display='block';}
+// Reveals the "what happens next" panel the first time. If it's already open,
+// a second click means they forgot to pick an option — nudge them instead of doing nothing.
+function showRejectionOptions(){
+  const e=document.getElementById('rejectionExtra');
+  if(!e) return;
+  if(e.style.display==='block'){
+    showToast('Select an option below, then hit "Confirm Rejection"','error');
+    return;
+  }
+  e.style.display='block';
+  e.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
 
 // PM selects a quotation (PM path only)
 function selectQuotation(qId) {
