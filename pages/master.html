@@ -256,9 +256,9 @@ async function init() {
 }
 
 async function loadRequests() {
-  const{data}=await db.from('procurement_requests')
-    .select('*, users!procurement_requests_created_by_fkey(name,email), vendors(name)')
-    .order('updated_at',{ascending:false});
+  const data = await dbFetch(() => db.from('procurement_requests')
+    .select(PR_LIST_COLUMNS + ', users!procurement_requests_created_by_fkey(name,email), vendors(name)')
+    .order('updated_at',{ascending:false}), 'requests');
   allRequests=data||[];
   updateStats();
   filterRequests();

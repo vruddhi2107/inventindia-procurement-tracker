@@ -540,7 +540,7 @@ async function openVendorHistory(vendorId) {
   const [vendorRes, ratingsRes, ordersRes] = await Promise.all([
     db.from('vendors').select('*').eq('id',vendorId).single(),
     db.from('vendor_ratings').select('*,users(name),procurement_requests(project_name,request_number)').eq('vendor_id',vendorId).order('created_at',{ascending:false}),
-    db.from('procurement_requests').select('*').eq('assigned_vendor_id',vendorId).order('created_at',{ascending:false})
+    db.from('procurement_requests').select(PR_LIST_COLUMNS).eq('assigned_vendor_id',vendorId).order('created_at',{ascending:false})
   ]);
 
   const v = vendorRes.data||{};
@@ -594,10 +594,9 @@ async function openVendorHistory(vendorId) {
 }
 
 async function loadRequests() {
-  const{data}=await db.from('procurement_requests')
-    .select('*, users!procurement_requests_created_by_fkey(name)')
-    .order('updated_at',{ascending:false});
-  allRequests=data||[];
+  allRequests = await dbFetch(() => db.from('procurement_requests')
+    .select(PR_LIST_COLUMNS + ', users!procurement_requests_created_by_fkey(name)')
+    .order('updated_at',{ascending:false}), 'requests');
   updateStats(); filterTable();
 }
 
@@ -740,7 +739,7 @@ async function openPR(id) {
   // into the same shape as pr_attachments table rows so they render identically
   const jsonbAttachments = (currentPR.attachments || []).map(a => ({
     file_name: a.name || 'Attachment',
-    file_url: a.data,
+    file_url: a.url || a.data,
     attachment_type: 'engineer_upload',
     file_type: a.type
   }));
@@ -1118,8 +1117,12 @@ async function handleQuoteFiles(e) {
     if(file.size>5*1024*1024){showToast(`${file.name} too large`,'error');continue;}
     const allowed=['image/png','image/jpeg','image/jpg','application/pdf'];
     if(!allowed.includes(file.type)){showToast(`${file.name} — unsupported`,'error');continue;}
-    const b64=await fileToBase64(file);
-    uploadedFiles.push({name:file.name,type:file.type,data:b64});
+    try{
+      const uploaded=await uploadFileToStorage(file, `pr/${currentPR?.id||'pending'}/quotations`);
+      uploadedFiles.push(uploaded);
+    }catch(err){
+      showToast(`${file.name}: ${err.message}`,'error');
+    }
   }
   document.getElementById('quoteFileInput').value='';
   renderUploadList();
@@ -1173,7 +1176,7 @@ async function shareQuotations() {
       const curEl = document.getElementById(`qcur-${i}`);
       await db.from('pr_quotations').insert({
         pr_id: currentPR.id, vendor_id: vendorId, vendor_name: vendorName,
-        file_name: f.name, file_url: f.data, file_type: f.type,
+        file_name: f.name, file_url: f.url, file_type: f.type,
         amount: amtEl?.value ? parseFloat(amtEl.value) : null,
         currency: curEl?.value || 'INR',
         lead_time_days: ltEl?.value ? parseInt(ltEl.value) : null,
@@ -1255,7 +1258,7 @@ async function submitAdvanceViaSmartsheet() {
 
   let screenshotData = null;
   if (screenshotEl?.files?.length) {
-    try { screenshotData = await fileToBase64(screenshotEl.files[0]); }
+    try { screenshotData = (await uploadFileToStorage(screenshotEl.files[0], `pr/${currentPR.id}/advance-payment`)).url; }
     catch(e) { showToast('Screenshot error: ' + e.message, 'error'); return; }
   }
 
@@ -1800,8 +1803,12 @@ async function handlePRAttachFiles(e) {
   for (const file of files) {
     if (file.size > 5*1024*1024) { showToast(`${file.name} too large`,'error'); continue; }
     if (!allowed.includes(file.type)) { showToast(`${file.name} — unsupported`,'error'); continue; }
-    const b64 = await fileToBase64(file);
-    paymentRequestFiles.push({name: file.name, type: file.type, data: b64});
+    try{
+      const uploaded = await uploadFileToStorage(file, `pr/${currentPR?.id||'pending'}/payment-attachments`);
+      paymentRequestFiles.push(uploaded);
+    }catch(err){
+      showToast(`${file.name}: ${err.message}`,'error');
+    }
   }
   e.target.value = '';
   renderPRAttachList();
@@ -2127,7 +2134,7 @@ async function submitPaymentRequest() {
   const ssFileEl = document.getElementById('prSmartsheetFile');
   let ssScreenshot = null;
   if (ssFileEl?.files?.length) {
-    try { ssScreenshot = await fileToBase64(ssFileEl.files[0]); }
+    try { ssScreenshot = (await uploadFileToStorage(ssFileEl.files[0], `pr/${currentPR.id}/payment-smartsheet`)).url; }
     catch(e) { showLoader(false); showToast('Screenshot error: ' + e.message, 'error'); return; }
   }
   if (!ssPayId) { showLoader(false); showToast('Please enter the Smartsheet Payment ID', 'error'); return; }
@@ -2145,7 +2152,7 @@ async function submitPaymentRequest() {
       for (const f of paymentRequestFiles) {
         await db.from('pr_attachments').insert({
           pr_id: currentPR.id, uploaded_by: currentUser.id,
-          attachment_type: 'other', file_name: f.name, file_url: f.data
+          attachment_type: 'other', file_name: f.name, file_url: f.url
         });
       }
       paymentRequestFiles = [];
@@ -2238,7 +2245,7 @@ async function markAdvanceReceived(prId, advId) {
   if (!fileEl?.files?.length) { showToast('Please attach a confirmation screenshot', 'error'); return; }
   showLoader(true);
   let screenshot = null;
-  try { screenshot = await fileToBase64(fileEl.files[0]); } catch(e) { showLoader(false); showToast('Screenshot error: ' + e.message, 'error'); return; }
+  try { screenshot = (await uploadFileToStorage(fileEl.files[0], `pr/${prId}/advance-received`)).url; } catch(e) { showLoader(false); showToast('Screenshot error: ' + e.message, 'error'); return; }
 
   const now = new Date().toISOString();
   // Update the advance_payment_requests record
@@ -2275,7 +2282,7 @@ async function markFullPaymentReceived(prId, payId) {
   if (!fileEl?.files?.length) { showToast('Please attach a confirmation screenshot', 'error'); return; }
   showLoader(true);
   let screenshot = null;
-  try { screenshot = await fileToBase64(fileEl.files[0]); } catch(e) { showLoader(false); showToast('Screenshot error: ' + e.message, 'error'); return; }
+  try { screenshot = (await uploadFileToStorage(fileEl.files[0], `pr/${prId}/payment-received`)).url; } catch(e) { showLoader(false); showToast('Screenshot error: ' + e.message, 'error'); return; }
 
   const now = new Date().toISOString();
   // Update payment_requests record

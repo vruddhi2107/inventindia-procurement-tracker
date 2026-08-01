@@ -1,4 +1,31 @@
 // ══════════════════════════════════════════════════════════════
+// dbFetch — retry wrapper for list/dashboard queries.
+// Without this, a single transient timeout (cold pooler connection,
+// brief contention) fails the whole dashboard load with no retry.
+// ══════════════════════════════════════════════════════════════
+async function dbFetch(queryFn, label = 'data', { retries = 2, retryDelayMs = 500 } = {}) {
+  let lastError = null;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    let data, error;
+    try {
+      ({ data, error } = await queryFn());
+    } catch (e) {
+      error = e;
+    }
+    if (!error) return data || [];
+    lastError = error;
+    console.error(`[dbFetch] "${label}" failed (attempt ${attempt + 1}/${retries + 1}):`, error.message || error, error);
+    if (attempt < retries) await new Promise(r => setTimeout(r, retryDelayMs * (attempt + 1)));
+  }
+  console.error(`[dbFetch] "${label}" gave up after ${retries + 1} attempts.`, lastError);
+  if (typeof showToast === 'function') {
+    showToast(`Couldn't load ${label}: ${lastError?.message || 'unknown error'} — check console`, 'error');
+  }
+  return [];
+}
+window.dbFetch = dbFetch;
+
+// ══════════════════════════════════════════════════════════════
 // SAFE FILE REGISTRY — eliminates base64-in-HTML-attribute bugs
 // All large file URLs are stored here; buttons reference by index only.
 // ══════════════════════════════════════════════════════════════
@@ -749,7 +776,7 @@ async function openVendorHistory(vendorId) {
   const [vendorRes, ratingsRes, ordersRes] = await Promise.all([
     db.from('vendors').select('*').eq('id',vendorId).single(),
     db.from('vendor_ratings').select('*,users(name),procurement_requests(project_name,request_number)').eq('vendor_id',vendorId).order('created_at',{ascending:false}),
-    db.from('procurement_requests').select('*').eq('assigned_vendor_id',vendorId).order('created_at',{ascending:false})
+    db.from('procurement_requests').select(PR_LIST_COLUMNS).eq('assigned_vendor_id',vendorId).order('created_at',{ascending:false})
   ]);
 
   const v = vendorRes.data||{};
