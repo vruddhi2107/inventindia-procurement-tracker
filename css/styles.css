@@ -53,6 +53,17 @@ body {
   display: flex;           /* ADD THIS */
   flex-direction: column;  /* ADD THIS */
 }
+/* ── ICONS ── */
+.icon-inline {
+  width: 1em; height: 1em;
+  display: inline-block;
+  vertical-align: -0.15em;
+  flex-shrink: 0;
+  stroke: currentColor;
+}
+.stat-card-icon .icon-inline { width: 1.3em; height: 1.3em; }
+.modal-title .icon-inline { width: 1.05em; height: 1.05em; margin-right: 2px; vertical-align: -0.18em; }
+
 /* ── SCROLLBAR ── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -1222,6 +1233,41 @@ body {
   display: flex; align-items: center; gap: 4px;
 }
 .btn-logout:hover { border-color: var(--red); color: var(--red); background: var(--red-muted); }
+
+/* ── NAV LINKS / HAMBURGER ── */
+.nav-links { display: flex; align-items: center; gap: 2px; margin-left: 6px; }
+.nav-link {
+  font-family: var(--font-body); font-size: 0.78rem; font-weight: 500;
+  padding: 6px 12px; border-radius: var(--radius-sm);
+  color: var(--gray-3); text-decoration: none; white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+.nav-link:hover { background: var(--off-white); color: var(--black); }
+.nav-link.active { background: var(--red-muted); color: var(--red); font-weight: 600; }
+
+.nav-hamburger {
+  display: none; align-items: center; justify-content: center;
+  width: 32px; height: 32px; flex-shrink: 0;
+  background: none; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  color: var(--gray-3); cursor: pointer; transition: all 0.13s;
+}
+.nav-hamburger:hover { border-color: var(--gray-4); color: var(--black); background: var(--off-white); }
+
+@media (max-width: 900px) {
+  .nav-hamburger { display: flex; }
+  .nav-links {
+    display: none; flex-direction: column; align-items: stretch; gap: 2px;
+    position: absolute; top: var(--nav-h); left: 0; right: 0; z-index: 150;
+    background: var(--white); border-bottom: 1px solid var(--border-strong);
+    box-shadow: var(--shadow-md); padding: 8px; margin-left: 0;
+  }
+  .nav-links.open { display: flex; }
+  .nav-link { padding: 10px 14px; }
+  .nav-role-badge { display: none; }
+}
+@media (max-width: 520px) {
+  .nav-user-dept { display: none; }
+}
 
 /* ── LAYOUT ── */
 .page-container { max-width: 1360px; margin: 0 auto; padding: 22px 22px 48px; }
