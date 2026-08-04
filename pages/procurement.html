@@ -234,16 +234,16 @@
   </div>
 
   <div class="stats-grid">
-    <div class="stat-card"><div class="stat-card-value" id="sActive">—</div><div class="stat-card-label">Active</div><div class="stat-card-icon"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" /> <circle cx="12" cy="12" r="3" /></svg>️</div></div>
-    <div class="stat-card" style="--accent:#f97316"><div class="stat-card-value" id="sOrders">—</div><div class="stat-card-label">To Order</div><div class="stat-card-icon"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1" /> <circle cx="19" cy="21" r="1" /> <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" /></svg></div></div>
-    <div class="stat-card" style="--accent:#f59e0b"><div class="stat-card-value" id="sGRN">—</div><div class="stat-card-label">GRN Pending</div><div class="stat-card-icon"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z" /> <path d="M12 22V12" /> <polyline points="3.29 7 12 12 20.71 7" /> <path d="m7.5 4.27 9 5.15" /></svg></div></div>
-    <div class="stat-card" style="--accent:#22c55e"><div class="stat-card-value" id="sVendors">—</div><div class="stat-card-label">Active Vendors</div><div class="stat-card-icon"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 12h4" /> <path d="M10 8h4" /> <path d="M14 21v-3a2 2 0 0 0-4 0v3" /> <path d="M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2" /> <path d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16" /></svg></div></div>
+    <div class="stat-card"><div class="stat-card-value" id="sActive">—</div><div class="stat-card-label">Active</div><div class="stat-card-icon">⚙️</div></div>
+    <div class="stat-card" style="--accent:#f97316"><div class="stat-card-value" id="sOrders">—</div><div class="stat-card-label">To Order</div><div class="stat-card-icon">🛒</div></div>
+    <div class="stat-card" style="--accent:#f59e0b"><div class="stat-card-value" id="sGRN">—</div><div class="stat-card-label">GRN Pending</div><div class="stat-card-icon">📦</div></div>
+    <div class="stat-card" style="--accent:#22c55e"><div class="stat-card-value" id="sVendors">—</div><div class="stat-card-label">Active Vendors</div><div class="stat-card-icon">🏢</div></div>
   </div>
 
   <div class="tabs">
-    <button class="tab-btn active" onclick="switchTab('active')"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.268 21a2 2 0 0 0 3.464 0" /> <path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326" /></svg> Action Needed</button>
+    <button class="tab-btn active" onclick="switchTab('active')">🔔 Action Needed</button>
     <button class="tab-btn" onclick="switchTab('all')">All Requests</button>
-    <button class="tab-btn" onclick="switchTab('vendors')"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 12h4" /> <path d="M10 8h4" /> <path d="M14 21v-3a2 2 0 0 0-4 0v3" /> <path d="M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2" /> <path d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16" /></svg> Vendor DB</button>
+    <button class="tab-btn" onclick="switchTab('vendors')">🏢 Vendor DB</button>
   </div>
 
   <div id="tabRequests">
@@ -366,7 +366,7 @@
       </div>
       <!-- Quality Rating -->
       <div class="form-group" style="margin-bottom:14px;padding:12px;background:rgba(34,197,94,0.05);border:1px solid rgba(34,197,94,0.2);border-radius:var(--radius)">
-        <label class="form-label" style="margin-bottom:4px"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" /> <path d="m9 12 2 2 4-4" /></svg> Quality Rating * <span style="font-weight:400;font-size:0.75rem;color:var(--gray-3)">(Product quality &amp; accuracy)</span></label>
+        <label class="form-label" style="margin-bottom:4px">✅ Quality Rating * <span style="font-weight:400;font-size:0.75rem;color:var(--gray-3)">(Product quality &amp; accuracy)</span></label>
         <div style="font-size:0.72rem;color:var(--gray-4);margin-bottom:8px">1=Poor · 2=Below Avg · 3=Acceptable · 4=Good · 5=Excellent</div>
         <div class="star-input" id="rateQualityStars" data-rating="0"></div>
       </div>
@@ -386,7 +386,7 @@
 <div class="modal-overlay" id="poBrandingModal">
   <div class="modal" style="max-width:480px">
     <div class="modal-header">
-      <div><div class="modal-title"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /> <circle cx="9" cy="9" r="2" /> <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></svg> PO Logo &amp; Signature</div><div class="modal-title-sub">Saved in your browser — applied to every PO you generate</div></div>
+      <div><div class="modal-title">🖼 PO Logo &amp; Signature</div><div class="modal-title-sub">Saved in your browser — applied to every PO you generate</div></div>
       <button class="modal-close" onclick="closeModal('poBrandingModal')">✕</button>
     </div>
     <div class="modal-body">
@@ -424,11 +424,11 @@
 <div class="modal-overlay" id="etaPromptModal">
   <div class="modal" style="max-width:420px">
     <div class="modal-header">
-      <div><div class="modal-title"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v3" /> <path d="M16 2v3" /> <rect x="3" y="3" width="18" height="18" rx="2" /> <path d="M3 9h18" /></svg> Set Quote ETA</div><div class="modal-title-sub">One-time — cannot be changed after saving</div></div>
+      <div><div class="modal-title">📅 Set Quote ETA</div><div class="modal-title-sub">One-time — cannot be changed after saving</div></div>
     </div>
     <div class="modal-body">
       <div class="eta-prompt-box">
-        <div style="font-size:2rem;margin-bottom:8px"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v3" /> <path d="M16 2v3" /> <rect x="3" y="3" width="18" height="18" rx="2" /> <path d="M3 9h18" /></svg></div>
+        <div style="font-size:2rem;margin-bottom:8px">📅</div>
         <div style="font-size:0.9rem;font-weight:700;color:#b45309;margin-bottom:6px">When will you attach the quotation?</div>
         <p style="font-size:0.78rem;color:var(--gray-3);line-height:1.5">This ETA is visible to the engineer and PM. It is <strong>locked once saved</strong> and cannot be edited.</p>
       </div>
@@ -444,7 +444,7 @@
     </div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="skipEtaPrompt()">Skip for now</button>
-      <button class="btn btn-primary" onclick="saveQuoteEta()"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v3" /> <path d="M16 2v3" /> <rect x="3" y="3" width="18" height="18" rx="2" /> <path d="M3 9h18" /></svg> Save ETA & Continue →</button>
+      <button class="btn btn-primary" onclick="saveQuoteEta()">📅 Save ETA & Continue →</button>
     </div>
   </div>
 </div>
@@ -453,13 +453,13 @@
 <div class="modal-overlay" id="poModal">
   <div class="modal" style="max-width:900px">
     <div class="modal-header">
-      <div><div class="modal-title"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" /> <path d="M14 2v5a1 1 0 0 0 1 1h5" /> <path d="M10 9H8" /> <path d="M16 13H8" /> <path d="M16 17H8" /></svg> Generate Purchase Order</div><div class="modal-title-sub" id="poModalSub"></div></div>
+      <div><div class="modal-title">📄 Generate Purchase Order</div><div class="modal-title-sub" id="poModalSub"></div></div>
       <button class="modal-close" onclick="closeModal('poModal')">✕</button>
     </div>
     <div class="modal-body" id="poModalBody" style="max-height:82vh;overflow-y:auto;padding:16px"></div>
     <div class="modal-footer">
-      <button class="btn btn-ghost btn-sm" onclick="openPOBranding()" style="margin-right:auto"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /> <circle cx="9" cy="9" r="2" /> <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></svg> Logo &amp; Signature</button>
-      <button class="btn btn-secondary" onclick="downloadPO()"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3" /> <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /> <path d="m7 10 5 5 5-5" /></svg> Download PDF</button>
+      <button class="btn btn-ghost btn-sm" onclick="openPOBranding()" style="margin-right:auto">🖼 Logo &amp; Signature</button>
+      <button class="btn btn-secondary" onclick="downloadPO()">⬇ Download PDF</button>
       <button class="btn btn-secondary" onclick="closeModal('poModal')">Cancel</button>
       <button class="btn btn-primary" onclick="confirmGeneratePO()">✓ Generate &amp; Save PO</button>
     </div>
@@ -469,13 +469,13 @@
 <div class="modal-overlay" id="payReqModal">
   <div class="modal" style="max-width:680px">
     <div class="modal-header">
-      <div><div class="modal-title"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12" /> <path d="M6 8h12" /> <path d="m6 13 8.5 8" /> <path d="M6 13h3" /> <path d="M9 13c6.667 0 6.667-10 0-10" /></svg> Create Payment Request</div><div class="modal-title-sub" id="payReqSub"></div></div>
+      <div><div class="modal-title">💰 Create Payment Request</div><div class="modal-title-sub" id="payReqSub"></div></div>
       <button class="modal-close" onclick="closeModal('payReqModal')">✕</button>
     </div>
     <div class="modal-body" id="payReqBody" style="max-height:78vh;overflow-y:auto"></div>
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="closeModal('payReqModal')">Cancel</button>
-      <button class="btn btn-primary" onclick="submitPaymentRequest()"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12" /> <path d="m17 8-5-5-5 5" /> <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /></svg> Raise Payment to Accounts via Smartsheet →</button>
+      <button class="btn btn-primary" onclick="submitPaymentRequest()">📤 Raise Payment to Accounts via Smartsheet →</button>
     </div>
   </div>
 </div>
@@ -487,7 +487,7 @@
     <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #e5e7eb;background:#f9fafb">
       <span id="attPreviewName" style="font-size:0.85rem;font-weight:600;color:#374151;max-width:50vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></span>
       <div style="display:flex;gap:8px">
-        <button class="btn btn-secondary btn-sm" onclick="downloadCurrentPreview()"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3" /> <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /> <path d="m7 10 5 5 5-5" /></svg> Download</button>
+        <button class="btn btn-secondary btn-sm" onclick="downloadCurrentPreview()">⬇ Download</button>
         <button class="btn btn-secondary btn-sm" onclick="closeAttPreview()">✕ Close</button>
       </div>
     </div>
@@ -550,19 +550,19 @@ async function openVendorHistory(vendorId) {
 
   document.getElementById('_vhBody').innerHTML=`
     <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border)">
-      <div style="width:48px;height:48px;border-radius:10px;background:var(--off-white);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:1.4rem"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 12h4" /> <path d="M10 8h4" /> <path d="M14 21v-3a2 2 0 0 0-4 0v3" /> <path d="M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2" /> <path d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16" /></svg></div>
+      <div style="width:48px;height:48px;border-radius:10px;background:var(--off-white);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:1.4rem">🏢</div>
       <div>
         <div style="font-weight:700;font-size:1rem">${v.name}</div>
         <div style="font-size:0.78rem;color:var(--gray-3)">${v.specialization||''}</div>
         <div style="margin-top:3px">${starRating(v.avg_rating,v.rating_count)}</div>
       </div>
       ${v.email?`<div style="font-size:0.76rem;color:var(--gray-3);margin-left:8px">${v.email}${v.phone?' · '+v.phone:''}</div>`:''}
-      ${pt?`<div style="margin-left:auto;font-size:0.72rem;padding:4px 10px;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.18);border-radius:5px;color:#6366f1;white-space:nowrap"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2" /> <line x1="2" x2="22" y1="10" y2="10" /></svg> ${pt.label}</div>`:''}
+      ${pt?`<div style="margin-left:auto;font-size:0.72rem;padding:4px 10px;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.18);border-radius:5px;color:#6366f1;white-space:nowrap">💳 ${pt.label}</div>`:''}
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
       <div>
         <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--gray-4);margin-bottom:10px;display:flex;align-items:center;gap:6px">
-          <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z" /> <path d="M12 22V12" /> <polyline points="3.29 7 12 12 20.71 7" /> <path d="m7.5 4.27 9 5.15" /></svg> Orders <span style="background:var(--off-white);border:1px solid var(--border);border-radius:10px;padding:1px 7px;font-size:0.68rem">${orders.length}</span>
+          📦 Orders <span style="background:var(--off-white);border:1px solid var(--border);border-radius:10px;padding:1px 7px;font-size:0.68rem">${orders.length}</span>
         </div>
         ${orders.length?`<div style="display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto">
           ${orders.map(o=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--off-white);border:1px solid var(--border);border-radius:6px">
@@ -573,11 +573,11 @@ async function openVendorHistory(vendorId) {
             </div>
             ${getPhaseBadge(o.phase)}
           </div>`).join('')}
-        </div>`:`<div style="padding:20px;text-align:center;background:var(--off-white);border:1px solid var(--border);border-radius:6px"><div style="font-size:1.5rem;margin-bottom:4px"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 13V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12c0 1.1.9 2 2 2h9" /> <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /> <path d="m17 17 4 4" /> <path d="m21 17-4 4" /></svg></div><p style="color:var(--gray-4);font-size:0.78rem">No orders yet</p></div>`}
+        </div>`:`<div style="padding:20px;text-align:center;background:var(--off-white);border:1px solid var(--border);border-radius:6px"><div style="font-size:1.5rem;margin-bottom:4px">📭</div><p style="color:var(--gray-4);font-size:0.78rem">No orders yet</p></div>`}
       </div>
       <div>
         <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--gray-4);margin-bottom:10px;display:flex;align-items:center;gap:6px">
-          <svg class="icon-inline" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg> Ratings <span style="background:var(--off-white);border:1px solid var(--border);border-radius:10px;padding:1px 7px;font-size:0.68rem">${ratings.length}</span>
+          ⭐ Ratings <span style="background:var(--off-white);border:1px solid var(--border);border-radius:10px;padding:1px 7px;font-size:0.68rem">${ratings.length}</span>
         </div>
         ${ratings.length?`<div style="display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto">
           ${ratings.map(r=>`<div style="padding:9px 10px;background:var(--off-white);border:1px solid var(--border);border-radius:6px">
@@ -588,7 +588,7 @@ async function openVendorHistory(vendorId) {
             <div style="font-size:0.7rem;color:var(--gray-4);margin-bottom:3px">${r.users?.name||'Unknown'}${r.procurement_requests?.project_name?' · '+r.procurement_requests.project_name:''}</div>
             ${r.comment?`<p style="font-size:0.76rem;color:var(--gray-3);line-height:1.4">${r.comment}</p>`:'<p style="font-size:0.7rem;color:var(--gray-4);font-style:italic">No comment</p>'}
           </div>`).join('')}
-        </div>`:`<div style="padding:20px;text-align:center;background:var(--off-white);border:1px solid var(--border);border-radius:6px"><div style="font-size:1.5rem;margin-bottom:4px"><svg class="icon-inline" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg></div><p style="color:var(--gray-4);font-size:0.78rem">No ratings yet</p></div>`}
+        </div>`:`<div style="padding:20px;text-align:center;background:var(--off-white);border:1px solid var(--border);border-radius:6px"><div style="font-size:1.5rem;margin-bottom:4px">⭐</div><p style="color:var(--gray-4);font-size:0.78rem">No ratings yet</p></div>`}
       </div>
     </div>`;
 }
@@ -636,7 +636,7 @@ function filterTable(){
 
 function renderTable(reqs) {
   const tbody=document.getElementById('requestsBody');
-  if(!reqs.length){tbody.innerHTML=`<tr><td colspan="9"><div class="empty-state"><div class="empty-state-icon"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 13V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12c0 1.1.9 2 2 2h9" /> <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /> <path d="m17 17 4 4" /> <path d="m21 17-4 4" /></svg></div><h3>${activeTab==='active'?'All caught up!':'No requests'}</h3></div></td></tr>`;return;}
+  if(!reqs.length){tbody.innerHTML=`<tr><td colspan="9"><div class="empty-state"><div class="empty-state-icon">📭</div><h3>${activeTab==='active'?'All caught up!':'No requests'}</h3></div></td></tr>`;return;}
   tbody.innerHTML=reqs.map(r=>{
     const needsAction=['procurement_active','approved','grn_pending','qc_passed'].includes(r.phase);
     const lbl={procurement_active:'Work on it',approved:'Place Order',advance_requested:'View Advance',grn_pending:'Invoke GRN',qc_passed:'Payment Req'}[r.phase]||'View';
@@ -753,7 +753,7 @@ async function openPR(id) {
   // ── VENDOR INFO ──
   if(currentPR.phase==='procurement_active'&&currentPR.request_category==='vendor_info') {
     actionSection=`<div class="action-section">
-      <div class="action-section-title"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 12h4" /> <path d="M10 8h4" /> <path d="M14 21v-3a2 2 0 0 0-4 0v3" /> <path d="M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2" /> <path d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16" /></svg> Provide Vendor Information <span class="action-badge">ACTION REQUIRED</span></div>
+      <div class="action-section-title">🏢 Provide Vendor Information <span class="action-badge">ACTION REQUIRED</span></div>
       <div class="form-group">
         <label class="form-label">Vendor Details *</label>
         <textarea class="form-control" id="vendorInfoDetails" placeholder="Vendor name, contact, email, phone, specialization, lead times..." style="min-height:120px"></textarea>
@@ -768,8 +768,8 @@ async function openPR(id) {
     const vendorList=allVendors;
     const selectedVendorObj=vd?.data;
     actionSection=`<div class="action-section">
-      <div class="action-section-title"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" /> <circle cx="12" cy="12" r="3" /></svg>️ Assign Vendor &amp; Upload Quotations <span class="action-badge">ACTION REQUIRED</span></div>
-      ${currentPR.vendor_suggestion?`<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:12px;font-size:0.78rem"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" /> <path d="M9 18h6" /> <path d="M10 22h4" /></svg> Engineer suggested: <strong>${currentPR.vendor_suggestion}</strong></div>`:''}
+      <div class="action-section-title">⚙️ Assign Vendor &amp; Upload Quotations <span class="action-badge">ACTION REQUIRED</span></div>
+      ${currentPR.vendor_suggestion?`<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:12px;font-size:0.78rem">💡 Engineer suggested: <strong>${currentPR.vendor_suggestion}</strong></div>`:''}
       <div class="form-group" style="margin-bottom:14px">
         <label class="form-label">Assign Vendor * <span style="color:var(--gray-4);font-weight:400">(must be from vendor database)</span></label>
         <select class="form-control" id="assignVendor" onchange="onVendorSelect()">
@@ -782,7 +782,7 @@ async function openPR(id) {
       <div class="form-label" style="margin-bottom:6px">Upload Quotations (PNG, JPG, PDF)</div>
       <div class="drop-zone" id="quoteDZ" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleDrop(event)">
         <input type="file" id="quoteFileInput" accept=".png,.jpg,.jpeg,.pdf" multiple onchange="handleQuoteFiles(event)"/>
-        <div class="drop-zone-icon"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551" /></svg></div>
+        <div class="drop-zone-icon">📎</div>
         <div class="drop-zone-label">Drag &amp; drop or click to upload</div>
         <div class="drop-zone-hint">PNG, JPG or PDF — max 5MB each</div>
       </div>
@@ -810,7 +810,7 @@ async function openPR(id) {
     const {data:advRec} = await db.from('advance_payment_requests')
       .select('*').eq('pr_id',currentPR.id).order('created_at',{ascending:false}).limit(1).maybeSingle();
     actionSection=`<div class="action-section" style="border:1px solid rgba(245,158,11,0.3);background:rgba(245,158,11,0.04);border-radius:var(--radius);padding:16px">
-      <div class="action-section-title" style="color:#b45309"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12" /> <path d="m17 8-5-5-5 5" /> <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /></svg> Advance Raised via Smartsheet <span class="action-badge">AWAITING RECEIPT</span></div>
+      <div class="action-section-title" style="color:#b45309">📤 Advance Raised via Smartsheet <span class="action-badge">AWAITING RECEIPT</span></div>
       ${advRec ? `<div style="margin:10px 0;padding:10px 12px;background:var(--off-white);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:0.84rem">
         <div style="display:flex;gap:18px;flex-wrap:wrap">
           <div><span class="detail-key">Amount</span><div style="font-weight:700;font-family:var(--font-mono)">AED ${Number(advRec.amount||0).toLocaleString()}</div></div>
@@ -820,13 +820,13 @@ async function openPR(id) {
         ${advRec.notes?`<div style="margin-top:6px;font-size:0.76rem;color:var(--gray-3)">${advRec.notes}</div>`:''}
       </div>` : ''}
       <div style="margin-top:14px;padding:14px;background:white;border:1px solid var(--border);border-radius:var(--radius-sm)">
-        <div style="font-size:0.82rem;font-weight:700;margin-bottom:8px"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" /> <path d="m9 12 2 2 4-4" /></svg> Mark Advance Payment Received</div>
+        <div style="font-size:0.82rem;font-weight:700;margin-bottom:8px">✅ Mark Advance Payment Received</div>
         <p style="font-size:0.78rem;color:var(--gray-3);margin-bottom:12px">Once the vendor confirms receipt of the advance, attach a confirmation screenshot and mark received.</p>
         <div class="form-group" style="margin-bottom:10px">
           <label class="form-label">Confirmation Screenshot *</label>
           <div class="drop-zone" style="min-height:60px;cursor:pointer" onclick="document.getElementById('advReceivedFile').click()">
             <input type="file" id="advReceivedFile" accept=".png,.jpg,.jpeg,.pdf" style="display:none" onchange="previewGenericScreenshot(this,'advReceivedLabel','advReceivedPreview')"/>
-            <div class="drop-zone-label" id="advReceivedLabel"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551" /></svg> Click to upload receipt confirmation screenshot</div>
+            <div class="drop-zone-label" id="advReceivedLabel">📎 Click to upload receipt confirmation screenshot</div>
             <div class="drop-zone-hint">PNG, JPG or PDF — max 5MB</div>
           </div>
           <div id="advReceivedPreview" style="display:none;margin-top:8px"></div>
@@ -835,7 +835,7 @@ async function openPR(id) {
           <label class="form-label">Notes (optional)</label>
           <input class="form-control" id="advReceivedNote" placeholder="e.g. Vendor confirmed receipt on DD/MM/YYYY"/>
         </div>
-        <button class="btn btn-success" onclick="markAdvanceReceived('${currentPR.id}','${advRec?.id||''}')"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2" /> <line x1="2" x2="22" y1="10" y2="10" /></svg> Mark Advance Received →</button>
+        <button class="btn btn-success" onclick="markAdvanceReceived('${currentPR.id}','${advRec?.id||''}')">💳 Mark Advance Received →</button>
       </div>
     </div>
     ${buildDeclineSection()}`;
@@ -874,7 +874,7 @@ async function openPR(id) {
   // ── ORDER PLACED: invoke GRN ──
   if(currentPR.phase==='order_placed') {
     actionSection=`<div class="action-section">
-      <div class="action-section-title"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z" /> <path d="M12 22V12" /> <polyline points="3.29 7 12 12 20.71 7" /> <path d="m7.5 4.27 9 5.15" /></svg> Invoke GRN <span class="action-badge">ACTION REQUIRED</span></div>
+      <div class="action-section-title">📦 Invoke GRN <span class="action-badge">ACTION REQUIRED</span></div>
       <p style="font-size:0.82rem;color:var(--gray-3);margin-bottom:12px">Once goods have arrived, invoke GRN to notify the engineer for QC.</p>
       <button class="btn btn-primary" onclick="invokeGRN()">Goods Received — Notify Engineer for QC →</button>
     </div>
@@ -884,9 +884,9 @@ async function openPR(id) {
   // ── GRN PENDING ──
   if(currentPR.phase==='grn_pending'&&currentPR.assigned_vendor_id) {
     actionSection=`<div class="action-section">
-      <div class="action-section-title"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z" /> <path d="M12 22V12" /> <polyline points="3.29 7 12 12 20.71 7" /> <path d="m7.5 4.27 9 5.15" /></svg> GRN in Progress</div>
+      <div class="action-section-title">📦 GRN in Progress</div>
       <p style="font-size:0.82rem;color:var(--gray-3)">Waiting for engineer to complete QC.</p>
-      <button class="btn btn-secondary btn-sm" style="margin-top:10px" onclick="openRateModal('${currentPR.id}','${currentPR.assigned_vendor_id}')"><svg class="icon-inline" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg> Rate Vendor</button>
+      <button class="btn btn-secondary btn-sm" style="margin-top:10px" onclick="openRateModal('${currentPR.id}','${currentPR.assigned_vendor_id}')">⭐ Rate Vendor</button>
     </div>
     ${buildDeclineSection()}`;
   }
@@ -894,11 +894,11 @@ async function openPR(id) {
   // ── QC PASSED ──
   if(currentPR.phase==='qc_passed') {
     actionSection=`<div class="action-section" style="background:rgba(22,163,74,0.04);border:1px solid rgba(22,163,74,0.2);border-radius:var(--radius);padding:14px">
-      <div class="action-section-title" style="color:#16a34a"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" /> <path d="m9 12 2 2 4-4" /></svg> QC Passed — Raise Full Payment</div>
+      <div class="action-section-title" style="color:#16a34a">✅ QC Passed — Raise Full Payment</div>
       <p style="font-size:0.82rem;color:var(--gray-3);margin-bottom:12px">QC is complete. Raise the full payment via Smartsheet — attach the screenshot and Payment ID.</p>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
-        <button class="btn btn-primary" onclick="openPaymentRequestModal('${id}')"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12" /> <path d="M6 8h12" /> <path d="m6 13 8.5 8" /> <path d="M6 13h3" /> <path d="M9 13c6.667 0 6.667-10 0-10" /></svg> Raise Full Payment via Smartsheet</button>
-        ${currentPR.assigned_vendor_id?`<button class="btn btn-secondary" onclick="openRateModal('${currentPR.id}','${currentPR.assigned_vendor_id}')"><svg class="icon-inline" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg> Rate Vendor</button>`:''}
+        <button class="btn btn-primary" onclick="openPaymentRequestModal('${id}')">💰 Raise Full Payment via Smartsheet</button>
+        ${currentPR.assigned_vendor_id?`<button class="btn btn-secondary" onclick="openRateModal('${currentPR.id}','${currentPR.assigned_vendor_id}')">⭐ Rate Vendor</button>`:''}
       </div>
     </div>
     ${buildDeclineSection()}`;
@@ -909,7 +909,7 @@ async function openPR(id) {
     const {data:payRec} = await db.from('payment_requests')
       .select('*').eq('pr_id',currentPR.id).order('request_date',{ascending:false}).limit(1).maybeSingle();
     actionSection=`<div class="action-section" style="border:1px solid rgba(139,92,246,0.3);background:rgba(139,92,246,0.04);border-radius:var(--radius);padding:16px">
-      <div class="action-section-title" style="color:#7c3aed"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12" /> <path d="M6 8h12" /> <path d="m6 13 8.5 8" /> <path d="M6 13h3" /> <path d="M9 13c6.667 0 6.667-10 0-10" /></svg> Full Payment Raised via Smartsheet <span class="action-badge">AWAITING RECEIPT</span></div>
+      <div class="action-section-title" style="color:#7c3aed">💰 Full Payment Raised via Smartsheet <span class="action-badge">AWAITING RECEIPT</span></div>
       ${payRec?`<div style="margin:10px 0;padding:10px 12px;background:var(--off-white);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:0.84rem">
         <div style="display:flex;gap:18px;flex-wrap:wrap">
           <div><span class="detail-key">Invoice Amount</span><div style="font-weight:700;font-family:var(--font-mono)">${payRec.currency||'AED'} ${Number(payRec.invoice_amount||0).toLocaleString()}</div></div>
@@ -919,13 +919,13 @@ async function openPR(id) {
         ${payRec.notes?`<div style="margin-top:6px;font-size:0.76rem;color:var(--gray-3)">${payRec.notes}</div>`:''}
       </div>`:''}
       <div style="margin-top:14px;padding:14px;background:white;border:1px solid var(--border);border-radius:var(--radius-sm)">
-        <div style="font-size:0.82rem;font-weight:700;margin-bottom:8px"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" /> <path d="m9 12 2 2 4-4" /></svg> Mark Full Payment Received & Close PR</div>
+        <div style="font-size:0.82rem;font-weight:700;margin-bottom:8px">✅ Mark Full Payment Received & Close PR</div>
         <p style="font-size:0.78rem;color:var(--gray-3);margin-bottom:12px">Once payment is confirmed, attach the Smartsheet confirmation screenshot below. This will close the PR.</p>
         <div class="form-group" style="margin-bottom:10px">
           <label class="form-label">Confirmation Screenshot *</label>
           <div class="drop-zone" style="min-height:60px;cursor:pointer" onclick="document.getElementById('payReceivedFile').click()">
             <input type="file" id="payReceivedFile" accept=".png,.jpg,.jpeg,.pdf" style="display:none" onchange="previewGenericScreenshot(this,'payReceivedLabel','payReceivedPreview')"/>
-            <div class="drop-zone-label" id="payReceivedLabel"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551" /></svg> Click to upload payment confirmation screenshot</div>
+            <div class="drop-zone-label" id="payReceivedLabel">📎 Click to upload payment confirmation screenshot</div>
             <div class="drop-zone-hint">PNG, JPG or PDF — max 5MB</div>
           </div>
           <div id="payReceivedPreview" style="display:none;margin-top:8px"></div>
@@ -935,8 +935,8 @@ async function openPR(id) {
           <input class="form-control" id="payReceivedNote" placeholder="e.g. Transaction confirmed on DD/MM/YYYY"/>
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
-          <button class="btn btn-success" onclick="markFullPaymentReceived('${currentPR.id}','${payRec?.id||''}')"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" /> <path d="m9 12 2 2 4-4" /></svg> Mark Payment Received & Close PR →</button>
-          ${currentPR.assigned_vendor_id?`<button class="btn btn-secondary" onclick="openRateModal('${currentPR.id}','${currentPR.assigned_vendor_id}')"><svg class="icon-inline" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg> Rate Vendor</button>`:''}
+          <button class="btn btn-success" onclick="markFullPaymentReceived('${currentPR.id}','${payRec?.id||''}')">✅ Mark Payment Received & Close PR →</button>
+          ${currentPR.assigned_vendor_id?`<button class="btn btn-secondary" onclick="openRateModal('${currentPR.id}','${currentPR.assigned_vendor_id}')">⭐ Rate Vendor</button>`:''}
         </div>
       </div>
     </div>
@@ -946,7 +946,7 @@ async function openPR(id) {
   // ── PENDING DECLINE APPROVAL ──
   if(currentPR.phase==='pending_decline_approval') {
     actionSection=`<div style="margin-top:14px;padding:16px;background:rgba(245,158,11,0.05);border:1px solid rgba(245,158,11,0.2);border-radius:var(--radius);text-align:center">
-      <div style="font-size:2rem;margin-bottom:8px"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /> <path d="M12 9v4" /> <path d="M12 17h.01" /></svg>️</div>
+      <div style="font-size:2rem;margin-bottom:8px">⚠️</div>
       <div style="font-size:0.95rem;font-weight:700;color:#f59e0b;margin-bottom:4px">Awaiting PM Approval for Decline</div>
       <p style="font-size:0.8rem;color:var(--gray-3);margin:8px 0">Procurement has requested to decline this request. The Project Manager must approve this action.</p>
       ${currentPR.rejection_reason?`<div style="display:inline-block;margin:8px 0;padding:6px 14px;background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.2);border-radius:var(--radius-sm);font-size:0.82rem;font-weight:600;color:#d97706">Reason: ${currentPR.rejection_reason}</div>`:''}
@@ -957,7 +957,7 @@ async function openPR(id) {
   // ── DECLINED ──
   if(currentPR.phase==='declined') {
     actionSection=`<div style="margin-top:14px;padding:16px;background:rgba(214,43,43,0.05);border:1px solid rgba(214,43,43,0.2);border-radius:var(--radius);text-align:center">
-      <div style="font-size:2rem;margin-bottom:8px"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /> <path d="M4.929 4.929 19.07 19.071" /></svg></div>
+      <div style="font-size:2rem;margin-bottom:8px">🚫</div>
       <div style="font-size:0.95rem;font-weight:700;color:var(--red);margin-bottom:4px">Request Declined by Procurement</div>
       ${currentPR.rejection_reason?`<div style="display:inline-block;margin:8px 0;padding:6px 14px;background:rgba(214,43,43,0.08);border:1px solid rgba(214,43,43,0.2);border-radius:var(--radius-sm);font-size:0.82rem;font-weight:600;color:var(--red)">${currentPR.rejection_reason}</div>`:''}
       ${currentPR.pm_final_approval_notes?`<p style="font-size:0.8rem;color:var(--gray-3);margin:6px 0 0">${currentPR.pm_final_approval_notes}</p>`:''}
@@ -970,7 +970,7 @@ async function openPR(id) {
       <div style="font-size:2rem;margin-bottom:8px">✔️</div>
       <div style="font-size:0.95rem;font-weight:700;color:#16a34a;margin-bottom:4px">Order Complete &amp; Closed</div>
       <p style="font-size:0.8rem;color:var(--gray-3);margin:0">This procurement request has been fully processed and payment confirmed.</p>
-      ${currentPR.assigned_vendor_id?`<div style="margin-top:12px"><button class="btn btn-secondary btn-sm" onclick="openRateModal('${currentPR.id}','${currentPR.assigned_vendor_id}')"><svg class="icon-inline" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" /></svg> Rate Vendor</button></div>`:''}
+      ${currentPR.assigned_vendor_id?`<div style="margin-top:12px"><button class="btn btn-secondary btn-sm" onclick="openRateModal('${currentPR.id}','${currentPR.assigned_vendor_id}')">⭐ Rate Vendor</button></div>`:''}
     </div>`;
   }
 
@@ -982,7 +982,7 @@ async function openPR(id) {
     +attachmentsSectionHTML
     +actionSection+
     `<div style="margin-top:22px;border-top:1px solid var(--border);padding-top:16px">
-      <div class="section-title" style="margin-bottom:10px"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719" /></svg> Comments</div>
+      <div class="section-title" style="margin-bottom:10px">💬 Comments</div>
       <div id="commentsList">${renderComments(comments)}</div>
       <div style="display:flex;gap:8px;margin-top:10px">
         <input class="form-control" id="commentInput" placeholder="Add a comment..." style="flex:1" onkeydown="if(event.key==='Enter')addComment()"/>
@@ -1020,10 +1020,10 @@ function showVendorInfoChip(v) {
     <div style="flex:1">
       <div style="font-weight:600;font-size:0.82rem">${v.name}</div>
       <div style="font-size:0.72rem;color:var(--gray-3)">${v.email||''} ${v.phone?'· '+v.phone:''}</div>
-      ${pt?`<div style="font-size:0.72rem;color:#6366f1;margin-top:2px"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2" /> <line x1="2" x2="22" y1="10" y2="10" /></svg> ${pt.label}</div>`:''}
+      ${pt?`<div style="font-size:0.72rem;color:#6366f1;margin-top:2px">💳 ${pt.label}</div>`:''}
     </div>
     <div>${starRating(v.avg_rating,v.rating_count)}</div>
-    <button class="btn btn-ghost btn-sm" onclick="openVendorHistory('${v.id}')"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1" /> <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /> <path d="M12 11h4" /> <path d="M12 16h4" /> <path d="M8 11h.01" /> <path d="M8 16h.01" /></svg> History</button>
+    <button class="btn btn-ghost btn-sm" onclick="openVendorHistory('${v.id}')">📋 History</button>
   </div>`;
 }
 
@@ -1036,7 +1036,7 @@ const DECLINE_REASONS = [
 function buildDeclineSection() {
   // Decline can be done at any stage - no phase restrictions
   return `<div style="margin-top:10px;padding:14px 16px;background:rgba(214,43,43,0.04);border:1px solid rgba(214,43,43,0.18);border-radius:var(--radius)">
-    <div style="font-size:0.82rem;font-weight:700;color:var(--red);margin-bottom:10px;display:flex;align-items:center;gap:6px"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10" /> <path d="M4.929 4.929 19.07 19.071" /></svg> Decline this Request</div>
+    <div style="font-size:0.82rem;font-weight:700;color:var(--red);margin-bottom:10px;display:flex;align-items:center;gap:6px">🚫 Decline this Request</div>
     <div class="form-group" style="margin-bottom:10px">
       <label class="form-label" style="font-size:0.78rem">Reason for Declining *</label>
       <select class="form-control" id="declineReasonSelect" style="font-size:0.82rem">
@@ -1056,7 +1056,7 @@ async function declinePR() {
   const reason = document.getElementById('declineReasonSelect')?.value;
   const notes  = document.getElementById('declineNotesInput')?.value?.trim();
   if(!reason) { showToast('Please select a reason for declining.','error'); return; }
-  if(!await showConfirm(`Submit decline request for PM approval?\n\nReason: ${reason}\n\nThis will notify the Project Manager for approval.`, {title:'Submit Decline Request', confirmLabel:'Submit'})) return;
+  if(!confirm(`Submit decline request for PM approval?\n\nReason: ${reason}\n\nThis will notify the Project Manager for approval.`)) return;
   showLoader(true);
   const { error } = await db.from('procurement_requests').update({
     phase: 'pending_decline_approval',
@@ -1082,7 +1082,7 @@ function buildQuoteFieldsHTML() {
     ${uploadedFiles.map((f,i)=>`
       <div style="border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:10px;background:white">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-          <span>${f.type.includes('pdf')?'<svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" /> <path d="M14 2v5a1 1 0 0 0 1 1h5" /> <path d="M10 9H8" /> <path d="M16 13H8" /> <path d="M16 17H8" /></svg>':'<svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /> <circle cx="9" cy="9" r="2" /> <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></svg>️'}</span>
+          <span>${f.type.includes('pdf')?'📄':'🖼️'}</span>
           <span style="font-weight:600;font-size:0.8rem">${f.name}</span>
         </div>
         <div class="form-grid">
@@ -1134,7 +1134,7 @@ function renderUploadList() {
   const ul=document.getElementById('quoteUploadList');if(!ul)return;
   ul.innerHTML=uploadedFiles.map((f,i)=>`
     <div class="upload-item">
-      <span>${f.type.includes('pdf')?'<svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" /> <path d="M14 2v5a1 1 0 0 0 1 1h5" /> <path d="M10 9H8" /> <path d="M16 13H8" /> <path d="M16 17H8" /></svg>':f.type.includes('image')?'<svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /> <circle cx="9" cy="9" r="2" /> <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></svg>️':'<svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551" /></svg>'}</span>
+      <span>${f.type.includes('pdf')?'📄':f.type.includes('image')?'🖼️':'📎'}</span>
       <span class="upload-item-name">${f.name}</span>
       <button class="btn btn-danger btn-sm" onclick="removeUpload(${i})">✕</button>
     </div>`).join('');
@@ -1191,7 +1191,7 @@ async function shareQuotations() {
     if (!error) {
       const uniqueVendors = [...new Set(vendorNames)];
       await window.postComment(currentPR.id, currentUser?.id,
-        `<svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551" /></svg> ${uploadedFiles.length} quotation${uploadedFiles.length>1?'s':''} from ${uniqueVendors.join(', ')} shared with engineer.`);
+        `📎 ${uploadedFiles.length} quotation${uploadedFiles.length>1?'s':''} from ${uniqueVendors.join(', ')} shared with engineer.`);
     }
     showLoader(false);
     if (error) { showToast('Error: '+error.message,'error'); return; }
@@ -1215,7 +1215,7 @@ async function submitVendorInfo() {
     notifyPhaseChange(currentPR.id,'vendor_info_shared',currentUser?.id);
 
   if (!error) {
-    await window.postComment(currentPR.id, currentUser?.id, '<svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 12h4" /> <path d="M10 8h4" /> <path d="M14 21v-3a2 2 0 0 0-4 0v3" /> <path d="M6 10H4a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-2" /> <path d="M6 21V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v16" /></svg> Vendor information provided to engineer.');
+    await window.postComment(currentPR.id, currentUser?.id, '🏢 Vendor information provided to engineer.');
   }
   showLoader(false);
   if (error) { showToast('Error: '+error.message,'error'); return; }
@@ -1278,7 +1278,7 @@ async function submitAdvanceViaSmartsheet() {
     }).eq('id', currentPR.id);
     notifyPhaseChange(currentPR.id, 'advance_raised_to_accounts', currentUser?.id);
     await window.postComment(currentPR.id, currentUser?.id,
-      `<svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12" /> <path d="m17 8-5-5-5 5" /> <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /></svg> Advance payment of AED ${amt.toLocaleString()} raised via Smartsheet. Payment ID: ${payId}`);
+      `📤 Advance payment of AED ${amt.toLocaleString()} raised via Smartsheet. Payment ID: ${payId}`);
   }
   showLoader(false);
   if (error) { showToast('Error: ' + error.message, 'error'); return; }
@@ -1319,7 +1319,7 @@ async function placeOrder() {
     await window.postComment(
       currentPR.id,
       currentUser.id,
-      `<svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1" /> <circle cx="19" cy="21" r="1" /> <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" /></svg> Order placed with vendor. PO: ${poCheck.po_number}.` + (notes ? ` Notes: ${notes}` : '')
+      `🛒 Order placed with vendor. PO: ${poCheck.po_number}.` + (notes ? ` Notes: ${notes}` : '')
     );
   }
 
@@ -1343,7 +1343,7 @@ async function invokeGRN() {
   }).eq('id',currentPR.id);
   notifyPhaseChange(currentPR.id,'grn_pending',currentUser?.id);
   if (!error) {
-    await window.postComment(currentPR.id, currentUser?.id, '<svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z" /> <path d="M12 22V12" /> <polyline points="3.29 7 12 12 20.71 7" /> <path d="m7.5 4.27 9 5.15" /></svg> Goods received — engineer notified for QC.');
+    await window.postComment(currentPR.id, currentUser?.id, '📦 Goods received — engineer notified for QC.');
   }
   showLoader(false);
   if (error) { showToast('Error: '+error.message,'error'); return; }
@@ -1436,7 +1436,7 @@ async function openPOModal(prId) {
   document.getElementById('poModalBody').innerHTML=`
     <!-- Tax controls strip (outside printable area) -->
     <div style="margin-bottom:12px;padding:9px 12px;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.2);border-radius:6px;font-size:0.78rem;display:flex;align-items:center;flex-wrap:wrap;gap:12px">
-      <span><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" /> <circle cx="12" cy="12" r="3" /></svg>️ Review and edit fields directly in the PO below. Adjust tax rates here:</span>
+      <span>⚙️ Review and edit fields directly in the PO below. Adjust tax rates here:</span>
       <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap">
         <label style="font-size:0.74rem;white-space:nowrap">CGST %</label>
         <input id="cgstInput" type="number" value="${cgstPct}" class="po-tax-input" onchange="recalcPO()"/>
@@ -1726,7 +1726,7 @@ let _attRegistry = [], _previewUrl = null, _previewName = null;
 
 function _registerAtts(arr) { _attRegistry = arr; }
 
-function _attIcon(name) { return (name||'').toLowerCase().includes('.pdf') ? '<svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" /> <path d="M14 2v5a1 1 0 0 0 1 1h5" /> <path d="M10 9H8" /> <path d="M16 13H8" /> <path d="M16 17H8" /></svg>' : '<svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" ry="2" /> <circle cx="9" cy="9" r="2" /> <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" /></svg>️'; }
+function _attIcon(name) { return (name||'').toLowerCase().includes('.pdf') ? '📄' : '🖼️'; }
 
 function _attTypeLabel(t) {
   return {quotation:'Quotation',approval_screenshot:'Approval',grn_doc:'GRN',other:'Document',engineer_upload:'Engineer Upload'}[t] || t || 'doc';
@@ -1737,8 +1737,8 @@ function _buildAttRow(a, i) {
     <span style="font-size:1.1rem;flex-shrink:0">${_attIcon(a.file_name)}</span>
     <span style="font-size:0.78rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500">${a.file_name||'Attachment'}</span>
     <span style="font-size:0.62rem;padding:2px 6px;background:white;border:1px solid var(--border,#e5e7eb);border-radius:3px;color:#6b7280;font-family:monospace;flex-shrink:0">${_attTypeLabel(a.attachment_type)}</span>
-    <button class="btn btn-secondary btn-sm" style="flex-shrink:0" onclick="previewAttByIndex(${i})"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0" /> <circle cx="12" cy="12" r="3" /></svg> Preview</button>
-    <button class="btn btn-secondary btn-sm" style="flex-shrink:0" onclick="downloadAttByIndex(${i})"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15V3" /> <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /> <path d="m7 10 5 5 5-5" /></svg> Download</button>
+    <button class="btn btn-secondary btn-sm" style="flex-shrink:0" onclick="previewAttByIndex(${i})">👁 Preview</button>
+    <button class="btn btn-secondary btn-sm" style="flex-shrink:0" onclick="downloadAttByIndex(${i})">⬇ Download</button>
   </div>`;
 }
 
@@ -1746,7 +1746,7 @@ function _buildAttsSection(atts, title) {
   if (!atts || !atts.length) return '';
   _registerAtts(atts);
   return `<div style="margin-top:16px;padding:14px;background:rgba(99,102,241,0.04);border:1px solid rgba(99,102,241,0.15);border-radius:8px">
-    <div style="color:#6366f1;font-weight:600;font-size:0.82rem;margin-bottom:10px"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551" /></svg> ${title||'Attachments'} (${atts.length})</div>
+    <div style="color:#6366f1;font-weight:600;font-size:0.82rem;margin-bottom:10px">📎 ${title||'Attachments'} (${atts.length})</div>
     <div style="display:flex;flex-direction:column;gap:6px">${atts.map((a,i)=>_buildAttRow(a,i)).join('')}</div>
   </div>`;
 }
@@ -1785,7 +1785,7 @@ function openAttPreview(url, name) {
   } else if (isPDF) {
     content.innerHTML=`<iframe src="${url}" style="width:82vw;height:76vh;border:none" title="${name}"></iframe>`;
   } else {
-    content.innerHTML=`<div style="padding:48px;text-align:center;color:#6b7280"><div style="font-size:3rem;margin-bottom:12px"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" /> <path d="M14 2v5a1 1 0 0 0 1 1h5" /> <path d="M10 9H8" /> <path d="M16 13H8" /> <path d="M16 17H8" /></svg></div><div style="font-size:0.9rem;font-weight:600">${name}</div><div style="font-size:0.78rem;margin-top:8px">Preview not available — please use Download</div></div>`;
+    content.innerHTML=`<div style="padding:48px;text-align:center;color:#6b7280"><div style="font-size:3rem;margin-bottom:12px">📄</div><div style="font-size:0.9rem;font-weight:600">${name}</div><div style="font-size:0.78rem;margin-top:8px">Preview not available — please use Download</div></div>`;
   }
   ov.style.display='flex';
 }
@@ -1866,7 +1866,7 @@ async function confirmGeneratePO() {
     // Step 3: Upload to Supabase Storage (bucket: 'attachments' must exist and be public)
     const{data:uploadData, error:uploadErr} = await db.storage
       .from('attachments')
-      .upload(storagePath, pdfBlob, {contentType:'application/pdf', upsert:true});
+      .upload(storagePath, pdfBlob, {contentType:'application/pdf'});
 
     if(uploadErr){
       console.warn('Storage upload failed:', uploadErr.message, '— falling back to base64 storage');
@@ -1912,8 +1912,8 @@ async function confirmGeneratePO() {
 
   // Step 5: Comment on PR thread
   const commentText = pdfUrl
-    ? `<svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" /> <path d="M14 2v5a1 1 0 0 0 1 1h5" /> <path d="M10 9H8" /> <path d="M16 13H8" /> <path d="M16 17H8" /></svg> Purchase Order ${poNumber} generated. Net Payable: ₹${netPayable.toLocaleString('en-IN')} — [View PO PDF](${pdfUrl})`
-    : `<svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" /> <path d="M14 2v5a1 1 0 0 0 1 1h5" /> <path d="M10 9H8" /> <path d="M16 13H8" /> <path d="M16 17H8" /></svg> Purchase Order ${poNumber} generated. Net Payable: ₹${netPayable.toLocaleString('en-IN')}`;
+    ? `📄 Purchase Order ${poNumber} generated. Net Payable: ₹${netPayable.toLocaleString('en-IN')} — [View PO PDF](${pdfUrl})`
+    : `📄 Purchase Order ${poNumber} generated. Net Payable: ₹${netPayable.toLocaleString('en-IN')}`;
   await window.postComment(currentPR.id, currentUser.id, commentText);
 
   showLoader(false);
@@ -1994,7 +1994,7 @@ async function reRequestAdvance() {
   const{error}=await db.from('advance_payment_requests').insert({pr_id:currentPR.id,amount:amt,notes:note||null,requested_by:currentUser.id,status:'pending'});
   if(!error){
     await db.from('procurement_requests').update({phase:'advance_requested',updated_at:new Date().toISOString(),phase_timestamps:addPhaseTimestamp(currentPR,'advance_requested')}).eq('id',currentPR.id);
-    await window.postComment(currentPR.id,currentUser.id,`<svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12" /> <path d="m17 8-5-5-5 5" /> <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /></svg> New advance request of ₹${amt} submitted to accounts.`);
+    await window.postComment(currentPR.id,currentUser.id,`📤 New advance request of ₹${amt} submitted to accounts.`);
   }
   showLoader(false);
   if(error){showToast('Error: '+error.message,'error');return;}
@@ -2025,7 +2025,7 @@ async function openPaymentRequestModal(prId) {
         <div class="form-group"><label class="form-label">Project Phase</label><input class="form-control" id="prPhaseName" value="${pr.project_phase||''}" readonly/></div>
         <div class="form-group"><label class="form-label">Request Date</label><input class="form-control" id="prReqDate" value="${now}" readonly/></div>
         <div class="form-group">
-          <label class="form-label"><svg class="icon-inline" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15.914 4a1.5 1.5 0 00-2.474-1.561l-9 9A1.5 1.5 0 005.5 14h4.002a.5.5 0 01.471.666L8.086 20a1.5 1.5 0 002.475 1.56l9-9A1.5 1.5 0 0018.5 10h-3.997a.5.5 0 01-.472-.667z" /></svg> Urgency</label>
+          <label class="form-label">⚡ Urgency</label>
           <select class="form-control" id="prUrgency">
             <option value="normal">Normal</option>
             <option value="urgent">Urgent</option>
@@ -2037,7 +2037,7 @@ async function openPaymentRequestModal(prId) {
         <div class="detail-key" style="margin-bottom:6px">Vendor</div>
         <div style="font-weight:600">${vendor?.name||'—'}</div>
         <div style="font-size:0.76rem;color:var(--gray-3)">${vendor?.email||''} ${vendor?.phone?'· '+vendor.phone:''}</div>
-        ${pt?`<div style="font-size:0.76rem;color:#6366f1;margin-top:3px"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2" /> <line x1="2" x2="22" y1="10" y2="10" /></svg> ${pt.label}</div>`:''}
+        ${pt?`<div style="font-size:0.76rem;color:#6366f1;margin-top:3px">💳 ${pt.label}</div>`:''}
         ${vendor?.custom_payment_terms?`<div style="font-size:0.72rem;color:var(--gray-3)">${vendor.custom_payment_terms}</div>`:''}
       </div>
       ${(pr.parts||[]).length?`
@@ -2082,7 +2082,7 @@ async function openPaymentRequestModal(prId) {
         </div>
         <!-- Smartsheet Payment Fields -->
         <div class="form-group full" style="margin-top:8px;padding:14px;background:rgba(99,102,241,0.04);border:1px solid rgba(99,102,241,0.2);border-radius:var(--radius-sm)">
-          <div style="font-size:0.8rem;font-weight:700;color:#4f46e5;margin-bottom:10px"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="4" x="8" y="2" rx="1" ry="1" /> <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" /> <path d="M12 11h4" /> <path d="M12 16h4" /> <path d="M8 11h.01" /> <path d="M8 16h.01" /></svg> Smartsheet Payment — Required</div>
+          <div style="font-size:0.8rem;font-weight:700;color:#4f46e5;margin-bottom:10px">📋 Smartsheet Payment — Required</div>
           <div class="form-grid">
             <div class="form-group">
               <label class="form-label">Smartsheet Payment ID *</label>
@@ -2093,16 +2093,16 @@ async function openPaymentRequestModal(prId) {
             <label class="form-label">Smartsheet Screenshot *</label>
             <div class="drop-zone" style="min-height:60px;cursor:pointer" onclick="document.getElementById('prSmartsheetFile').click()">
               <input type="file" id="prSmartsheetFile" accept=".png,.jpg,.jpeg,.pdf" style="display:none" onchange="previewPayScreenshot(this)"/>
-              <div class="drop-zone-label" id="prScreenshotLabel"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551" /></svg> Click to upload Smartsheet screenshot</div>
+              <div class="drop-zone-label" id="prScreenshotLabel">📎 Click to upload Smartsheet screenshot</div>
               <div class="drop-zone-hint">PNG, JPG or PDF — max 5MB</div>
             </div>
             <div id="prScreenshotPreview" style="display:none;margin-top:8px"></div>
           </div>
         </div>
         <div class="form-group full" style="margin-top:4px">
-          <label class="form-label"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 6-8.414 8.586a2 2 0 0 0 2.829 2.829l8.414-8.586a4 4 0 1 0-5.657-5.657l-8.379 8.551a6 6 0 1 0 8.485 8.485l8.379-8.551" /></svg> Attach Documents (Invoice, Delivery Note, etc.)</label>
+          <label class="form-label">📎 Attach Documents (Invoice, Delivery Note, etc.)</label>
           <div style="border:2px dashed var(--border);border-radius:var(--radius);padding:14px 16px;text-align:center;cursor:pointer;transition:border-color .15s" onclick="document.getElementById('prAttachInput').click()" onmouseenter="this.style.borderColor='#6366f1'" onmouseleave="this.style.borderColor=''">
-            <div style="font-size:1.4rem;margin-bottom:4px"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" /></svg></div>
+            <div style="font-size:1.4rem;margin-bottom:4px">📁</div>
             <div style="font-size:0.82rem;color:var(--gray-3)">Click to upload · PNG, JPG, PDF · Max 5 MB each</div>
             <input type="file" id="prAttachInput" accept=".png,.jpg,.jpeg,.pdf" multiple style="display:none" onchange="handlePRAttachFiles(event)"/>
           </div>
@@ -2147,7 +2147,7 @@ async function submitPaymentRequest() {
     }).eq('id', currentPR.id);
     notifyPhaseChange(currentPR.id, 'payment_raised_to_accounts', currentUser?.id);
     await window.postComment(currentPR.id, currentUser.id,
-      `<svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12" /> <path d="M6 8h12" /> <path d="m6 13 8.5 8" /> <path d="M6 13h3" /> <path d="M9 13c6.667 0 6.667-10 0-10" /></svg> Full payment of ${invCur} ${invAmt.toLocaleString()} raised to accounts via Smartsheet. Payment ID: ${ssPayId}`);
+      `💰 Full payment of ${invCur} ${invAmt.toLocaleString()} raised to accounts via Smartsheet. Payment ID: ${ssPayId}`);
     if (paymentRequestFiles.length) {
       for (const f of paymentRequestFiles) {
         await db.from('pr_attachments').insert({
@@ -2179,7 +2179,7 @@ function previewAdvScreenshot(input) {
   const preview = document.getElementById('advScreenshotPreview');
   if (!input.files?.length) return;
   const file = input.files[0];
-  if (label) label.textContent = '<svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" /> <path d="m9 12 2 2 4-4" /></svg> ' + file.name;
+  if (label) label.textContent = '✅ ' + file.name;
   if (preview) {
     if (file.type.startsWith('image/')) {
       const reader = new FileReader();
@@ -2190,7 +2190,7 @@ function previewAdvScreenshot(input) {
       reader.readAsDataURL(file);
     } else {
       preview.style.display = 'block';
-      preview.innerHTML = `<div style="font-size:0.76rem;color:#6366f1"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" /> <path d="M14 2v5a1 1 0 0 0 1 1h5" /> <path d="M10 9H8" /> <path d="M16 13H8" /> <path d="M16 17H8" /></svg> ${file.name}</div>`;
+      preview.innerHTML = `<div style="font-size:0.76rem;color:#6366f1">📄 ${file.name}</div>`;
     }
   }
 }
@@ -2200,7 +2200,7 @@ function previewPayScreenshot(input) {
   const preview = document.getElementById('prScreenshotPreview');
   if (!input.files?.length) return;
   const file = input.files[0];
-  if (label) label.textContent = '<svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" /> <path d="m9 12 2 2 4-4" /></svg> ' + file.name;
+  if (label) label.textContent = '✅ ' + file.name;
   if (preview) {
     if (file.type.startsWith('image/')) {
       const reader = new FileReader();
@@ -2211,7 +2211,7 @@ function previewPayScreenshot(input) {
       reader.readAsDataURL(file);
     } else {
       preview.style.display = 'block';
-      preview.innerHTML = `<div style="font-size:0.76rem;color:#6366f1"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" /> <path d="M14 2v5a1 1 0 0 0 1 1h5" /> <path d="M10 9H8" /> <path d="M16 13H8" /> <path d="M16 17H8" /></svg> ${file.name}</div>`;
+      preview.innerHTML = `<div style="font-size:0.76rem;color:#6366f1">📄 ${file.name}</div>`;
     }
   }
 }
@@ -2222,7 +2222,7 @@ function previewGenericScreenshot(input, labelId, previewId) {
   const preview = document.getElementById(previewId);
   if (!input.files?.length) return;
   const file = input.files[0];
-  if (label) label.textContent = '<svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" /> <path d="m9 12 2 2 4-4" /></svg> ' + file.name;
+  if (label) label.textContent = '✅ ' + file.name;
   if (preview) {
     if (file.type.startsWith('image/')) {
       const reader = new FileReader();
@@ -2233,7 +2233,7 @@ function previewGenericScreenshot(input, labelId, previewId) {
       reader.readAsDataURL(file);
     } else {
       preview.style.display = 'block';
-      preview.innerHTML = `<div style="font-size:0.76rem;color:#6366f1;padding:6px 8px;background:rgba(99,102,241,0.06);border-radius:4px"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" /> <path d="M14 2v5a1 1 0 0 0 1 1h5" /> <path d="M10 9H8" /> <path d="M16 13H8" /> <path d="M16 17H8" /></svg> ${file.name}</div>`;
+      preview.innerHTML = `<div style="font-size:0.76rem;color:#6366f1;padding:6px 8px;background:rgba(99,102,241,0.06);border-radius:4px">📄 ${file.name}</div>`;
     }
   }
 }
@@ -2267,11 +2267,11 @@ async function markAdvanceReceived(prId, advId) {
   if (!error) {
     notifyPhaseChange(prId, 'advance_payment_received', currentUser?.id);
     await window.postComment(prId, currentUser.id,
-      `<svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2" /> <line x1="2" x2="22" y1="10" y2="10" /></svg> Advance payment confirmed received.${note ? ' ' + note : ''}`);
+      `💳 Advance payment confirmed received.${note ? ' ' + note : ''}`);
   }
   showLoader(false);
   if (error) { showToast('Error: ' + error.message, 'error'); return; }
-  showToast('<svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" /> <path d="m9 12 2 2 4-4" /></svg> Advance payment marked as received!', 'success');
+  showToast('✅ Advance payment marked as received!', 'success');
   closeModal('prModal'); await loadRequests();
 }
 
@@ -2307,11 +2307,11 @@ async function markFullPaymentReceived(prId, payId) {
     notifyPhaseChange(prId, 'payment_received', currentUser?.id);
     notifyPhaseChange(prId, 'accepted', currentUser?.id);
     await window.postComment(prId, currentUser.id,
-      `<svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" /> <path d="m9 12 2 2 4-4" /></svg> Full payment confirmed received. PR closed.${note ? ' ' + note : ''}`);
+      `✅ Full payment confirmed received. PR closed.${note ? ' ' + note : ''}`);
   }
   showLoader(false);
   if (error) { showToast('Error: ' + error.message, 'error'); return; }
-  showToast('<svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" /> <path d="m9 12 2 2 4-4" /></svg> Payment received — PR closed!', 'success');
+  showToast('✅ Payment received — PR closed!', 'success');
   closeModal('prModal'); await loadRequests();
 }
 
@@ -2385,7 +2385,7 @@ function buildAdvanceRejectedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, 
     ${selectedQ ? `<div style="margin-bottom:14px;padding:9px 12px;background:var(--off-white);border:1px solid var(--border);border-radius:var(--radius-sm)">
       <div class="detail-key" style="margin-bottom:3px">Selected Quote</div>
       <div style="font-weight:600;font-size:0.88rem">${selectedQ.vendor_name || vendorObj?.name || '—'} — ${selectedQ.currency || 'INR'} ${Number(selectedQ.amount || 0).toLocaleString()}</div>
-      ${pt ? `<div style="font-size:0.72rem;color:#6366f1;margin-top:2px"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2" /> <line x1="2" x2="22" y1="10" y2="10" /></svg> ${pt.label}</div>` : ''}
+      ${pt ? `<div style="font-size:0.72rem;color:#6366f1;margin-top:2px">💳 ${pt.label}</div>` : ''}
     </div>` : ''}
 
     <!-- PO info -->
@@ -2395,18 +2395,18 @@ function buildAdvanceRejectedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, 
       ${hasPO
         ? `<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
              <div>
-               <div style="font-size:0.78rem;font-weight:700;color:#16a34a"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" /> <path d="M14 2v5a1 1 0 0 0 1 1h5" /> <path d="M10 9H8" /> <path d="M16 13H8" /> <path d="M16 17H8" /></svg> PO Already Generated</div>
+               <div style="font-size:0.78rem;font-weight:700;color:#16a34a">📄 PO Already Generated</div>
                <div style="font-family:var(--font-mono);font-size:0.82rem;font-weight:700">${existingPO.po_number}</div>
              </div>
              <div style="text-align:right;font-size:0.72rem;color:var(--gray-3)">${existingPO.currency || 'INR'} ${Number(existingPO.total_amount || 0).toLocaleString()}</div>
            </div>`
-        : `<div style="font-size:0.78rem;color:#b45309;font-weight:600"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /> <path d="M12 9v4" /> <path d="M12 17h.01" /></svg> No PO found — generate before placing order</div>
-           <div style="margin-top:8px"><button class="btn btn-secondary btn-sm" onclick="openPOModal('${id}')"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" /> <path d="M14 2v5a1 1 0 0 0 1 1h5" /> <path d="M10 9H8" /> <path d="M16 13H8" /> <path d="M16 17H8" /></svg> Generate PO</button></div>`
+        : `<div style="font-size:0.78rem;color:#b45309;font-weight:600">⚠ No PO found — generate before placing order</div>
+           <div style="margin-top:8px"><button class="btn btn-secondary btn-sm" onclick="openPOModal('${id}')">📄 Generate PO</button></div>`
       }
     </div>
 
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
-      <button class="btn btn-primary btn-sm" onclick="reRequestAdvance()"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12" /> <path d="m17 8-5-5-5 5" /> <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /></svg> Request Advance Again</button>
+      <button class="btn btn-primary btn-sm" onclick="reRequestAdvance()">📤 Request Advance Again</button>
     </div>
     <div class="form-group" style="margin-bottom:12px">
       <label class="form-label">Order Notes</label>
@@ -2419,16 +2419,16 @@ function buildAdvanceRejectedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, 
 function buildAdvanceApprovedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, advRec, existingPO) {
   const hasPO = !!existingPO;
   return `<div class="action-section" style="border:1px solid rgba(22,163,74,0.25);background:rgba(22,163,74,0.04);border-radius:var(--radius);padding:14px">
-    <div class="action-section-title" style="color:#16a34a"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" /> <path d="m9 12 2 2 4-4" /></svg> Advance Approved — Ready to Place Order</div>
+    <div class="action-section-title" style="color:#16a34a">✅ Advance Approved — Ready to Place Order</div>
 
     ${selectedQ ? `<div style="margin:10px 0;padding:9px 12px;background:var(--off-white);border:1px solid var(--border);border-radius:var(--radius-sm)">
       <div class="detail-key" style="margin-bottom:3px">Selected Quote</div>
       <div style="font-weight:600;font-size:0.88rem">${selectedQ.vendor_name || vendorObj?.name || '—'} — ${selectedQ.currency || 'INR'} ${Number(selectedQ.amount || 0).toLocaleString()}</div>
-      ${pt ? `<div style="font-size:0.72rem;color:#6366f1;margin-top:2px"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2" /> <line x1="2" x2="22" y1="10" y2="10" /></svg> ${pt.label}</div>` : ''}
+      ${pt ? `<div style="font-size:0.72rem;color:#6366f1;margin-top:2px">💳 ${pt.label}</div>` : ''}
     </div>` : ''}
 
     ${advRec ? `<div style="margin-bottom:14px;padding:9px 12px;background:rgba(22,163,74,0.08);border:1px solid rgba(22,163,74,0.2);border-radius:var(--radius-sm);font-family:var(--font-mono);font-size:0.88rem;color:#16a34a">
-      <svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2" /> <path d="m9 12 2 2 4-4" /></svg> Advance of AED ${Number(advRec.amount || 0).toLocaleString()} approved by accounts
+      ✅ Advance of AED ${Number(advRec.amount || 0).toLocaleString()} approved by accounts
     </div>` : ''}
 
     <!-- PO info (already generated) -->
@@ -2438,13 +2438,13 @@ function buildAdvanceApprovedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, 
       ${hasPO
         ? `<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
              <div>
-               <div style="font-size:0.78rem;font-weight:700;color:#16a34a"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" /> <path d="M14 2v5a1 1 0 0 0 1 1h5" /> <path d="M10 9H8" /> <path d="M16 13H8" /> <path d="M16 17H8" /></svg> Purchase Order Already Generated</div>
+               <div style="font-size:0.78rem;font-weight:700;color:#16a34a">📄 Purchase Order Already Generated</div>
                <div style="font-family:var(--font-mono);font-size:0.82rem;font-weight:700">${existingPO.po_number}</div>
              </div>
              <div style="text-align:right;font-size:0.72rem;color:var(--gray-3)">${existingPO.currency || 'INR'} ${Number(existingPO.total_amount || 0).toLocaleString()}<br/>${fmtDate(existingPO.po_date || existingPO.created_at)}</div>
            </div>`
-        : `<div style="font-size:0.78rem;color:#b45309;font-weight:600"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /> <path d="M12 9v4" /> <path d="M12 17h.01" /></svg> No PO found — generate PO before placing order</div>
-           <div style="margin-top:8px"><button class="btn btn-secondary btn-sm" onclick="openPOModal('${id}')"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z" /> <path d="M14 2v5a1 1 0 0 0 1 1h5" /> <path d="M10 9H8" /> <path d="M16 13H8" /> <path d="M16 17H8" /></svg> Generate PO Now</button></div>`
+        : `<div style="font-size:0.78rem;color:#b45309;font-weight:600">⚠ No PO found — generate PO before placing order</div>
+           <div style="margin-top:8px"><button class="btn btn-secondary btn-sm" onclick="openPOModal('${id}')">📄 Generate PO Now</button></div>`
       }
     </div>
 
@@ -2485,13 +2485,13 @@ function buildApprovedPhaseHTML(currentPR, id, selectedQ, vendorObj, pt, existin
   const hasPO = !!existingPO;
 
   return `<div class="action-section">
-    <div class="action-section-title"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1" /> <circle cx="19" cy="21" r="1" /> <path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" /></svg> Place Order <span class="action-badge">ACTION REQUIRED</span></div>
+    <div class="action-section-title">🛒 Place Order <span class="action-badge">ACTION REQUIRED</span></div>
     <p style="font-size:0.82rem;color:var(--gray-3);margin-bottom:12px">Generate the PO, confirm the order, then optionally raise an advance via Smartsheet.</p>
 
     ${selectedQ ? `<div style="margin-bottom:14px;padding:10px 12px;background:var(--off-white);border:1px solid var(--border);border-radius:var(--radius-sm)">
       <div class="detail-key" style="margin-bottom:4px">Selected Quote</div>
       <div style="font-weight:600">${selectedQ.vendor_name || vendorObj?.name || '—'} — ${currency} ${Number(selectedQ.amount || 0).toLocaleString()}</div>
-      ${pt ? `<div style="font-size:0.72rem;color:#6366f1;margin-top:3px"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2" /> <line x1="2" x2="22" y1="10" y2="10" /></svg> Payment Terms: ${pt.label}</div>` : ''}
+      ${pt ? `<div style="font-size:0.72rem;color:#6366f1;margin-top:3px">💳 Payment Terms: ${pt.label}</div>` : ''}
     </div>` : ''}
 
     <!-- STEP 1: PO -->
@@ -2572,14 +2572,14 @@ function renderEtaBadge(etaDate, phase) {
     'advance_requested','advance_raised_to_accounts','advance_approved','advance_rejected',
     'advance_payment_received','order_placed','grn_pending','qc_passed','payment_requested','payment_raised_to_accounts'];
   if (!activePhases.includes(phase)) return '<span style="color:var(--gray-5);font-size:0.72rem">—</span>';
-  if (!etaDate) return `<span class="eta-badge eta-none"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v3" /> <path d="M16 2v3" /> <rect x="3" y="3" width="18" height="18" rx="2" /> <path d="M3 9h18" /></svg> Not set</span>`;
+  if (!etaDate) return `<span class="eta-badge eta-none">📅 Not set</span>`;
   const today = new Date(); today.setHours(0,0,0,0);
   const eta = new Date(etaDate); eta.setHours(0,0,0,0);
   const diff = Math.round((eta - today) / 86400000);
   const fmt = eta.toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
-  if (diff < 0) return `<span class="eta-badge eta-overdue"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /> <path d="M12 9v4" /> <path d="M12 17h.01" /></svg> ${fmt} overdue</span>`;
+  if (diff < 0) return `<span class="eta-badge eta-overdue">⚠ ${fmt} overdue</span>`;
   if (diff <= 2) return `<span class="eta-badge eta-soon">⏰ ${fmt}</span>`;
-  return `<span class="eta-badge eta-ok"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v3" /> <path d="M16 2v3" /> <rect x="3" y="3" width="18" height="18" rx="2" /> <path d="M3 9h18" /></svg> ${fmt}</span>`;
+  return `<span class="eta-badge eta-ok">📅 ${fmt}</span>`;
 }
 
 function renderEtaInDetail(pr) {
@@ -2588,8 +2588,8 @@ function renderEtaInDetail(pr) {
   const eta = new Date(pr.quote_eta); eta.setHours(0,0,0,0);
   const diff = Math.round((eta - today) / 86400000);
   const fmt = eta.toLocaleDateString('en-GB',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
-  let color='#16a34a', bg='rgba(34,197,94,0.08)', border='rgba(34,197,94,0.25)', icon='<svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v3" /> <path d="M16 2v3" /> <rect x="3" y="3" width="18" height="18" rx="2" /> <path d="M3 9h18" /></svg>';
-  if (diff < 0) { color='#dc2626'; bg='rgba(214,43,43,0.08)'; border='rgba(214,43,43,0.3)'; icon='<svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /> <path d="M12 9v4" /> <path d="M12 17h.01" /></svg>️'; }
+  let color='#16a34a', bg='rgba(34,197,94,0.08)', border='rgba(34,197,94,0.25)', icon='📅';
+  if (diff < 0) { color='#dc2626'; bg='rgba(214,43,43,0.08)'; border='rgba(214,43,43,0.3)'; icon='⚠️'; }
   else if (diff <= 2) { color='#b45309'; bg='rgba(245,158,11,0.08)'; border='rgba(245,158,11,0.3)'; icon='⏰'; }
   const label = diff < 0 ? `${Math.abs(diff)} day${Math.abs(diff)>1?'s':''} overdue` : diff === 0 ? 'Due today' : `${diff} day${diff>1?'s':''} remaining`;
   return `<div style="margin:14px 0;padding:12px 16px;background:${bg};border:2px solid ${border};border-radius:var(--radius);display:flex;align-items:center;gap:12px">
@@ -2599,7 +2599,7 @@ function renderEtaInDetail(pr) {
       <div style="font-size:0.95rem;font-weight:800;font-family:var(--font-mono);color:${color}">${fmt}</div>
       <div style="font-size:0.72rem;color:${color};opacity:0.8;margin-top:2px">${label}</div>
     </div>
-    <div style="font-size:0.68rem;color:var(--gray-4);background:white;padding:3px 8px;border-radius:20px;border:1px solid var(--border)"><svg class="icon-inline" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /> <path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg> Locked</div>
+    <div style="font-size:0.68rem;color:var(--gray-4);background:white;padding:3px 8px;border-radius:20px;border:1px solid var(--border)">🔒 Locked</div>
   </div>`;
 }
 
