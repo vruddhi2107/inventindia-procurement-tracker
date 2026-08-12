@@ -954,17 +954,25 @@ async function resolveMentionedUsers(text, actorId) {
 async function sendMentionNotifications(prId, actorId, commentText, targets) {
   try {
     if (!targets?.length) return;
-    const actor = (await _loadAllUsers()).find(u => u.id === actorId);
-    const actorName = actor?.name || 'Someone';
-    const snippet = commentText.trim().length > 140 ? commentText.trim().slice(0, 140) + '…' : commentText.trim();
-    const rows = targets.map(u => ({
-      user_id: u.id,
-      pr_id: prId,
-      message: `${actorName} mentioned you: "${snippet}"`,
-      is_read: false
-    }));
-    const { error } = await db.from('notifications').insert(rows);
-    if (error) console.error('notify-mention insert failed:', error.message || error);
+    const mentionedUserIds = targets.map(u => u.id);
+
+    // Delegate to edge function — it handles both DB notification insert AND email.
+    // NOTE: supabase-js functions.invoke() resolves with {data, error} on a
+    // non-2xx response, it does NOT throw — so the error must be checked
+    // explicitly or failures (and missing notification rows) go unnoticed.
+    const { data, error } = await db.functions.invoke('notify-mention', {
+      body: {
+        pr_id:               prId,
+        actor_id:            actorId,
+        comment_text:        commentText,
+        mentioned_user_ids:  mentionedUserIds,
+      },
+    });
+    if (error) {
+      console.error('notify-mention failed:', error.message || error, error.context || '');
+    } else {
+      console.log('notify-mention ok:', data);
+    }
   } catch(e) {
     // Non-blocking — log but don't surface to user
     console.warn('Mention notification failed (non-blocking):', e?.message || e);
