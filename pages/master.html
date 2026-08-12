@@ -17,6 +17,7 @@
       <div><h1 class="page-title">Master <span>Dashboard</span></h1>
         <p class="page-sub">Full system oversight — all requests, users, vendors, and analytics</p></div>
       <div style="display:flex;gap:10px">
+        <button class="btn btn-secondary" onclick="openBroadcastModal()">📢 Notify All</button>
         <button class="btn btn-secondary" onclick="exportCSV()">⬇ Export CSV</button>
         <button class="btn btn-primary" onclick="openAddUser()">+ Add User</button>
       </div>
@@ -228,6 +229,53 @@
 <script>
 let currentUser, allRequests=[], allUsers=[], allVendors=[], activeTab='requests', editingUserId=null, viewingPRId=null;
 
+// ── BROADCAST ANNOUNCEMENT (Master only) ──────────────────────
+// Sends a system-wide notification to every user's bell — for
+// announcing new features, downtime, policy changes, etc.
+function openBroadcastModal() {
+  let ov = document.getElementById('_broadcastModal');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = '_broadcastModal';
+    ov.className = 'modal-overlay';
+    ov.onclick = e => { if(e.target===ov) ov.classList.remove('active'); };
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML = `<div class="modal" style="max-width:460px">
+    <div class="modal-header">
+      <div><div class="modal-title">📢 Notify All Users</div><div class="modal-title-sub">Sends a bell notification to every user in the system</div></div>
+      <button class="modal-close" onclick="document.getElementById('_broadcastModal').classList.remove('active')">✕</button>
+    </div>
+    <div class="modal-body">
+      <label class="form-label" style="margin-bottom:6px;display:block">Message</label>
+      <textarea class="form-control" id="broadcastMsgInput" rows="4" placeholder="e.g. New: you can now @mention teammates in comments — they'll get a bell notification." style="width:100%;resize:vertical"></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="document.getElementById('_broadcastModal').classList.remove('active')">Cancel</button>
+      <button class="btn btn-primary" onclick="sendBroadcastMsg()">Send to All Users</button>
+    </div>
+  </div>`;
+  ov.classList.add('active');
+  setTimeout(()=>document.getElementById('broadcastMsgInput')?.focus(), 50);
+}
+
+async function sendBroadcastMsg() {
+  const input = document.getElementById('broadcastMsgInput');
+  const text = input?.value.trim();
+  if (!text) { showToast('Enter a message first', 'error'); return; }
+  if (!confirm('Send this notification to every user? This cannot be undone.')) return;
+  showLoader(true);
+  try {
+    const { count } = await window.broadcastNotification(text);
+    showLoader(false);
+    document.getElementById('_broadcastModal').classList.remove('active');
+    showToast(`📢 Notified ${count} user${count===1?'':'s'}`, 'success');
+  } catch(e) {
+    showLoader(false);
+    showToast('Broadcast failed: ' + (e?.message || e), 'error');
+  }
+}
+
 function handleAttachmentDownload(e, url, fileName) {
   if (!url) return;
   if (url.startsWith('data:')) {
@@ -253,6 +301,7 @@ async function init() {
   showLoader(true);
   await Promise.all([loadRequests(), loadUsers(), loadVendors()]);
   showLoader(false);
+  window.initNotifBell && window.initNotifBell(currentUser, function(prId){ viewPR(prId); });
 }
 
 async function loadRequests() {
