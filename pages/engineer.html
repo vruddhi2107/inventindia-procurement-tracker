@@ -83,7 +83,7 @@
     <div class="card">
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>PR #</th><th>Project</th><th>Type</th><th>Phase</th><th>PM</th><th>Quote ETA</th><th>Updated</th><th></th></tr></thead>
+          <thead><tr><th>PR #</th><th>Project</th><th>Type</th><th>Phase</th><th>PM</th><th>Quote ETA</th><th style="cursor:pointer;user-select:none" onclick="sortRowsBy(currentTableRows,'__leadtime__',renderTable,this)" title="Click to sort">Lead Time ⇅</th><th></th></tr></thead>
           <tbody id="requestsBody"></tbody>
         </table>
       </div>
@@ -323,8 +323,10 @@
 <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="../js/supabase-config.js"></script>
 <script src="../js/shared.js"></script>
+<script src="../js/po-groups.js"></script>
+<script>window.PO_GROUP_PAGE_ROLE="engineer";</script>
 <script>
-let currentUser, myRequests=[], prQuotations=[], allPMs=[], allProjects=[];
+let currentUser, myRequests=[], prQuotations=[], allPMs=[], allProjects=[], currentTableRows=[];
 function addPhaseTimestamp(pr, phaseName) {
   var existing = (pr && pr.phase_timestamps) ? pr.phase_timestamps : {};
   var ts = Object.assign({}, existing);
@@ -376,6 +378,7 @@ async function init() {
 
 async function loadRequests() {
   myRequests = await dbFetch(() => db.from('procurement_requests').select(PR_LIST_COLUMNS + ', users!procurement_requests_assigned_pm_id_fkey(name)').eq('created_by',currentUser.id).order('updated_at',{ascending:false}), 'requests');
+  if (window.stampPartLevelActionFlags) await stampPartLevelActionFlags(myRequests, 'engineer');
   updateStats(); renderBanner(); filterTable();
 }
 
@@ -413,13 +416,13 @@ function onProjectChange() {
 function updateStats() {
   const closed=['qc_passed','accepted','rejected','payment_requested'], action=['quotations_shared','grn_pending','vendor_info_shared'];
   document.getElementById('sTotal').textContent=myRequests.length;
-  document.getElementById('sActive').textContent=myRequests.filter(r=>!closed.includes(r.phase)).length;
-  document.getElementById('sAction').textContent=myRequests.filter(r=>action.includes(r.phase)).length;
-  document.getElementById('sClosed').textContent=myRequests.filter(r=>closed.includes(r.phase)).length;
+  document.getElementById('sActive').textContent=myRequests.filter(r=>!closed.includes(r.phase)&&r.rollup_status!=='closed').length;
+  document.getElementById('sAction').textContent=myRequests.filter(r=>action.includes(r.phase)||r._hasPartLevelAction).length;
+  document.getElementById('sClosed').textContent=myRequests.filter(r=>closed.includes(r.phase)||r.rollup_status==='closed').length;
 }
 
 function renderBanner() {
-  const items=myRequests.filter(r=>['quotations_shared','grn_pending','vendor_info_shared'].includes(r.phase));
+  const items=myRequests.filter(r=>['quotations_shared','grn_pending','vendor_info_shared'].includes(r.phase)||r._hasPartLevelAction);
   const b=document.getElementById('actionBanner');
   if(!items.length){b.style.display='none';return;}
   b.style.display='block';
@@ -446,18 +449,19 @@ function filterTable() {
   const s=document.getElementById('searchInput').value.toLowerCase(), ph=document.getElementById('filterPhase').value;
   const closed=['qc_passed','accepted','rejected','payment_requested'], action=['quotations_shared','grn_pending','vendor_info_shared'];
   let reqs=myRequests;
-  if(activeTab==='action') reqs=reqs.filter(r=>action.includes(r.phase));
-  if(activeTab==='closed') reqs=reqs.filter(r=>closed.includes(r.phase));
+  if(activeTab==='action') reqs=reqs.filter(r=>action.includes(r.phase)||r._hasPartLevelAction);
+  if(activeTab==='closed') reqs=reqs.filter(r=>closed.includes(r.phase)||r.rollup_status==='closed');
   if(s) reqs=reqs.filter(r=>r.project_name.toLowerCase().includes(s)||String(r.request_number).includes(s));
   if(ph) reqs=reqs.filter(r=>r.phase===ph);
   renderTable(reqs);
 }
 
 function renderTable(reqs) {
+  currentTableRows = reqs;
   const tbody=document.getElementById('requestsBody');
   if(!reqs.length){tbody.innerHTML=`<tr><td colspan="8"><div class="empty-state"><div class="empty-state-icon">📭</div><h3>${activeTab==='action'?'All caught up!':'No requests found'}</h3><p>${activeTab==='action'?'No actions needed right now.':'Submit a new request to get started.'}</p></div></td></tr>`;return;}
   tbody.innerHTML=reqs.map(r=>{
-    const needsAction=['quotations_shared','grn_pending','vendor_info_shared'].includes(r.phase);
+    const needsAction=['quotations_shared','grn_pending','vendor_info_shared'].includes(r.phase)||r._hasPartLevelAction;
     const pmName=r.users?.name||r.project_manager_name||'—';
     return `<tr style="${needsAction?'background:rgba(214,43,43,0.025)':''}">
       <td>
@@ -466,16 +470,17 @@ function renderTable(reqs) {
       </td>
       <td><div style="font-weight:600;font-size:0.82rem">${r.project_name}</div><div style="font-size:0.72rem;color:var(--gray-4)">${r.project_phase}</div></td>
       <td><span style="font-size:0.72rem;background:var(--off-white);border:1px solid var(--border);padding:1px 7px;border-radius:3px">${r.request_category==='vendor_info'?'Vendor Info':'RFQ'}</span></td>
-      <td>${getPhaseBadge(r.phase)}</td>
+      <td id="phase-cell-${r.id}">${getPhaseBadge(r.phase)}</td>
       <td style="font-size:0.78rem;color:var(--gray-3)">${pmName}</td>
       <td>${renderEngineerEtaBadge(r.quote_eta, r.phase)}</td>
-      <td style="font-family:var(--font-mono);font-size:0.72rem;color:var(--gray-4)">${fmtDate(r.updated_at||r.created_at)}</td>
+      <td id="leadtime-cell-${r.id}" style="font-family:var(--font-mono);font-size:0.72rem;color:var(--gray-4)">${fmtDate(r.updated_at||r.created_at)}</td>
       <td style="white-space:nowrap">
         <button class="btn ${needsAction?'btn-primary':'btn-ghost'} btn-sm" onclick='openPR("${r.id}")'>${needsAction?'Action':'View'}</button>
         ${['submitted','pending_initial_pm_approval'].includes(r.phase)?`<button class="btn btn-ghost btn-sm" onclick='openEditPR("${r.id}")' style="margin-left:4px">Edit</button>`:''}
       </td>
     </tr>`;
   }).join('');
+  if (window.decoratePartLevelListRows) decoratePartLevelListRows(reqs);
 }
 
 function renderEngineerEtaBadge(etaDate, phase) {
@@ -729,6 +734,9 @@ async function submitPR() {
 // ── PR DETAIL ─────────────────────────────────────────────────
 async function openPR(id) {
   currentPR=myRequests.find(r=>r.id===id); if(!currentPR) return;
+  // New part/PO-group model requests render via js/po-groups.js instead —
+  // the legacy logic below is untouched for is_legacy requests.
+  if (currentPR.is_legacy === false) { return await openPRNewModel(id); }
   selectedQuotationId=currentPR.selected_quotation_id;
   screenshotBase64=null; selectedApprovalPath=null;
   document.getElementById('prModalTitle').textContent=`PR-${String(currentPR.request_number).padStart(4,'0')} — ${currentPR.project_name}`;

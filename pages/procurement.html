@@ -265,7 +265,7 @@
     <div class="card">
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>PR #</th><th>Project</th><th>Type</th><th>Phase</th><th>PM</th><th>Engineer</th><th>Lead Time</th><th>Quote ETA</th><th>Updated</th><th></th></tr></thead>
+          <thead><tr><th>PR #</th><th>Project</th><th>Type</th><th>Phase</th><th>PM</th><th>Engineer</th><th style="cursor:pointer;user-select:none" onclick="sortRowsBy(currentTableRows,'__leadtime__',renderTable,this)" title="Click to sort">Lead Time ⇅</th><th>Quote ETA</th><th style="cursor:pointer;user-select:none" onclick="sortRowsBy(currentTableRows,'updated_at',renderTable,this)" title="Click to sort">Updated ⇅</th><th></th></tr></thead>
           <tbody id="requestsBody"></tbody>
         </table>
       </div>
@@ -502,8 +502,10 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="../js/supabase-config.js"></script>
 <script src="../js/shared.js"></script>
+<script src="../js/po-groups.js"></script>
+<script>window.PO_GROUP_PAGE_ROLE="procurement";</script>
 <script>
-let currentUser, allRequests=[], allVendors=[], activeTab='active', currentPR=null;
+let currentUser, allRequests=[], allVendors=[], activeTab='active', currentPR=null, currentTableRows=[];
 function addPhaseTimestamp(pr, phaseName) {
   var existing = (pr && pr.phase_timestamps) ? pr.phase_timestamps : {};
   var ts = Object.assign({}, existing);
@@ -598,6 +600,7 @@ async function loadRequests() {
   allRequests = await dbFetch(() => db.from('procurement_requests')
     .select(PR_LIST_COLUMNS + ', users!procurement_requests_created_by_fkey(name)')
     .order('updated_at',{ascending:false}), 'requests');
+  if (window.stampPartLevelActionFlags) await stampPartLevelActionFlags(allRequests, 'procurement');
   updateStats(); filterTable();
 }
 
@@ -608,7 +611,7 @@ async function loadVendors() {
 }
 
 function updateStats() {
-  document.getElementById('sActive').textContent=allRequests.filter(r=>r.phase==='procurement_active').length;
+  document.getElementById('sActive').textContent=allRequests.filter(r=>r.phase==='procurement_active'&&(r.is_legacy!==false||r._hasPartLevelAction)).length;
   document.getElementById('sOrders').textContent=allRequests.filter(r=>r.phase==='approved').length;
   document.getElementById('sGRN').textContent=allRequests.filter(r=>r.phase==='grn_pending').length;
 }
@@ -629,31 +632,33 @@ function filterTable(){
   const ph=document.getElementById('filterPhase').value;
   const actionPhases=['procurement_active','approved','advance_requested','grn_pending','qc_passed'];
   let reqs=allRequests;
-  if(activeTab==='active') reqs=reqs.filter(r=>actionPhases.includes(r.phase));
+  if(activeTab==='active') reqs=reqs.filter(r=>r.is_legacy===false ? r._hasPartLevelAction : actionPhases.includes(r.phase));
   if(s) reqs=reqs.filter(r=>r.project_name.toLowerCase().includes(s)||String(r.request_number).includes(s));
   if(ph) reqs=reqs.filter(r=>r.phase===ph);
   renderTable(reqs);
 }
 
 function renderTable(reqs) {
+  currentTableRows = reqs;
   const tbody=document.getElementById('requestsBody');
   if(!reqs.length){tbody.innerHTML=`<tr><td colspan="9"><div class="empty-state"><div class="empty-state-icon">📭</div><h3>${activeTab==='active'?'All caught up!':'No requests'}</h3></div></td></tr>`;return;}
   tbody.innerHTML=reqs.map(r=>{
-    const needsAction=['procurement_active','approved','grn_pending','qc_passed'].includes(r.phase);
+    const needsAction=r.is_legacy===false ? !!r._hasPartLevelAction : ['procurement_active','approved','grn_pending','qc_passed'].includes(r.phase);
     const lbl={procurement_active:'Work on it',approved:'Place Order',advance_requested:'View Advance',grn_pending:'Invoke GRN',qc_passed:'Payment Req'}[r.phase]||'View';
     return `<tr style="${needsAction?'background:rgba(214,43,43,0.025)':''}">
       <td><span class="pr-number${r.is_modification?' modified':''}">${r.is_modification?'↺ ':''} PR-${String(r.request_number).padStart(4,'0')}</span></td>
       <td><div style="font-weight:600;font-size:0.82rem">${r.project_name}</div><div style="font-size:0.72rem;color:var(--gray-4)">${r.project_phase||''}</div></td>
       <td><span style="font-size:0.72rem;background:var(--off-white);border:1px solid var(--border);padding:1px 7px;border-radius:3px">${r.request_category==='vendor_info'?'Vendor Info':'RFQ'}</span></td>
-      <td>${getPhaseBadge(r.phase)}</td>
+      <td id="phase-cell-${r.id}">${getPhaseBadge(r.phase)}</td>
       <td style="font-size:0.78rem">${r.project_manager_name||'—'}</td>
       <td style="font-size:0.78rem">${r.users?.name||'—'}</td>
-      <td>${leadTimeBadge(r.created_at, (r.phase_timestamps||{})['rejected']||(r.phase_timestamps||{})['declined']||(r.phase_timestamps||{})['accepted']||null)}</td>
+      <td id="leadtime-cell-${r.id}">${leadTimeBadge(r.created_at, (r.phase_timestamps||{})['rejected']||(r.phase_timestamps||{})['declined']||(r.phase_timestamps||{})['accepted']||null)}</td>
       <td>${renderEtaBadge(r.quote_eta, r.phase)}</td>
       <td style="font-family:var(--font-mono);font-size:0.72rem;color:var(--gray-4)">${fmtDate(r.updated_at||r.created_at)}</td>
-      <td><button class="btn ${needsAction?'btn-primary':'btn-ghost'} btn-sm" onclick='openPR("${r.id}")'>${lbl}</button></td>
+      <td><button class="btn ${needsAction?'btn-primary':'btn-ghost'} btn-sm" onclick='openPR("${r.id}")'>${r.is_legacy===false?'View Parts':lbl}</button></td>
     </tr>`;
   }).join('');
+  if (window.decoratePartLevelListRows) decoratePartLevelListRows(reqs);
 }
 
 // ── VENDOR DB ─────────────────────────────────────────────────
@@ -721,6 +726,10 @@ async function toggleVendorActive(id,current){
 // ── PR DETAIL MODAL ──────────────────────────────────────────
 async function openPR(id) {
   currentPR=allRequests.find(r=>r.id===id);if(!currentPR)return;
+  // New part/PO-group model requests are handled by a separate render
+  // path (js/po-groups.js) so the legacy single-PO logic below stays
+  // completely untouched for existing/legacy requests.
+  if (currentPR.is_legacy === false) { return await openPRNewModel(id); }
   uploadedFiles=[];
   document.getElementById('prModalTitle').textContent=`PR-${String(currentPR.request_number).padStart(4,'0')} — ${currentPR.project_name}`;
   document.getElementById('prModalSub').textContent=`${currentPR.request_category==='vendor_info'?'Vendor Info':'RFQ'} · ${DEPARTMENTS[currentPR.department]} · ${currentPR.users?.name||''}`;
@@ -768,7 +777,13 @@ async function openPR(id) {
   if(currentPR.phase==='procurement_active'&&currentPR.request_category==='RFQ') {
     const vendorList=allVendors;
     const selectedVendorObj=vd?.data;
+    const partsCount=(currentPR.parts||[]).length;
+    const splitOptInHTML = partsCount>1 ? `<div style="border:1px dashed rgba(99,102,241,0.4);border-radius:var(--radius);padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+        <div style="font-size:0.78rem;color:var(--gray-3)">🧩 This request has ${partsCount} parts. Ordering them from more than one vendor?</div>
+        <button class="btn btn-secondary btn-sm" onclick="enablePartLevelTracking('${currentPR.id}')">Split Across Vendors →</button>
+      </div>` : '';
     actionSection=`<div class="action-section">
+      ${splitOptInHTML}
       <div class="action-section-title">⚙️ Assign Vendor &amp; Upload Quotations <span class="action-badge">ACTION REQUIRED</span></div>
       ${currentPR.vendor_suggestion?`<div style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);border-radius:var(--radius-sm);padding:8px 12px;margin-bottom:12px;font-size:0.78rem">💡 Engineer suggested: <strong>${currentPR.vendor_suggestion}</strong></div>`:''}
       <div class="form-group" style="margin-bottom:14px">
@@ -1604,6 +1619,13 @@ async function openPOModal(prId) {
   window._poCurrSymbol = currSymbol;
   window._poCgstPct = cgstPct;
   window._poSgstPct = sgstPct;
+
+  // Reset the Confirm button back to the legacy single-PO save handler —
+  // openPOGroupModal() (js/po-groups.js) repoints this at
+  // confirmGeneratePOGroupOrder() when generating a PO Group's order,
+  // and the #poModal shell is shared across both flows on this page.
+  const confirmBtn = document.querySelector('#poModal .modal-footer .btn-primary');
+  if (confirmBtn) confirmBtn.setAttribute('onclick', 'confirmGeneratePO()');
 
   openModal('poModal');
 }

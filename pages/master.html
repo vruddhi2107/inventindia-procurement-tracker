@@ -40,7 +40,24 @@
     <button class="tab-btn" onclick="switchTab('users')">👥 Users</button>
     <button class="tab-btn" onclick="switchTab('vendors')">🏢 Vendors</button>
     <button class="tab-btn" onclick="switchTab('analytics')">📊 Analytics</button>
+    <button class="tab-btn" onclick="switchTab('partconfig')">🧩 Part Tracking Config</button>
     <button class="tab-btn" onclick="goToProjects()">📋 Projects</button>
+  </div>
+
+  <!-- PART TRACKING CONFIG TAB -->
+  <div id="tab-partconfig" style="display:none">
+    <p style="font-size:0.82rem;color:var(--gray-3);margin-bottom:14px">
+      Rename PO Group phase labels and change their badge colors — applies instantly across Procurement, Engineer, PM, and Accounts.
+      The phase <em>sequence</em> itself (what can move to what) is fixed for now to keep in-flight POs safe from an invalid edit; that becomes editable in a later phase with its own guardrails.
+    </p>
+    <div class="card">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th style="width:180px">Phase Key</th><th>Label</th><th style="width:180px">Badge Color</th><th style="width:80px">Preview</th><th style="width:90px"></th></tr></thead>
+          <tbody id="phaseConfigBody"></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <!-- REQUESTS TAB -->
@@ -80,7 +97,7 @@
     <div class="card">
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>PR #</th><th>Project</th><th>Category</th><th>Dept</th><th>Vendor</th><th>Phase</th><th>Lead Time</th><th>Updated</th><th>Requester</th><th>Actions</th></tr></thead>
+          <thead><tr><th>PR #</th><th>Project</th><th>Category</th><th>Dept</th><th>Vendor</th><th>Phase</th><th style="cursor:pointer;user-select:none" onclick="sortRowsBy(currentTableRows,'__leadtime__',renderTable,this)" title="Click to sort">Lead Time ⇅</th><th style="cursor:pointer;user-select:none" onclick="sortRowsBy(currentTableRows,'updated_at',renderTable,this)" title="Click to sort">Updated ⇅</th><th>Requester</th><th>Actions</th></tr></thead>
           <tbody id="requestsBody"><tr><td colspan="10" style="text-align:center;padding:48px;color:var(--gray-4)">Loading...</td></tr></tbody>
         </table>
       </div>
@@ -166,6 +183,18 @@
 </main>
 
 <!-- PR DETAIL MODAL -->
+<!-- PR DETAIL MODAL (part-level PO tracking — reused by js/po-groups.js) -->
+<div class="modal-overlay" id="prModal">
+  <div class="modal" style="max-width:880px">
+    <div class="modal-header">
+      <div><div class="modal-title" id="prModalTitle">Request</div><div class="modal-title-sub" id="prModalSub"></div></div>
+      <button class="modal-close" onclick="closeModal('prModal')">✕</button>
+    </div>
+    <div class="modal-body" id="prModalBody" style="max-height:80vh;overflow-y:auto"></div>
+    <div class="modal-footer" id="prModalFooter"><button class="btn btn-secondary" onclick="closeModal('prModal')">Close</button></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="prDetailModal">
   <div class="modal" style="max-width:800px">
     <div class="modal-header">
@@ -226,8 +255,10 @@
 <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="../js/supabase-config.js"></script>
 <script src="../js/shared.js"></script>
+<script src="../js/po-groups.js"></script>
+<script>window.PO_GROUP_PAGE_ROLE="master";</script>
 <script>
-let currentUser, allRequests=[], allUsers=[], allVendors=[], activeTab='requests', editingUserId=null, viewingPRId=null;
+let currentUser, allRequests=[], allUsers=[], allVendors=[], activeTab='requests', editingUserId=null, viewingPRId=null, currentTableRows=[];
 
 // ── BROADCAST ANNOUNCEMENT (Master only) ──────────────────────
 // Sends a system-wide notification to every user's bell — for
@@ -330,19 +361,59 @@ async function loadVendors() {
 
 function updateStats() {
   document.getElementById('sTotal').textContent=allRequests.length;
-  document.getElementById('sActive').textContent=allRequests.filter(r=>!['accepted','rejected'].includes(r.phase)).length;
-  document.getElementById('sClosed').textContent=allRequests.filter(r=>r.phase==='accepted').length;
+  document.getElementById('sActive').textContent=allRequests.filter(r=>r.is_legacy===false ? r.rollup_status!=='closed' : !['accepted','rejected'].includes(r.phase)).length;
+  document.getElementById('sClosed').textContent=allRequests.filter(r=>r.is_legacy===false ? r.rollup_status==='closed' : r.phase==='accepted').length;
   document.getElementById('sRejected').textContent=allRequests.filter(r=>r.phase==='rejected').length;
 }
 
 function switchTab(tab) {
   activeTab=tab;
-  ['requests','users','vendors','analytics'].forEach((t,i)=>{
+  ['requests','users','vendors','analytics','partconfig'].forEach((t,i)=>{
     document.getElementById(`tab-${t}`).style.display=t===tab?'':'none';
     document.querySelectorAll('.tab-btn')[i].classList.toggle('active',t===tab);
   });
   if(tab==='analytics') requestAnimationFrame(renderAnalytics);
+  if(tab==='partconfig') loadPhaseConfigPanel();
 }
+
+// ── PART TRACKING CONFIG (Master Admin, no code needed) ─────────────
+const PHASE_BADGE_COLOR_OPTIONS = ['badge-gray','badge-purple','badge-green','badge-blue','badge-orange','badge-red'];
+async function loadPhaseConfigPanel() {
+  const rows = await dbFetch(
+    () => db.from('po_phase_config').select('*').order('sort_order'),
+    'phase config'
+  );
+  const tbody = document.getElementById('phaseConfigBody');
+  if (!rows || !rows.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--gray-4);padding:24px">No phase config rows found — run the SQL migration (sql/001_part_level_po_tracking.sql), which seeds these defaults.</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map(r => `
+    <tr data-phase="${r.phase_key}">
+      <td class="mono" style="font-size:0.78rem">${r.phase_key}</td>
+      <td><input class="form-control" style="max-width:220px" id="pcfgLabel-${r.phase_key}" value="${r.label}"/></td>
+      <td><select class="form-control" style="max-width:160px" id="pcfgBadge-${r.phase_key}">
+        ${PHASE_BADGE_COLOR_OPTIONS.map(c => `<option value="${c}" ${c===r.badge_class?'selected':''}>${c.replace('badge-','')}</option>`).join('')}
+      </select></td>
+      <td><span class="badge ${r.badge_class}" id="pcfgPreview-${r.phase_key}">${r.label}</span></td>
+      <td><button class="btn btn-secondary btn-sm" onclick="savePhaseConfigRow('${r.phase_key}')">Save</button></td>
+    </tr>`).join('');
+}
+
+async function savePhaseConfigRow(phaseKey) {
+  const label = document.getElementById(`pcfgLabel-${phaseKey}`).value.trim();
+  const badge = document.getElementById(`pcfgBadge-${phaseKey}`).value;
+  if (!label) { showToast('Label cannot be empty.', 'error'); return; }
+  const { error } = await db.from('po_phase_config')
+    .update({ label, badge_class: badge, updated_at: new Date().toISOString() })
+    .eq('phase_key', phaseKey);
+  if (error) { showToast('Error: ' + error.message, 'error'); return; }
+  document.getElementById(`pcfgPreview-${phaseKey}`).className = `badge ${badge}`;
+  document.getElementById(`pcfgPreview-${phaseKey}`).textContent = label;
+  await loadPhaseConfigOverrides(); // refresh in-memory PO_GROUP_PHASES immediately
+  showToast(`"${phaseKey}" phase label updated.`, 'success');
+}
+window.savePhaseConfigRow = savePhaseConfigRow;
 
 function clearFilters() {
   document.getElementById('searchInput').value='';
@@ -363,6 +434,7 @@ function filterRequests() {
 }
 
 function renderTable(reqs) {
+  currentTableRows = reqs;
   const tbody=document.getElementById('requestsBody');
   if(!reqs.length){tbody.innerHTML=`<tr><td colspan="10"><div class="empty-state"><div class="empty-state-icon">📭</div><h3>No requests found</h3><p>No procurement requests match your current filters.</p></div></td></tr>`;return;}
   tbody.innerHTML=reqs.map(r=>`<tr>
@@ -371,20 +443,24 @@ function renderTable(reqs) {
     <td class="mono">${r.request_category}</td>
     <td style="font-size:0.82rem">${DEPARTMENTS[r.department]||r.department}</td>
     <td style="font-size:0.8rem;max-width:110px;overflow:hidden;text-overflow:ellipsis">${r.vendors?.name||'—'}</td>
-    <td>${getPhaseBadge(r.phase)}</td>
-    <td>${leadTimeBadge(r.created_at, (r.phase_timestamps||{})['rejected']||(r.phase_timestamps||{})['declined']||(r.phase_timestamps||{})['accepted']||null)}</td>
+    <td id="phase-cell-${r.id}">${getPhaseBadge(r.phase)}</td>
+    <td id="leadtime-cell-${r.id}">${leadTimeBadge(r.created_at, (r.phase_timestamps||{})['rejected']||(r.phase_timestamps||{})['declined']||(r.phase_timestamps||{})['accepted']||null)}</td>
     <td class="mono" style="font-size:0.75rem">${formatDate(r.updated_at||r.created_at)}</td>
     <td style="font-size:0.82rem">${r.users?.name||'—'}</td>
     <td style="white-space:nowrap">
       <button class="btn btn-ghost btn-sm" onclick='viewPR("${r.id}")'>View</button>
     </td>
   </tr>`).join('');
+  if (window.decoratePartLevelListRows) decoratePartLevelListRows(reqs);
 }
 
 async function viewPR(id) {
   viewingPRId=id;
   const pr=allRequests.find(r=>r.id===id);
   if(!pr) return;
+  // New part/PO-group model requests render via js/po-groups.js instead —
+  // the legacy detail modal below is untouched for is_legacy requests.
+  if (pr.is_legacy === false) { return await openPRNewModel(id); }
   document.getElementById('prDetailTitle').textContent=`PR-${String(pr.request_number).padStart(4,'0')} — ${pr.project_name}`;
   document.getElementById('prDetailSub').textContent=`${pr.request_category} · ${DEPARTMENTS[pr.department]} · ${formatDate(pr.created_at)}`;
   showLoader(true);

@@ -606,6 +606,12 @@ footer {
 .approval-option-label { font-family: var(--font-display); font-size: 0.88rem; font-weight: 700; }
 .approval-option-sub { font-size: 0.75rem; color: var(--gray-4); margin-top: 2px; }
 
+/* ── SCREENSHOT UPLOAD ZONE (used by Engineer client-approval flow, ── */
+/* both legacy single-PO and PO Group part-level tracking) ──────────── */
+.screenshot-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:14px;text-align:center;cursor:pointer;position:relative;transition:all 0.15s}
+.screenshot-zone:hover{border-color:#6366f1}
+.screenshot-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
+
 /* ── FILE INPUT ── */
 .file-input-wrap {
   border: 2px dashed var(--border-strong); border-radius: var(--radius);
@@ -1472,3 +1478,15 @@ footer { background: var(--black); color: var(--gray-4); padding: 18px 22px; dis
 /* ── CHANGE PASSWORD PAGE ── */
 .cp-page { max-width: 400px; margin: 52px auto; padding: 0 18px; }
 .cp-card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px; box-shadow: var(--shadow-sm); }
+/* ── GENERIC BADGE (phase config, PO Group chips, payment status) ──── */
+/* Base + color modifiers — used throughout shared.js/master.html/       */
+/* accounts.html/po-groups.js as class="badge badge-<color>", but no     */
+/* CSS backed it anywhere in this file, so every one of those rendered   */
+/* as unstyled plain text with no pill/background/color at all.          */
+.badge { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 3px; font-size: 0.68rem; font-weight: 600; white-space: nowrap; letter-spacing: -0.01em; border: 1px solid transparent; }
+.badge-gray   { background: rgba(107,114,128,0.1);  color: #4b5563; border-color: rgba(107,114,128,0.22); }
+.badge-purple { background: rgba(99,102,241,0.1);   color: #4f46e5; border-color: rgba(99,102,241,0.22); }
+.badge-blue   { background: rgba(37,99,235,0.1);    color: #1d4ed8; border-color: rgba(37,99,235,0.22); }
+.badge-green  { background: rgba(22,163,74,0.1);    color: #16a34a; border-color: rgba(22,163,74,0.22); }
+.badge-orange { background: rgba(245,158,11,0.12);  color: #b45309; border-color: rgba(245,158,11,0.25); }
+.badge-red    { background: rgba(220,38,38,0.1);    color: #dc2626; border-color: rgba(220,38,38,0.22); }

@@ -137,7 +137,7 @@ async function uploadFileToStorage(file, folder) {
 // arrays, and are only ever read off a single fetched PR in detail modals,
 // never off list rows. Use select('*') only for single-PR detail queries
 // (.eq('id', id).single()).
-const PR_LIST_COLUMNS = 'id,request_number,request_category,project_name,project_phase,project_manager_name,team_member_name,department,order_type,vendor_suggestion,description,phase,initial_pm_approval,assigned_vendor_id,selected_quotation_id,client_approval_notes,pm_final_approval_status,pm_final_approval_notes,rejection_reason,needs_more_vendors,qc_result,qc_notes,order_notes,created_by,created_at,updated_at,approval_path,assigned_pm_id,vendor_info_details,is_modification,parent_request_id,modification_note,parts,product_link,sourcing,qc_criteria,advance_option,phase_timestamps,quote_eta,last_reminder_sent_at,last_reminder_phase';
+const PR_LIST_COLUMNS = 'id,request_number,request_category,project_name,project_phase,project_manager_name,team_member_name,department,order_type,vendor_suggestion,description,phase,initial_pm_approval,assigned_vendor_id,selected_quotation_id,client_approval_notes,pm_final_approval_status,pm_final_approval_notes,rejection_reason,needs_more_vendors,qc_result,qc_notes,order_notes,created_by,created_at,updated_at,approval_path,assigned_pm_id,vendor_info_details,is_modification,parent_request_id,modification_note,parts,product_link,sourcing,qc_criteria,advance_option,phase_timestamps,quote_eta,last_reminder_sent_at,last_reminder_phase,is_legacy,rollup_status';
 
 // File → base64 helper
 function fileToBase64(file) {

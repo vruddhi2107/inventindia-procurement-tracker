@@ -44,7 +44,7 @@
     <div class="card">
       <div class="table-wrap">
         <table class="data-table">
-          <thead><tr><th>PR #</th><th>Project</th><th>Requester</th><th>Dept</th><th>Type</th><th>Phase</th><th>Quote ETA</th><th>Submitted</th><th></th></tr></thead>
+          <thead><tr><th>PR #</th><th>Project</th><th>Requester</th><th>Dept</th><th>Type</th><th>Phase</th><th>Quote ETA</th><th style="cursor:pointer;user-select:none" onclick="sortRowsBy(currentTableRows,'__leadtime__',renderTable,this)" title="Click to sort">Lead Time ⇅</th><th></th></tr></thead>
           <tbody id="requestsBody"></tbody>
         </table>
       </div>
@@ -76,8 +76,10 @@
 <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="../js/supabase-config.js"></script>
 <script src="../js/shared.js"></script>
+<script src="../js/po-groups.js"></script>
+<script>window.PO_GROUP_PAGE_ROLE="pm";</script>
 <script>
-let currentUser, allRequests=[], activeTab='clearance', currentPR=null;
+let currentUser, allRequests=[], activeTab='clearance', currentPR=null, currentTableRows=[];
 function addPhaseTimestamp(pr, phaseName) {
   var existing = (pr && pr.phase_timestamps) ? pr.phase_timestamps : {};
   var ts = Object.assign({}, existing);
@@ -120,19 +122,20 @@ async function loadRequests() {
     .eq('assigned_pm_id', currentUser.id)
     .order('updated_at',{ascending:false}), 'requests');
   allRequests=data||[];
+  if (window.stampPartLevelActionFlags) await stampPartLevelActionFlags(allRequests, 'pm');
   updateStats(); renderBanner(); filterTable();
 }
 
 function updateStats() {
   document.getElementById('sClearance').textContent=allRequests.filter(r=>r.phase==='pending_initial_pm_approval').length;
-  document.getElementById('sFinal').textContent=allRequests.filter(r=>['pending_pm_final_approval','pending_decline_approval'].includes(r.phase)).length;
+  document.getElementById('sFinal').textContent=allRequests.filter(r=>['pending_pm_final_approval','pending_decline_approval'].includes(r.phase)||r._hasPartLevelAction).length;
   document.getElementById('sApproved').textContent=allRequests.filter(r=>r.pm_final_approval_status==='approved').length;
   document.getElementById('sRejected').textContent=allRequests.filter(r=>r.pm_final_approval_status==='rejected').length;
 }
 
 function renderBanner() {
   const clearance=allRequests.filter(r=>r.phase==='pending_initial_pm_approval');
-  const final=allRequests.filter(r=>['pending_pm_final_approval','pending_decline_approval'].includes(r.phase));
+  const final=allRequests.filter(r=>['pending_pm_final_approval','pending_decline_approval'].includes(r.phase)||r._hasPartLevelAction);
   const total=clearance.length+final.length;
   const b=document.getElementById('pendingBanner');
   if(!total){b.style.display='none';return;}
@@ -141,7 +144,7 @@ function renderBanner() {
     <span style="font-size:1.1rem">⏳</span>
     <div style="flex:1"><strong style="font-size:0.85rem">${total} request${total>1?'s':''} awaiting your decision</strong>
     <div style="font-size:0.75rem;color:var(--gray-3);margin-top:2px">${clearance.length?`${clearance.length} clearance`:''}${clearance.length&&final.length?' · ':''}${final.length?`${final.length} final approval`:''}</div></div>
-    <button class="btn btn-primary btn-sm" onclick="switchTab('clearance')">Review Now</button>
+    <button class="btn btn-primary btn-sm" onclick="switchTab('final')">Review Now</button>
   </div>`;
 }
 
@@ -158,16 +161,17 @@ function filterTable() {
   const s=document.getElementById('searchInput').value.toLowerCase();
   let reqs=allRequests;
   if(activeTab==='clearance') reqs=reqs.filter(r=>r.phase==='pending_initial_pm_approval');
-  else if(activeTab==='final') reqs=reqs.filter(r=>['pending_pm_final_approval','pending_decline_approval'].includes(r.phase));
+  else if(activeTab==='final') reqs=reqs.filter(r=>['pending_pm_final_approval','pending_decline_approval'].includes(r.phase)||r._hasPartLevelAction);
   if(s) reqs=reqs.filter(r=>r.project_name.toLowerCase().includes(s)||String(r.request_number).includes(s));
   renderTable(reqs);
 }
 
 function renderTable(reqs) {
+  currentTableRows = reqs;
   const tbody=document.getElementById('requestsBody');
   if(!reqs.length){tbody.innerHTML=`<tr><td colspan="9"><div class="empty-state"><div class="empty-state-icon">${activeTab==='clearance'?'🔐':'✍️'}</div><h3>No requests here</h3><p>${activeTab==='clearance'?'No pending clearance requests.':activeTab==='final'?'No final approvals or decline requests pending.':'No requests assigned to you yet.'}</p></div></td></tr>`;return;}
   tbody.innerHTML=reqs.map(r=>{
-    const needsAction=['pending_initial_pm_approval','pending_pm_final_approval','pending_decline_approval'].includes(r.phase);
+    const needsAction=['pending_initial_pm_approval','pending_pm_final_approval','pending_decline_approval'].includes(r.phase)||r._hasPartLevelAction;
     const isClearance=r.phase==='pending_initial_pm_approval', isFinal=r.phase==='pending_pm_final_approval', isDecline=r.phase==='pending_decline_approval';
     return `<tr style="${needsAction?'background:rgba(214,43,43,0.025)':''}${isDecline?' outline:1.5px solid rgba(245,158,11,0.4);outline-offset:-2px':''}">
       <td><span class="pr-number${r.is_modification?' modified':''}">${r.is_modification?'↺ ':''} PR-${String(r.request_number).padStart(4,'0')}</span></td>
@@ -175,12 +179,13 @@ function renderTable(reqs) {
       <td style="font-size:0.8rem">${r.users?.name||'—'}</td>
       <td style="font-size:0.78rem">${DEPARTMENTS[r.department]||r.department}</td>
       <td><span style="font-size:0.72rem;background:var(--off-white);border:1px solid var(--border);padding:1px 7px;border-radius:3px">${r.request_category==='vendor_info'?'Vendor Info':'RFQ'}</span></td>
-      <td>${getPhaseBadge(r.phase)}</td>
+      <td id="phase-cell-${r.id}">${getPhaseBadge(r.phase)}</td>
       <td>${renderPmTableEta(r.quote_eta, r.phase)}</td>
-      <td style="font-family:var(--font-mono);font-size:0.72rem;color:var(--gray-4)">${fmtDate(r.created_at)}</td>
+      <td id="leadtime-cell-${r.id}" style="font-family:var(--font-mono);font-size:0.72rem;color:var(--gray-4)">${fmtDate(r.created_at)}</td>
       <td><button class="btn ${needsAction?'btn-primary':'btn-ghost'} btn-sm" onclick='openPR("${r.id}")'>${isClearance?'Approve/Deny':isFinal?'Review':isDecline?'Review Decline':'View'}</button></td>
     </tr>`;
   }).join('');
+  if (window.decoratePartLevelListRows) decoratePartLevelListRows(reqs);
 }
 
 function renderPmTableEta(etaDate, phase) {
@@ -216,6 +221,9 @@ function renderPmEtaDetail(pr) {
 
 async function openPR(id) {
   currentPR=allRequests.find(r=>r.id===id); if(!currentPR) return;
+  // New part/PO-group model requests render via js/po-groups.js instead —
+  // the legacy logic below is untouched for is_legacy requests.
+  if (currentPR.is_legacy === false) { return await openPRNewModel(id); }
   pmSelectedQuotationId=null; prQuotations=[];
   document.getElementById('prModalTitle').textContent=`PR-${String(currentPR.request_number).padStart(4,'0')} — ${currentPR.project_name}`;
   document.getElementById('prModalSub').textContent=`${currentPR.request_category==='vendor_info'?'Vendor Info':'RFQ'} · ${DEPARTMENTS[currentPR.department]} · ${currentPR.users?.name||''}`;

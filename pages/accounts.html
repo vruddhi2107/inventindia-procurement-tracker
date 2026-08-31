@@ -55,6 +55,19 @@
     <button class="tab-btn active" onclick="switchTab('due')">💰 Payment Due</button>
     <button class="tab-btn" onclick="switchTab('advance')">📤 Smartsheet Advances <span id="advBadge" style="display:none;background:var(--red);color:white;border-radius:10px;padding:0 6px;font-size:0.65rem;font-family:var(--font-mono);margin-left:4px"></span></button>
     <button class="tab-btn" onclick="switchTab('all')">All Payments</button>
+    <button class="tab-btn" onclick="switchTab('partlevel')">🧩 Part-Level PO Payments <span id="partLevelBadge" style="display:none;background:var(--red);color:white;border-radius:10px;padding:0 6px;font-size:0.65rem;font-family:var(--font-mono);margin-left:4px"></span></button>
+  </div>
+
+  <div id="tabPartLevel" style="display:none">
+    <p style="font-size:0.82rem;color:var(--gray-3);margin-bottom:12px">PO Groups from part-level-tracked requests that have passed QC and are ready for payment, or have a balance outstanding.</p>
+    <div class="card">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Request</th><th>Vendor Group</th><th>Status</th><th>Paid So Far</th><th></th></tr></thead>
+          <tbody id="partLevelPaymentsBody"></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <div id="tabPayments">
@@ -82,6 +95,18 @@
     <div id="advanceContent"></div>
   </div>
 </main>
+
+<!-- PR DETAIL MODAL (part-level PO tracking — reused by js/po-groups.js) -->
+<div class="modal-overlay" id="prModal">
+  <div class="modal" style="max-width:880px">
+    <div class="modal-header">
+      <div><div class="modal-title" id="prModalTitle">Request</div><div class="modal-title-sub" id="prModalSub"></div></div>
+      <button class="modal-close" onclick="closeModal('prModal')">✕</button>
+    </div>
+    <div class="modal-body" id="prModalBody" style="max-height:80vh;overflow-y:auto"></div>
+    <div class="modal-footer" id="prModalFooter"><button class="btn btn-secondary" onclick="closeModal('prModal')">Close</button></div>
+  </div>
+</div>
 
 <!-- PAYMENT DETAIL MODAL — full width for comprehensive view -->
 <div class="modal-overlay" id="payDetailModal">
@@ -119,6 +144,8 @@
 <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="../js/supabase-config.js"></script>
 <script src="../js/shared.js"></script>
+<script src="../js/po-groups.js"></script>
+<script>window.PO_GROUP_PAGE_ROLE="accounts";</script>
 <script>
 let currentUser, allPayments=[], allAdvances=[], activeTab='due';
 function addPhaseTimestamp(existingTs, phaseName) {
@@ -266,11 +293,58 @@ function renderAdvanceBanner() {
 // ── TABS ─────────────────────────────────────────────────────
 function switchTab(t) {
   activeTab=t;
-  document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',['due','advance','all'][i]===t));
-  document.getElementById('tabPayments').style.display=t==='advance'?'none':'block';
+  document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',['due','advance','all','partlevel'][i]===t));
+  document.getElementById('tabPayments').style.display=(t==='advance'||t==='partlevel')?'none':'block';
   document.getElementById('tabAdvance').style.display=t==='advance'?'block':'none';
+  document.getElementById('tabPartLevel').style.display=t==='partlevel'?'block':'none';
   if(t==='advance') renderAdvanceTab();
+  else if(t==='partlevel') loadPartLevelPayments();
   else filterPayments();
+}
+
+// ── PART-LEVEL PO PAYMENTS (new part/PO-group model) ────────────────
+// PO Groups that have passed QC and are ready for (or partway through)
+// payment, across all part-level-tracked requests. Clicking a row opens
+// the same detail view used by Procurement/Engineer/PM, rendered by
+// js/po-groups.js, with the accounts-role actions (record payment).
+window.allRequests = window.allRequests || [];
+async function loadPartLevelPayments() {
+  const groups = await dbFetch(
+    () => db.from('po_groups')
+      .select('*, vendors(name), procurement_requests(id,request_number,project_name,department,request_category,parts,is_legacy)')
+      .eq('current_version', true)
+      .in('phase', ['qc_passed', 'payment_pending'])
+      .order('updated_at', { ascending: false }),
+    'part-level payments due'
+  );
+  const badge = document.getElementById('partLevelBadge');
+  if (groups && groups.length) { badge.style.display = 'inline'; badge.textContent = groups.length; }
+  else { badge.style.display = 'none'; }
+
+  const tbody = document.getElementById('partLevelPaymentsBody');
+  if (!groups || !groups.length) {
+    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--gray-4);padding:24px">No PO Groups awaiting payment right now.</td></tr>`;
+    return;
+  }
+
+  // Keep a lightweight cache of parent requests so openPRNewModel's
+  // (window.allRequests || window.myRequests).find(...) lookup resolves.
+  const seen = new Set(window.allRequests.map(r => r.id));
+  groups.forEach(g => {
+    const pr = g.procurement_requests;
+    if (pr && !seen.has(pr.id)) { window.allRequests.push(pr); seen.add(pr.id); }
+  });
+
+  tbody.innerHTML = groups.map(g => {
+    const pr = g.procurement_requests;
+    return `<tr>
+      <td>PR-${pr ? String(pr.request_number).padStart(4, '0') : '—'} — ${pr?.project_name || '—'}</td>
+      <td>${g.group_label}${g.vendors?.name ? ' · ' + g.vendors.name : ''}</td>
+      <td>${poGroupPhaseBadgeHTML(g.phase)}</td>
+      <td style="font-family:var(--font-mono)">—</td>
+      <td><button class="btn btn-primary btn-sm" onclick="openPRNewModel('${pr?.id}')">View / Record Payment →</button></td>
+    </tr>`;
+  }).join('');
 }
 
 function clearFilters(){document.getElementById('searchInput').value='';document.getElementById('filterUrgency').value='';filterPayments();}

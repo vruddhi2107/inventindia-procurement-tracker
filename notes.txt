@@ -1,0 +1,36 @@
+BEGIN;
+
+-- 1. Break circular link between PR and its selected quotation
+UPDATE public.procurement_requests 
+SET selected_quotation_id = NULL 
+WHERE id = '73c17919-8a11-4ae2-b4f5-39ef14c63970';
+
+-- 2. Unlink any modifications/child PRs that point to this as a parent
+UPDATE public.procurement_requests 
+SET parent_request_id = NULL 
+WHERE parent_request_id = '73c17919-8a11-4ae2-b4f5-39ef14c63970';
+
+-- 3. Clear all related data entries
+DELETE FROM public.purchase_orders WHERE pr_id = '73c17919-8a11-4ae2-b4f5-39ef14c63970';
+DELETE FROM public.advance_payment_requests WHERE pr_id = '73c17919-8a11-4ae2-b4f5-39ef14c63970';
+DELETE FROM public.payment_requests WHERE pr_id = '73c17919-8a11-4ae2-b4f5-39ef14c63970';
+DELETE FROM public.pr_comments WHERE pr_id = '73c17919-8a11-4ae2-b4f5-39ef14c63970';
+DELETE FROM public.vendor_ratings WHERE pr_id = '73c17919-8a11-4ae2-b4f5-39ef14c63970';
+DELETE FROM public.pr_attachments WHERE pr_id = '73c17919-8a11-4ae2-b4f5-39ef14c63970';
+DELETE FROM public.pr_quotations WHERE pr_id = '73c17919-8a11-4ae2-b4f5-39ef14c63970';
+
+-- 4. Delete the primary PR record
+DELETE FROM public.procurement_requests WHERE id = '73c17919-8a11-4ae2-b4f5-39ef14c63970';
+
+COMMIT;
+
+
+So I would like you to work on this one particular task which is That I would like to reshape and procurex into pART tracking system rather than a request tracking so currently I can only make one PO per As a quest so I would like that for example each request has five parts and let's say that three parts are ordered from vendor A 1 part is Ordered from vendor B and one part is ordered from vendor C so in that case I would generate three POS and I would like to track these three vendor POs separately. These are the specifications I have I would like you to ask me counter questions on what all you would need in order to build a solid solution I wanted it to be robust and customizable so that I can change directly from the master admins profile and I don't have to code everything for a minor change that needs to be made in the system
+
+So there's one thing that if what is order from vendor A and it is received and the GRN or the QC has been done but the parts from Vendor B and Vendor C are still pending or are under GRN or QC Till then those paths would be making the request still open so until and unless everything is ordered and everything has been received and has been approved by all and the payment is marked for all till then the request remains open.
+
+So if let's say three parts are being ordered from vendor A and we support codes for part three parts and that code is being approved or being rejected so we would need an option that we can generate or ask for one more cycle of quotes for each vendors or each category 4th stop the request within a request so we also have to track subway request at the same time and also the major request I would like the UI to be in a way that the majority request and there would be some minimized version of that request where those request falling under a request should be minimized and it could be expandable and the view should be like that This is what I have in mind but I would want you to give me an honest review on whatever you feel that we can discuss that and I would like you to ask open ended questions on whatever you feel could be a loophole in the system.
+
+I would want that lead time and other columns could be sorted from everyone's profile.
+
+I would like you to also do that part where i can define TAT for each activity for eg. if the procurement manager should be given 2days to submit quote and if they dont submit it within that period then they should be asked a reason for submitting it late and basically that should be logged.Similarly for further stages.I would like you to also give me a list of which phases would require this TAT.
