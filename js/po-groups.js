@@ -639,6 +639,21 @@ function renderPOGroupDocsAndPayments(group, quotations, po, poAttachment, payme
 
   if (po) {
     const fi = poAttachment?.file_url ? _regFile(poAttachment.file_url, poAttachment.file_name || `PO_${po.po_number}.pdf`) : null;
+    // The PO record and its PDF are saved in two separate steps (see
+    // confirmGeneratePOGroupOrder) — the DB write basically can't fail,
+    // but the html2canvas/jsPDF render + Storage upload can, silently,
+    // leaving a PO with no attached file. Surface that clearly instead of
+    // just omitting the buttons, and give Procurement a one-click retry
+    // that backfills the PDF without touching the PO record itself.
+    // Only procurement.html has the #poModal markup this needs, so the
+    // retry action is scoped to that role.
+    const role = window.PO_GROUP_PAGE_ROLE || 'procurement';
+    const missingPdfHTML = (fi === null)
+      ? `<div style="width:100%;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-top:6px;border-top:1px dashed rgba(214,43,43,0.25);margin-top:4px">
+          <span style="font-size:0.74rem;color:var(--red)">⚠️ PDF not attached — the file failed to save when this PO was generated.</span>
+          ${role === 'procurement' ? `<button class="btn btn-secondary btn-sm" onclick="openPOGroupModal('${group.id}')">🔄 Generate PDF</button>` : ''}
+        </div>`
+      : '';
     html += `<div style="margin-top:8px;border:1px solid rgba(99,102,241,0.25);border-radius:var(--radius-sm);overflow:hidden">
       <div style="padding:8px 12px;background:rgba(99,102,241,0.07);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
         <div style="font-weight:700;font-size:0.8rem;color:#4f46e5">📄 Purchase Order</div>
@@ -651,6 +666,7 @@ function renderPOGroupDocsAndPayments(group, quotations, po, poAttachment, payme
           <button class="btn btn-secondary btn-sm" onclick="_previewByIdx(${fi})">👁 Preview PO</button>
           <button class="btn btn-secondary btn-sm" onclick="_downloadByIdx(${fi})">⬇ Download</button>
         </div>` : ''}
+        ${missingPdfHTML}
       </div>
     </div>`;
   }
@@ -1343,7 +1359,7 @@ async function openPOGroupModal(groupId) {
         <div style="width:130px"></div>
         <div class="po-paper-title">Purchase Order</div>
         <div id="poLogoSlot" style="width:130px;display:flex;justify-content:flex-end">
-          <img src="${logoSrc}" class="po-logo-img" alt="Logo" onerror="this.style.display='none'"/>
+          <img src="${logoSrc}" class="po-logo-img" alt="Logo" crossorigin="anonymous" onerror="this.style.display='none'"/>
         </div>
       </div>
 
@@ -1532,21 +1548,41 @@ async function confirmGeneratePOGroupOrder(groupId) {
   const { data: group } = await db.from('po_groups').select('*').eq('id', groupId).single();
   const currency = window._poCurrSymbol === '₹' ? 'INR' : (window._poCurrSymbol || 'INR');
 
-  // Step 1: save the PO record itself, tagged to this group.
-  // NOTE: purchase_orders.quotation_id has a foreign key into pr_quotations
-  // (the legacy single-PO quotes table). This group flow selects from
-  // po_group_quotations instead — a different table with its own id space —
-  // so writing that id into quotation_id always violates the FK. It goes
-  // into po_group_quotation_id (its own FK into po_group_quotations)
-  // instead; quotation_id is left null for group-flow POs.
-  const { error: poErr } = await db.from('purchase_orders').insert({
-    pr_id: group.pr_id, po_group_id: groupId, po_number: poNumber, po_date: new Date().toISOString(),
-    vendor_id: group.vendor_id, po_group_quotation_id: window._poGroupSelectedQuoteId || null,
-    total_amount: netPayable, currency, generated_by: currentUser.id,
-  });
-  if (poErr) { showLoader(false); showToast('Error saving PO: ' + poErr.message, 'error'); return; }
+  // A group can only ever get one purchase_orders row (Place Order isn't
+  // re-clickable once order_placed). If one's already there, this call is
+  // a PDF-attach retry (see "⚠️ PDF not attached" below) — reuse the
+  // existing record instead of inserting a duplicate, and don't re-advance
+  // the phase or re-post the "PO generated" comment a second time.
+  const { data: existingPO } = await db.from('purchase_orders').select('*').eq('po_group_id', groupId).maybeSingle();
 
-  // Step 2: render the PO paper to PDF and upload it.
+  if (!existingPO) {
+    // Step 1: save the PO record itself, tagged to this group.
+    // NOTE: purchase_orders.quotation_id has a foreign key into pr_quotations
+    // (the legacy single-PO quotes table). This group flow selects from
+    // po_group_quotations instead — a different table with its own id space —
+    // so writing that id into quotation_id always violates the FK. It goes
+    // into po_group_quotation_id (its own FK into po_group_quotations)
+    // instead; quotation_id is left null for group-flow POs.
+    const { error: poErr } = await db.from('purchase_orders').insert({
+      pr_id: group.pr_id, po_group_id: groupId, po_number: poNumber, po_date: new Date().toISOString(),
+      vendor_id: group.vendor_id, po_group_quotation_id: window._poGroupSelectedQuoteId || null,
+      total_amount: netPayable, currency, generated_by: currentUser.id,
+    });
+    if (poErr) { showLoader(false); showToast('Error saving PO: ' + poErr.message, 'error'); return; }
+  }
+
+  // Step 2: render the PO paper to PDF and upload it. Everything above is
+  // a plain DB write and basically can't fail; this step involves
+  // html2canvas + jsPDF + a Storage upload, all of which can throw for
+  // reasons outside our control (a slow-loading logo image, a storage
+  // policy hiccup) — which is exactly why it's kept behind its own
+  // try/catch instead of one wrapping the whole function: a failure here
+  // must never take down the PO record that's already safely saved above.
+  // The trade-off is that it CAN fail silently from the user's point of
+  // view (PO shows up, no PDF) — that's what the retry affordance in
+  // renderPOGroupDocsAndPayments() ("⚠️ PDF not attached — Generate PDF")
+  // is for; it re-invokes this exact function, which is why the
+  // existingPO check above matters.
   let pdfUrl = null;
   try {
     const previewEl = document.getElementById('poPreviewBox');
@@ -1592,15 +1628,26 @@ async function confirmGeneratePOGroupOrder(groupId) {
     showToast('PO saved — PDF generation failed: ' + pdfErr.message, 'error');
   }
 
-  // Step 3: advance phase + comment + notify, same as the rest of the group lifecycle.
-  await setPOGroupPhase(group, 'order_placed');
-  const commentText = pdfUrl
-    ? `📄 Purchase Order ${poNumber} generated for "${group.group_label}". Net Payable: ${window._poCurrSymbol || '₹'}${netPayable.toLocaleString('en-IN')} — [View PO PDF](${pdfUrl})`
-    : `📄 Purchase Order ${poNumber} generated for "${group.group_label}". Net Payable: ${window._poCurrSymbol || '₹'}${netPayable.toLocaleString('en-IN')}`;
-  if (typeof window.postComment === 'function') await window.postComment(group.pr_id, currentUser.id, commentText);
+  // Step 3: advance phase + comment + notify — only the first time. A
+  // retry that's just backfilling a missing PDF must not re-fire
+  // notifications or bounce the phase (it's already order_placed, possibly
+  // even further along by now).
+  if (!existingPO) {
+    await setPOGroupPhase(group, 'order_placed');
+    const commentText = pdfUrl
+      ? `📄 Purchase Order ${poNumber} generated for "${group.group_label}". Net Payable: ${window._poCurrSymbol || '₹'}${netPayable.toLocaleString('en-IN')} — [View PO PDF](${pdfUrl})`
+      : `📄 Purchase Order ${poNumber} generated for "${group.group_label}". Net Payable: ${window._poCurrSymbol || '₹'}${netPayable.toLocaleString('en-IN')}`;
+    if (typeof window.postComment === 'function') await window.postComment(group.pr_id, currentUser.id, commentText);
+  } else if (pdfUrl && typeof window.postComment === 'function') {
+    await window.postComment(group.pr_id, currentUser.id, `📎 PDF re-attached for Purchase Order ${poNumber} ("${group.group_label}") — [View PO PDF](${pdfUrl})`);
+  }
 
   showLoader(false);
-  showToast(`PO ${poNumber} generated${pdfUrl ? ' & saved as attachment' : ''}!`, 'success');
+  if (!pdfUrl) {
+    showToast(`PO ${poNumber} saved, but the PDF still failed to attach — check your connection and try "Generate PDF" again from the PO panel.`, 'error');
+  } else {
+    showToast(`PO ${poNumber} ${existingPO ? 'PDF attached' : 'generated & saved as attachment'}!`, 'success');
+  }
   closeModal('poModal');
   await openPRNewModel(currentPR.id);
 }
