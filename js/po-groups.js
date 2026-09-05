@@ -251,7 +251,15 @@ async function resubmitAfterRework(group) {
 }
 
 // ── PAYMENTS, scoped per PO Group, with running-total support ─────────
-async function recordPOGroupPayment(poGroupId, paymentType, amount, currency, poValue, raisedBy) {
+// Phases where goods have already been received & QC'd. Only once a group
+// is here does "fully paid" mean "safe to close" — an advance paid earlier
+// (pm_approved / order_placed / grn_pending / rework_pending) must never
+// auto-close a group whose goods haven't even arrived yet, no matter how
+// large the advance amount is relative to the (often provisional) PO value
+// entered at that point.
+const PO_GROUP_POST_GOODS_PHASES = new Set(['qc_passed', 'payment_pending']);
+
+async function recordPOGroupPayment(poGroupId, paymentType, amount, currency, poValue, raisedBy, smartsheetId, screenshot) {
   showLoader(true);
   try {
     const prior = await dbFetch(
@@ -279,14 +287,23 @@ async function recordPOGroupPayment(poGroupId, paymentType, amount, currency, po
       raised_by: raisedBy || null,
       raised_at: new Date().toISOString(),
       paid_at: new Date().toISOString(),
+      smartsheet_payment_id: smartsheetId || null,
+      screenshot: screenshot || null,
     });
     if (error) throw error;
 
     const { data: group } = await db.from('po_groups').select('*').eq('id', poGroupId).single();
     const isFullyPaid = poValue && runningTotal >= poValue;
-    await setPOGroupPhase(group, isFullyPaid ? 'closed' : 'payment_pending');
+    // Only let a payment move the group's phase once goods are in and QC'd.
+    // An advance recorded at pm_approved/order_placed/grn_pending/rework_pending
+    // is logged (and shows up in the group's Payments panel) but leaves the
+    // phase — and the Place Order / GRN / rework actions still pending on
+    // it — exactly where it was.
+    if (PO_GROUP_POST_GOODS_PHASES.has(group.phase)) {
+      await setPOGroupPhase(group, isFullyPaid ? 'closed' : 'payment_pending');
+    }
 
-    showToast(isFullyPaid ? 'Payment recorded — PO Group closed.' : 'Partial payment recorded.', 'success');
+    showToast(isFullyPaid && PO_GROUP_POST_GOODS_PHASES.has(group.phase) ? 'Payment recorded — PO Group closed.' : 'Payment recorded.', 'success');
     return true;
   } catch (e) {
     console.error('[po-groups] recordPOGroupPayment failed:', e.message);
@@ -648,6 +665,7 @@ function renderPOGroupDocsAndPayments(group, quotations, po, poAttachment, payme
           <span style="color:var(--gray-4)">Running total: ${p.currency || 'INR'} ${Number(p.running_total_paid || 0).toLocaleString()}</span>
           <span class="badge ${p.status === 'paid' ? 'badge-green' : 'badge-orange'}">${(p.status || '').toUpperCase()}</span>
           <span style="color:var(--gray-4);font-size:0.72rem">${fmtDate(p.raised_at || p.paid_at)}</span>
+          ${p.smartsheet_payment_id ? `<span style="color:#6366f1;font-family:var(--font-mono);font-size:0.72rem">📋 ${p.smartsheet_payment_id}</span>` : ''}
           ${p.screenshot ? `<button class="btn btn-secondary btn-sm" onclick="_previewByIdx(${_regFile(p.screenshot, 'payment_screenshot')})">👁 Screenshot</button>` : ''}
         </div>`).join('')}
       </div>
@@ -679,6 +697,32 @@ function renderPOGroupCard(group, partLines, quotations, po, poAttachment, payme
     <div id="po-group-actions-${group.id}"></div>
     ${renderPOGroupDocsAndPayments(group, quotations, po, poAttachment, paymentRows)}
   </div>`;
+}
+
+// ── RENDER: basic request details — Request #, Project, Team Member, PM,
+// Department etc. Mirrors the fields shown in the legacy buildPRDetailHTML()
+// (shared.js) header, since the part-level modal has its own body layout
+// and doesn't call into that function at all — without this, none of that
+// identifying info is visible anywhere in the split-cycle modal.
+function buildPOGroupBasicDetailsHTML(pr) {
+  return `
+    <div class="detail-grid" style="margin-bottom:14px">
+      <div class="detail-item"><div class="detail-key">Request #</div>
+        <div class="detail-value"><span class="pr-number${pr.is_modification ? ' modified' : ''}">PR-${String(pr.request_number).padStart(4, '0')}</span>
+        ${pr.is_modification ? `<span class="mod-badge" style="margin-left:6px">↺ Modified</span>` : ''}
+        </div></div>
+      <div class="detail-item"><div class="detail-key">Category</div><div class="detail-value">${pr.request_category === 'vendor_info' ? 'Vendor Info Request' : 'RFQ'}</div></div>
+      <div class="detail-item"><div class="detail-key">Project</div><div class="detail-value">${pr.project_name}</div></div>
+      <div class="detail-item"><div class="detail-key">Phase</div><div class="detail-value">${pr.project_phase}</div></div>
+      <div class="detail-item"><div class="detail-key">Project Manager</div><div class="detail-value">${pr.project_manager_name || '—'}</div></div>
+      <div class="detail-item"><div class="detail-key">Team Member</div><div class="detail-value">${pr.team_member_name}</div></div>
+      <div class="detail-item"><div class="detail-key">Department</div><div class="detail-value">${DEPARTMENTS[pr.department] || pr.department}</div></div>
+      ${pr.order_type ? `<div class="detail-item"><div class="detail-key">Order Type</div><div class="detail-value">${ORDER_TYPES[pr.order_type] || pr.order_type}</div></div>` : ''}
+      ${pr.product_link ? `<div class="detail-item"><div class="detail-key">Product Link</div><div class="detail-value"><a href="${pr.product_link}" target="_blank" style="color:var(--red)">🔗 View Product</a></div></div>` : ''}
+      <div class="detail-item"><div class="detail-key">Submitted</div><div class="detail-value">${fmtDate(pr.created_at)}</div></div>
+      ${pr.description ? `<div class="detail-item" style="grid-column:1/-1"><div class="detail-key">Description / Notes</div><div class="detail-value" style="line-height:1.5">${pr.description}</div></div>` : ''}
+      ${pr.modification_note ? `<div class="detail-item" style="grid-column:1/-1"><div class="detail-key" style="color:#6366f1">Modification Note</div><div class="detail-value">${pr.modification_note}</div></div>` : ''}
+    </div>`;
 }
 
 // ── RENDER: "Group Parts" panel — ungrouped parts + vendor assignment ──
@@ -812,10 +856,24 @@ async function openPRNewModel(id) {
   const vendorOptionsHTML = `<option value="">— Select vendor —</option>` +
     vendorList.map(v => `<option value="${v.id}" data-name="${v.name}">${v.name}${v.specialization ? ' (' + v.specialization + ')' : ''}</option>`).join('');
 
+  // Generated-PO summary, so "has a PO actually been generated for this
+  // request?" is answerable at a glance instead of having to open every
+  // group card. Each chip jumps to its group's card, where the full PO
+  // details (date, amount, PDF) live via renderPOGroupDocsAndPayments().
+  const generatedPOs = poGroups.filter(g => poByGroup[g.id]).map(g => ({ group: g, po: poByGroup[g.id] }));
+  const poSummaryHTML = generatedPOs.length ? `
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid rgba(99,102,241,0.15)">
+      <span style="font-size:0.72rem;color:var(--gray-4)">📄 PO${generatedPOs.length > 1 ? 's' : ''} generated:</span>
+      ${generatedPOs.map(({ group: g, po }) => `<span class="badge badge-blue" style="cursor:pointer;font-family:var(--font-mono)" onclick="document.querySelector('[data-group-id=&quot;${g.id}&quot;]')?.scrollIntoView({behavior:'smooth',block:'center'})" title="${po.currency || 'INR'} ${Number(po.total_amount || 0).toLocaleString()} — ${g.group_label}">${po.po_number}</span>`).join('')}
+    </div>` : '';
+
   const rollupBannerHTML = `
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding:10px 14px;border-radius:var(--radius);background:${rollup.closed ? 'rgba(22,163,74,0.06)' : 'rgba(99,102,241,0.06)'};border:1px solid ${rollup.closed ? 'rgba(22,163,74,0.2)' : 'rgba(99,102,241,0.2)'}">
-      <div style="font-weight:700;font-size:0.85rem;color:${rollup.closed ? '#16a34a' : '#4f46e5'}">${rollup.closed ? '✅' : '🧩'} ${rollup.label}</div>
-      <div style="font-size:0.72rem;color:var(--gray-4)">${partLines.length} part${partLines.length !== 1 ? 's' : ''} total · Part-Level PO Tracking</div>
+    <div style="margin-bottom:14px;padding:10px 14px;border-radius:var(--radius);background:${rollup.closed ? 'rgba(22,163,74,0.06)' : 'rgba(99,102,241,0.06)'};border:1px solid ${rollup.closed ? 'rgba(22,163,74,0.2)' : 'rgba(99,102,241,0.2)'}">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div style="font-weight:700;font-size:0.85rem;color:${rollup.closed ? '#16a34a' : '#4f46e5'}">${rollup.closed ? '✅' : '🧩'} ${rollup.label}</div>
+        <div style="font-size:0.72rem;color:var(--gray-4)">${partLines.length} part${partLines.length !== 1 ? 's' : ''} total · Part-Level PO Tracking</div>
+      </div>
+      ${poSummaryHTML}
     </div>`;
 
   const groupingPanelHTML = (window.PO_GROUP_PAGE_ROLE === 'procurement' || window.PO_GROUP_PAGE_ROLE === 'master')
@@ -828,6 +886,7 @@ async function openPRNewModel(id) {
   }).join('') || (ungroupedParts.length ? '' : `<div style="text-align:center;padding:20px;color:var(--gray-4);font-size:0.82rem">No parts on this request yet.</div>`);
 
   document.getElementById('prModalBody').innerHTML =
+    buildPOGroupBasicDetailsHTML(currentPR) +
     rollupBannerHTML +
     groupingPanelHTML +
     `<div id="poGroupCardsContainer">${groupCardsHTML}</div>` +
@@ -904,6 +963,28 @@ if (typeof window.addComment !== 'function') {
       document.getElementById('commentsList').innerHTML = renderComments(c);
     } catch (e) { showToast('Comment failed', 'error'); }
   };
+}
+
+// ── Accounts payment form, shared across every phase a payment can be
+// raised from (pm_approved through payment_pending). Mirrors the legacy
+// Smartsheet-based flow (Payment ID + screenshot), scoped to a PO Group.
+function renderPOGroupPaymentForm(group, contextHTML) {
+  return `
+    ${contextHTML}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <select class="form-control" style="max-width:120px" id="payType-${group.id}">
+        <option value="advance">Advance</option>
+        <option value="balance">Balance</option>
+        <option value="full">Full</option>
+      </select>
+      <input class="form-control" style="max-width:120px" type="number" id="payAmt-${group.id}" placeholder="Amount"/>
+      <input class="form-control" style="max-width:140px" type="number" id="payPoValue-${group.id}" placeholder="Total PO value"/>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <input class="form-control" style="max-width:200px" type="text" id="paySmartsheetId-${group.id}" placeholder="Smartsheet Payment ID"/>
+      <input class="form-control" style="max-width:220px" type="file" accept=".png,.jpg,.jpeg,.pdf" id="payScreenshot-${group.id}"/>
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="handleRecordPayment('${group.id}')">Record Payment →</button>`;
 }
 
 // ── PO Group action area — phase-specific controls, gated by page role ──
@@ -999,15 +1080,25 @@ function renderPOGroupActions(group, partLines, quotations, vendorList) {
       html = readOnly('⏳ Awaiting PM final approval.');
     }
   } else if (phase === 'pm_approved') {
-    html = role === 'procurement' ? `
+    if (role === 'procurement') {
+      html = `
       <div style="font-size:0.78rem;color:#16a34a;margin-bottom:8px">✓ PM Approved — ready to place order.</div>
-      <button class="btn btn-primary btn-sm" onclick="handlePlaceOrderForGroup('${group.id}')">Place Order →</button>`
-      : readOnly('✓ PM Approved — awaiting order placement by Procurement.');
+      <button class="btn btn-primary btn-sm" onclick="handlePlaceOrderForGroup('${group.id}')">Place Order →</button>`;
+    } else if (role === 'accounts' || role === 'master') {
+      html = renderPOGroupPaymentForm(group, `<div style="font-size:0.78rem;color:#16a34a;margin-bottom:8px">✓ PM Approved — raise an advance payment now if the vendor needs it before starting work, or wait until goods are received.</div>`);
+    } else {
+      html = readOnly('✓ PM Approved — awaiting order placement by Procurement.');
+    }
   } else if (phase === 'order_placed') {
-    html = role === 'procurement' ? `
+    if (role === 'procurement') {
+      html = `
       <div style="font-size:0.78rem;color:var(--gray-3);margin-bottom:8px">🛒 Order placed.</div>
-      <button class="btn btn-primary btn-sm" onclick="handleInvokeGRNForGroup('${group.id}')">Goods Received — Notify Engineer for QC →</button>`
-      : readOnly('🛒 Order placed — awaiting goods receipt.');
+      <button class="btn btn-primary btn-sm" onclick="handleInvokeGRNForGroup('${group.id}')">Goods Received — Notify Engineer for QC →</button>`;
+    } else if (role === 'accounts' || role === 'master') {
+      html = renderPOGroupPaymentForm(group, `<div style="font-size:0.78rem;color:var(--gray-3);margin-bottom:8px">🛒 Order placed — raise an advance payment if due before the goods arrive.</div>`);
+    } else {
+      html = readOnly('🛒 Order placed — awaiting goods receipt.');
+    }
   } else if (phase === 'grn_pending') {
     if (role === 'engineer' || role === 'master') {
       const groupParts = partLines.filter(p => p.po_group_id === group.id);
@@ -1023,28 +1114,24 @@ function renderPOGroupActions(group, partLines, quotations, vendorList) {
           <button class="btn btn-primary btn-sm" onclick="handleSubmitGRN('${group.id}', true)">Submit GRN — QC Passed ✓</button>
           <button class="btn btn-danger btn-sm" onclick="handleSubmitGRN('${group.id}', false)">Submit GRN — QC Failed ✗</button>
         </div>`;
+    } else if (role === 'accounts' || role === 'master') {
+      html = renderPOGroupPaymentForm(group, `<div style="font-size:0.78rem;color:var(--gray-3);margin-bottom:8px">📦 GRN / QC in progress — raise an advance payment if still due.</div>`);
     } else {
       html = readOnly('📦 GRN / QC in progress — waiting on Engineer.');
     }
   } else if (phase === 'rework_pending') {
-    html = (role === 'engineer' || role === 'procurement' || role === 'master') ? `
+    if (role === 'engineer' || role === 'procurement' || role === 'master') {
+      html = `
       <div style="font-size:0.78rem;color:var(--red);margin-bottom:8px">✗ QC Failed — sent back to vendor for rework/return.</div>
-      <button class="btn btn-secondary btn-sm" onclick="handleResubmitRework('${group.id}')">Vendor Reshipped — Resume GRN/QC</button>`
-      : readOnly('✗ QC Failed — item(s) returned to vendor for rework.');
+      <button class="btn btn-secondary btn-sm" onclick="handleResubmitRework('${group.id}')">Vendor Reshipped — Resume GRN/QC</button>`;
+    } else if (role === 'accounts') {
+      html = renderPOGroupPaymentForm(group, `<div style="font-size:0.78rem;color:var(--red);margin-bottom:8px">✗ QC Failed — item(s) returned to vendor. Payments already raised are unaffected.</div>`);
+    } else {
+      html = readOnly('✗ QC Failed — item(s) returned to vendor for rework.');
+    }
   } else if (phase === 'qc_passed' || phase === 'payment_pending') {
     if (role === 'accounts' || role === 'master') {
-      html = `
-        <div style="font-size:0.78rem;color:${phase === 'qc_passed' ? '#16a34a' : 'var(--gray-3)'};margin-bottom:8px">${phase === 'qc_passed' ? '✅ QC Passed — raise payment.' : '💰 Partial payment recorded — balance still due.'}</div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-          <select class="form-control" style="max-width:120px" id="payType-${group.id}">
-            <option value="advance">Advance</option>
-            <option value="balance">Balance</option>
-            <option value="full">Full</option>
-          </select>
-          <input class="form-control" style="max-width:120px" type="number" id="payAmt-${group.id}" placeholder="Amount"/>
-          <input class="form-control" style="max-width:120px" type="number" id="payPoValue-${group.id}" placeholder="Total PO value"/>
-        </div>
-        <button class="btn btn-primary btn-sm" onclick="handleRecordPayment('${group.id}')">Record Payment →</button>`;
+      html = renderPOGroupPaymentForm(group, `<div style="font-size:0.78rem;color:${phase === 'qc_passed' ? '#16a34a' : 'var(--gray-3)'};margin-bottom:8px">${phase === 'qc_passed' ? '✅ QC Passed — raise the balance/full payment.' : '💰 Partial payment recorded — balance still due.'}</div>`);
     } else {
       html = readOnly(phase === 'qc_passed' ? '✅ QC Passed — awaiting payment from Accounts.' : '💰 Partial payment recorded — balance pending with Accounts.');
     }
@@ -1559,8 +1646,17 @@ async function handleRecordPayment(groupId) {
   const type = document.getElementById(`payType-${groupId}`)?.value || 'full';
   const amt = parseFloat(document.getElementById(`payAmt-${groupId}`)?.value || 0);
   const poValue = parseFloat(document.getElementById(`payPoValue-${groupId}`)?.value || 0) || null;
+  const smartsheetId = document.getElementById(`paySmartsheetId-${groupId}`)?.value?.trim() || null;
+  const screenshotFile = document.getElementById(`payScreenshot-${groupId}`)?.files?.[0] || null;
   if (!amt) { showToast('Enter a payment amount.', 'error'); return; }
-  await recordPOGroupPayment(groupId, type, amt, 'INR', poValue, currentUser?.id);
+  let screenshotUrl = null;
+  if (screenshotFile) {
+    showLoader(true);
+    try { screenshotUrl = (await uploadFileToStorage(screenshotFile, `pr/${currentPR.id}/po-group-payments`)).url; }
+    catch (e) { showLoader(false); showToast('Screenshot upload error: ' + e.message, 'error'); return; }
+    showLoader(false);
+  }
+  await recordPOGroupPayment(groupId, type, amt, 'INR', poValue, currentUser?.id, smartsheetId, screenshotUrl);
   const { data: group } = await db.from('po_groups').select('*').eq('id', groupId).single();
   if (group.phase === 'closed' && currentPR.created_by) {
     notifyUserOfPOGroupEvent(currentPR.id, currentPR.created_by, `"${group.group_label}" fully paid and closed on PR-${String(currentPR.request_number).padStart(4,'0')}.`);
