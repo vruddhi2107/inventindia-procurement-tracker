@@ -630,6 +630,19 @@ window.renderPOGroupTimeline = renderPOGroupTimeline;
 function renderPOGroupDocsAndPayments(group, quotations, po, poAttachment, paymentRows) {
   let html = '';
 
+  // Client approval screenshot: previously only rendered inline inside the
+  // pending_pm_approval action panel (PM/master role only), so it vanished
+  // for everyone — including Procurement — the moment the group advanced
+  // past that phase. Rendered here instead so it persists in the card body
+  // across every phase and every role, same as quotations/PO/payments below.
+  if (group.client_approval_screenshot) {
+    html += `<div style="margin-top:8px;padding:10px;background:rgba(22,163,74,0.06);border:1px solid rgba(22,163,74,0.2);border-radius:var(--radius)">
+      <div class="detail-key" style="color:#16a34a;margin-bottom:6px">✓ Client Approval Screenshot</div>
+      <img src="${group.client_approval_screenshot}" style="max-width:100%;max-height:220px;object-fit:contain;border-radius:6px;border:1px solid var(--border)" onerror="this.style.display='none'"/>
+      ${group.client_approval_notes ? `<p style="margin-top:6px;font-size:0.8rem;color:var(--gray-3)">${group.client_approval_notes}</p>` : ''}
+    </div>`;
+  }
+
   if (quotations && quotations.length) {
     html += `<div style="margin-top:8px">
       <div class="detail-key" style="margin-bottom:6px">📎 Quotations &amp; Files</div>
