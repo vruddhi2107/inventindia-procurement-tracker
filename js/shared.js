@@ -1000,7 +1000,18 @@ window.broadcastNotification = async function(message) {
 function highlightMentions(text) {
   if (!text) return '';
   // Escape HTML first
-  const safe = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  let safe = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // po-groups.js and procurement.html auto-post system comments containing
+  // markdown-style links — e.g. "PO generated ... — [View PO PDF](https://...)"
+  // — when a PO PDF, GRN, or payment screenshot is attached. This was never
+  // converted to a real link, so those comments just showed the raw
+  // "[View PO PDF](https://...)" text and the attachment was effectively
+  // unreachable from the comment feed. Convert [label](url) to a clickable
+  // link before mention-highlighting (safe: text is already HTML-escaped
+  // above, so the () and [] here are literal, not live HTML).
+  safe = safe.replace(/\[([^\[\]]+)\]\((https?:\/\/[^\s)]+|data:[^\s)]+)\)/g,
+    '<a href="$2" target="_blank" rel="noopener" style="color:#6366f1;font-weight:600;text-decoration:underline">$1</a>'
+  );
   // Highlight @mentions
   return safe.replace(/@([A-Za-z]+(?:\s+[A-Za-z]+)?)/g,
     '<span style="color:#6366f1;font-weight:600;background:rgba(99,102,241,0.08);border-radius:3px;padding:0 3px">@$1</span>'
