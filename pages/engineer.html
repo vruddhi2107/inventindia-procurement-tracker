@@ -742,15 +742,28 @@ async function openPR(id) {
   document.getElementById('prModalTitle').textContent=`PR-${String(currentPR.request_number).padStart(4,'0')} — ${currentPR.project_name}`;
   document.getElementById('prModalSub').textContent=`${currentPR.request_category==='vendor_info'?'Vendor Info':'RFQ'} · ${DEPARTMENTS[currentPR.department]} · ${fmtDate(currentPR.created_at)}`;
   showLoader(true);
-  const[comments,quotations,vd,poRes,advRes,payRes]=await Promise.all([
+  const[comments,quotations,vd,poRes,advRes,payRes,attRes,heavyRes]=await Promise.all([
     loadComments(id),
     db.from('pr_quotations').select('*').eq('pr_id',id).order('created_at').then(r=>r.data||[]),
     currentPR.assigned_vendor_id?db.from('vendors').select('name').eq('id',currentPR.assigned_vendor_id).single():Promise.resolve({data:null}),
     db.from('purchase_orders').select('*').eq('pr_id',id).order('created_at',{ascending:false}).limit(1).maybeSingle(),
     db.from('advance_payment_requests').select('*').eq('pr_id',id).order('created_at',{ascending:false}).limit(1).maybeSingle(),
-    db.from('payment_requests').select('*').eq('pr_id',id).order('request_date',{ascending:false}).limit(1).maybeSingle()
+    db.from('payment_requests').select('*').eq('pr_id',id).order('request_date',{ascending:false}).limit(1).maybeSingle(),
+    db.from('pr_attachments').select('*').eq('pr_id',id).order('created_at'),
+    // currentPR came from myRequests (PR_LIST_COLUMNS), which deliberately
+    // excludes attachments/client_approval_screenshot. This modal never had
+    // an attachments section at all, so the engineer couldn't even see back
+    // their own uploaded file, and client_approval_screenshot was unusable
+    // here too since it was never fetched.
+    db.from('procurement_requests').select('attachments,client_approval_screenshot').eq('id',id).single()
   ]);
   prQuotations=quotations;
+  Object.assign(currentPR, heavyRes.data || {});
+  const jsonbAttachments = (currentPR.attachments || []).map(a => ({
+    file_name: a.name || 'Attachment', file_url: a.url || a.data,
+    attachment_type: 'engineer_upload', file_type: a.type
+  }));
+  const myAttachments = [...jsonbAttachments, ...(attRes.data || [])];
   showLoader(false);
   const pmName=allPMs.find(p=>p.id===currentPR.assigned_pm_id)?.name||currentPR.project_manager_name||'';
   const footer=document.getElementById('prModalFooter');
@@ -885,6 +898,20 @@ async function openPR(id) {
   document.getElementById('prModalBody').innerHTML=
     buildPRDetailHTML(currentPR,quotations,vd?.data?.name||'',pmName,{poData:poRes.data||null,advPayRec:advRes.data||null,payRec:payRes.data||null})
     +renderEngineerEtaDetail(currentPR)
+    +(myAttachments.length ? `<div style="margin-top:16px;padding:14px;background:rgba(99,102,241,0.04);border:1px solid rgba(99,102,241,0.15);border-radius:var(--radius)">
+        <div class="detail-key" style="color:#6366f1;margin-bottom:10px">📎 Attachments (${myAttachments.length})</div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          ${myAttachments.map(a=>{
+            const fi=_regFile(a.file_url,a.file_name||'Attachment');
+            return `<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--off-white);border:1px solid var(--border);border-radius:6px">
+              <span style="font-size:1rem;flex-shrink:0">${(a.file_name||'').toLowerCase().includes('.pdf')?'📄':'🖼️'}</span>
+              <span style="font-size:0.78rem;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.file_name||'Attachment'}</span>
+              <button class="btn btn-secondary btn-sm" onclick="_previewByIdx(${fi})">👁 Preview</button>
+              <button class="btn btn-secondary btn-sm" onclick="_downloadByIdx(${fi})">⬇ Download</button>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>` : '')
     +actionSection+
     `<div style="margin-top:22px;border-top:1px solid var(--border);padding-top:16px">
       <div class="section-title" style="margin-bottom:10px">💬 Comments</div>
