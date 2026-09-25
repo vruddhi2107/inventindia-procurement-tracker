@@ -1,1931 +1,1426 @@
 // ══════════════════════════════════════════════════════════════
-// po-groups.js — Part-Level PO Tracking
-//
-// Additive module. Nothing here is imported by legacy code paths.
-// A request only enters this system when procurement_requests.is_legacy
-// is explicitly false. All existing single-PO-per-request requests
-// (is_legacy = true, the default) continue to use the untouched logic
-// already in shared.js / procurement.html / engineer.html / pm.html /
-// accounts.html exactly as it works today.
-//
-// Requires: js/supabase-config.js (global `db` client), js/shared.js
-// (dbFetch, showToast, showLoader, fmtDate helpers) to be loaded first.
+// dbFetch — retry wrapper for list/dashboard queries.
+// Without this, a single transient timeout (cold pooler connection,
+// brief contention) fails the whole dashboard load with no retry.
 // ══════════════════════════════════════════════════════════════
-
-const PO_GROUP_PHASES = [
-  { key: 'quotation_pending', label: 'Quotation Pending', badge: 'badge-gray' },
-  { key: 'quoted',            label: 'Engineer Review',   badge: 'badge-purple' },
-  { key: 'pending_pm_approval', label: 'Pending PM Approval', badge: 'badge-orange' },
-  { key: 'pm_approved',       label: 'PM Approved',       badge: 'badge-green' },
-  { key: 'order_placed',      label: 'Order Placed',      badge: 'badge-blue' },
-  { key: 'grn_pending',       label: 'GRN / QC',          badge: 'badge-orange' },
-  { key: 'rework_pending',    label: 'Rework / Return',   badge: 'badge-red' },
-  { key: 'qc_passed',         label: 'QC Passed',         badge: 'badge-green' },
-  { key: 'payment_pending',   label: 'Payment Pending',   badge: 'badge-orange' },
-  { key: 'closed',            label: 'Closed',            badge: 'badge-green' },
-  { key: 'rejected',          label: 'Rejected',          badge: 'badge-red' },
-  { key: 'declined',          label: 'Declined',          badge: 'badge-red' },
-];
-const PO_GROUP_TERMINAL = new Set(['closed', 'rejected', 'declined']);
-
-function poGroupPhaseMeta(phase) {
-  return PO_GROUP_PHASES.find(p => p.key === phase) || { key: phase, label: phase, badge: 'badge-gray' };
-}
-
-// Loaded once per page from po_phase_config (Master-Admin-editable).
-// Falls back silently to the hardcoded PO_GROUP_PHASES defaults above if
-// the table hasn't been seeded yet or the fetch fails — the app never
-// breaks because of a missing admin config row.
-async function loadPhaseConfigOverrides() {
-  try {
-    const rows = await dbFetch(
-      () => db.from('po_phase_config').select('*').order('sort_order'),
-      'phase config'
-    );
-    (rows || []).forEach(row => {
-      const entry = PO_GROUP_PHASES.find(p => p.key === row.phase_key);
-      if (entry) { entry.label = row.label; entry.badge = row.badge_class; }
-    });
-  } catch (e) {
-    console.warn('[po-groups] phase config load failed, using defaults:', e.message);
-  }
-}
-window.loadPhaseConfigOverrides = loadPhaseConfigOverrides;
-// Fire on script load so every page picks up Master Admin's label/color
-// choices without each page needing to remember to call it.
-if (typeof db !== 'undefined') { loadPhaseConfigOverrides(); }
-
-function poGroupPhaseBadgeHTML(phase) {
-  const meta = poGroupPhaseMeta(phase);
-  return `<span class="badge ${meta.badge}">${meta.label}</span>`;
-}
-
-function addPOGroupPhaseTimestamp(group, phase) {
-  const ts = Object.assign({}, group.phase_timestamps || {});
-  ts[phase] = new Date().toISOString();
-  return ts;
-}
-
-// ── PART LINES ──────────────────────────────────────────────
-// Explodes procurement_requests.parts[] into request_part_lines rows.
-// Call once, right after a new-model request is created (or lazily the
-// first time Procurement opens a new-model request that has no part
-// lines yet).
-async function ensurePartLinesExist(pr) {
-  const existing = await dbFetch(
-    () => db.from('request_part_lines').select('id').eq('pr_id', pr.id).limit(1),
-    'part lines check'
-  );
-  if (existing && existing.length) return;
-
-  const parts = pr.parts || [];
-  if (!parts.length) return;
-
-  const rows = parts.map((p, i) => ({
-    pr_id: pr.id,
-    part_index: i,
-    name: p.name || `Part ${i + 1}`,
-    qty: p.qty || 1,
-    uom: p.uom || null,
-    department: p.department || null,
-    spec: p.spec || null,
-    status: 'unassigned',
-  }));
-  const { error } = await db.from('request_part_lines').insert(rows);
-  if (error) console.error('[po-groups] ensurePartLinesExist failed:', error.message);
-}
-
-async function fetchPartLines(prId) {
-  return await dbFetch(
-    () => db.from('request_part_lines').select('*').eq('pr_id', prId).order('part_index'),
-    'part lines'
-  );
-}
-
-async function fetchPOGroups(prId) {
-  return await dbFetch(
-    () => db.from('po_groups')
-      .select('*, vendors(name)')
-      .eq('pr_id', prId)
-      .eq('current_version', true)
-      .order('created_at'),
-    'PO groups'
-  );
-}
-
-// ── GROUPING: assign a set of ungrouped part lines to a new PO Group ──
-async function createPOGroupFromParts(prId, partLineIds, vendorId, vendorLabel, createdBy) {
-  if (!partLineIds || !partLineIds.length) {
-    showToast('Select at least one part to group.', 'error');
-    return null;
-  }
-  showLoader(true);
-  try {
-    const { data: group, error: gErr } = await db.from('po_groups').insert({
-      pr_id: prId,
-      group_label: vendorLabel || 'Vendor Group',
-      vendor_id: vendorId || null,
-      phase: 'quotation_pending',
-      phase_timestamps: { quotation_pending: new Date().toISOString() },
-      cycle_number: 1,
-      current_version: true,
-      created_by: createdBy || null,
-    }).select().single();
-
-    if (gErr) throw gErr;
-
-    const { error: pErr } = await db.from('request_part_lines')
-      .update({ po_group_id: group.id, status: 'grouped', updated_at: new Date().toISOString() })
-      .in('id', partLineIds);
-    if (pErr) throw pErr;
-
-    showToast(`PO Group "${group.group_label}" created with ${partLineIds.length} part(s).`, 'success');
-    return group;
-  } catch (e) {
-    console.error('[po-groups] createPOGroupFromParts failed:', e.message);
-    showToast('Error creating PO Group: ' + e.message, 'error');
-    return null;
-  } finally {
-    showLoader(false);
-  }
-}
-
-async function ungroupPartLine(partLineId) {
-  const { error } = await db.from('request_part_lines')
-    .update({ po_group_id: null, status: 'unassigned', updated_at: new Date().toISOString() })
-    .eq('id', partLineId);
-  if (error) { showToast('Error: ' + error.message, 'error'); return false; }
-  return true;
-}
-
-// ── RE-QUOTE CYCLE: version a PO Group instead of mutating it in place ──
-// Creates a new po_groups row with cycle_number+1, snapshots the old one
-// into po_group_versions, marks the old row current_version=false and
-// points superseded_by_version_id at the new row's id. Part lines move
-// to the new group id so the UI always resolves to the live version.
-async function requoteCycle(oldGroup, reason, createdBy) {
-  showLoader(true);
-  try {
-    const { data: newGroup, error: nErr } = await db.from('po_groups').insert({
-      pr_id: oldGroup.pr_id,
-      group_label: oldGroup.group_label,
-      vendor_id: oldGroup.vendor_id,
-      phase: 'quotation_pending',
-      phase_timestamps: { quotation_pending: new Date().toISOString() },
-      cycle_number: (oldGroup.cycle_number || 1) + 1,
-      current_version: true,
-      created_by: createdBy || null,
-    }).select().single();
-    if (nErr) throw nErr;
-
-    const { error: vErr } = await db.from('po_group_versions').insert({
-      po_group_id: oldGroup.id,
-      version_number: oldGroup.cycle_number || 1,
-      snapshot: oldGroup,
-      reason: reason || null,
-      created_by: createdBy || null,
-    });
-    if (vErr) throw vErr;
-
-    const { error: uErr } = await db.from('po_groups')
-      .update({ current_version: false, superseded_by_version_id: newGroup.id, updated_at: new Date().toISOString() })
-      .eq('id', oldGroup.id);
-    if (uErr) throw uErr;
-
-    const { error: pErr } = await db.from('request_part_lines')
-      .update({ po_group_id: newGroup.id, updated_at: new Date().toISOString() })
-      .eq('po_group_id', oldGroup.id);
-    if (pErr) throw pErr;
-
-    showToast(`Re-quote cycle ${newGroup.cycle_number} started for "${newGroup.group_label}".`, 'success');
-    return newGroup;
-  } catch (e) {
-    console.error('[po-groups] requoteCycle failed:', e.message);
-    showToast('Error starting re-quote cycle: ' + e.message, 'error');
-    return null;
-  } finally {
-    showLoader(false);
-  }
-}
-
-// ── PHASE TRANSITIONS ───────────────────────────────────────
-async function setPOGroupPhase(group, newPhase, extraFields) {
-  const update = Object.assign({
-    phase: newPhase,
-    phase_timestamps: addPOGroupPhaseTimestamp(group, newPhase),
-    updated_at: new Date().toISOString(),
-  }, extraFields || {});
-  const { error } = await db.from('po_groups').update(update).eq('id', group.id);
-  if (error) { showToast('Error: ' + error.message, 'error'); return false; }
-  return true;
-}
-
-// ── GRN / QC, scoped per PO Group ──────────────────────────
-async function submitPOGroupGRN(poGroupId, grnData, createdBy) {
-  showLoader(true);
-  try {
-    const { error: gErr } = await db.from('po_group_grn').insert(Object.assign({
-      po_group_id: poGroupId,
-      created_by: createdBy || null,
-    }, grnData));
-    if (gErr) throw gErr;
-
-    const passed = grnData.qc_result === 'qc_passed';
-    const { data: group } = await db.from('po_groups').select('*').eq('id', poGroupId).single();
-    await setPOGroupPhase(group, passed ? 'qc_passed' : 'rework_pending');
-
-    showToast(passed ? 'QC passed — GRN recorded.' : 'QC failed — PO Group moved to Rework/Return.', passed ? 'success' : 'error');
-    return true;
-  } catch (e) {
-    console.error('[po-groups] submitPOGroupGRN failed:', e.message);
-    showToast('Error submitting GRN: ' + e.message, 'error');
-    return false;
-  } finally {
-    showLoader(false);
-  }
-}
-
-// Vendor has reshipped after a rework/return — send back into GRN/QC.
-async function resubmitAfterRework(group) {
-  return await setPOGroupPhase(group, 'grn_pending');
-}
-
-// ── PAYMENTS, scoped per PO Group, with running-total support ─────────
-// Phases where goods have already been received & QC'd. Only once a group
-// is here does "fully paid" mean "safe to close" — an advance paid earlier
-// (pm_approved / order_placed / grn_pending / rework_pending) must never
-// auto-close a group whose goods haven't even arrived yet, no matter how
-// large the advance amount is relative to the (often provisional) PO value
-// entered at that point.
-const PO_GROUP_POST_GOODS_PHASES = new Set(['qc_passed', 'payment_pending']);
-
-async function recordPOGroupPayment(poGroupId, paymentType, amount, currency, poValue, raisedBy, smartsheetId, screenshot) {
-  showLoader(true);
-  try {
-    const prior = await dbFetch(
-      () => db.from('po_group_payments').select('amount').eq('po_group_id', poGroupId).eq('status', 'paid'),
-      'prior payments'
-    );
-    const priorTotal = (prior || []).reduce((sum, r) => sum + (r.amount || 0), 0);
-    const runningTotal = priorTotal + (amount || 0);
-
-    // status is set straight to 'paid' — this flow has a single "Record
-    // Payment" action (unlike the legacy raise-then-confirm flow), so the
-    // row it creates already represents money paid. This also matters for
-    // the prior-payments query above, which only counts status='paid' rows
-    // toward the running total — leaving this as 'raised' meant every
-    // group with more than one installment (advance + balance) never
-    // accumulated a correct running total or closed itself.
-    const { error } = await db.from('po_group_payments').insert({
-      po_group_id: poGroupId,
-      payment_type: paymentType,
-      amount,
-      currency: currency || 'INR',
-      running_total_paid: runningTotal,
-      po_value: poValue || null,
-      status: 'paid',
-      raised_by: raisedBy || null,
-      raised_at: new Date().toISOString(),
-      paid_at: new Date().toISOString(),
-      smartsheet_payment_id: smartsheetId || null,
-      screenshot: screenshot || null,
-    });
-    if (error) throw error;
-
-    const { data: group } = await db.from('po_groups').select('*').eq('id', poGroupId).single();
-    const isFullyPaid = poValue && runningTotal >= poValue;
-    // Only let a payment move the group's phase once goods are in and QC'd.
-    // An advance recorded at pm_approved/order_placed/grn_pending/rework_pending
-    // is logged (and shows up in the group's Payments panel) but leaves the
-    // phase — and the Place Order / GRN / rework actions still pending on
-    // it — exactly where it was.
-    if (PO_GROUP_POST_GOODS_PHASES.has(group.phase)) {
-      await setPOGroupPhase(group, isFullyPaid ? 'closed' : 'payment_pending');
-    }
-
-    showToast(isFullyPaid && PO_GROUP_POST_GOODS_PHASES.has(group.phase) ? 'Payment recorded — PO Group closed.' : 'Payment recorded.', 'success');
-    return true;
-  } catch (e) {
-    console.error('[po-groups] recordPOGroupPayment failed:', e.message);
-    showToast('Error recording payment: ' + e.message, 'error');
-    return false;
-  } finally {
-    showLoader(false);
-  }
-}
-
-// ── ROLLUP DISPLAY HELPERS (client-side mirror of the SQL trigger,
-//    used for instant UI feedback before the DB round-trips) ──────────
-function computeRollupLabel(poGroups) {
-  if (!poGroups || !poGroups.length) return { label: 'No PO Groups Yet', closed: false };
-  const closedCount = poGroups.filter(g => PO_GROUP_TERMINAL.has(g.phase)).length;
-  const total = poGroups.length;
-  if (closedCount === total) return { label: 'Closed', closed: true };
-  return { label: `${closedCount} of ${total} POs Closed`, closed: false };
-}
-
-// ── RENDER: PO Group chip strip for collapsed request-list rows ───────
-function renderPOGroupChips(poGroups) {
-  if (!poGroups || !poGroups.length) {
-    return `<span style="font-size:0.72rem;color:var(--gray-4);font-style:italic">No parts grouped yet</span>`;
-  }
-  return poGroups.map(g => {
-    const meta = poGroupPhaseMeta(g.phase);
-    const vendorName = g.vendors?.name || g.group_label;
-    return `<span class="badge ${meta.badge}" style="margin-right:4px;font-size:0.68rem" title="${g.group_label}">${vendorName}: ${meta.label}</span>`;
-  }).join('');
-}
-
-// ── RENDER: one quotation card inside a PO Group (multi-quote, per-quote vendor) ──
-// showSelectBtn=true renders the PM's "Select as Final" / "Deselect" toggle.
-// selectedId is the client-side-tracked pick (falls back to is_selected from DB).
-function renderPOGroupQuotationCard(groupId, q, showSelectBtn, selectedId) {
-  const isSelected = showSelectBtn ? (q.id === selectedId) : !!q.is_selected;
-  const isImg = q.file_type?.includes('image');
-  const isPDF = q.file_type === 'application/pdf' || q.file_name?.toLowerCase().includes('.pdf');
-  const currency = q.currency || 'INR';
-  const fi = q.file_url ? _regFile(q.file_url, q.file_name || 'quotation') : null;
-  return `<div class="quotation-card ${isSelected ? 'selected' : ''}" id="pogq-card-${q.id}" style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 12px">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-      <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
-        <span style="font-size:1.1rem;flex-shrink:0">${isPDF ? '📄' : isImg ? '🖼️' : '🔗'}</span>
-        <div style="min-width:0">
-          <div style="font-weight:600;font-size:0.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.vendor_name || 'Unnamed vendor'}</div>
-          <div style="font-family:var(--font-mono);font-size:0.65rem;color:var(--gray-4)">${q.file_name || 'No file'} · ${fmtDate(q.created_at)}</div>
-        </div>
-      </div>
-      ${isSelected ? `<span style="background:#22c55e14;color:#16a34a;border:1px solid #22c55e30;padding:2px 8px;border-radius:3px;font-family:var(--font-mono);font-size:0.62rem;font-weight:600;white-space:nowrap">✓ SELECTED</span>` : ''}
-    </div>
-    ${q.amount ? `<div style="display:flex;gap:18px;flex-wrap:wrap;margin:8px 0">
-      <div><div class="detail-key">Amount</div><div style="font-family:var(--font-mono);font-size:0.9rem;font-weight:700">${currency} ${Number(q.amount).toLocaleString()}</div></div>
-      ${q.lead_time_days ? `<div><div class="detail-key">Lead Time</div><div style="font-family:var(--font-mono);font-weight:600">${q.lead_time_days}d</div></div>` : ''}
-    </div>` : ''}
-    ${q.notes ? `<p style="font-size:0.78rem;color:var(--gray-3);margin:6px 0">${q.notes}</p>` : ''}
-    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px">
-      ${fi !== null ? `<button class="btn btn-secondary btn-sm" onclick="_previewByIdx(${fi})">👁 Preview</button>
-      <button class="btn btn-secondary btn-sm" onclick="_downloadByIdx(${fi})">⬇ Download</button>` : ''}
-      ${showSelectBtn && !isSelected ? `<button class="btn btn-primary btn-sm" onclick="selectPOGroupQuotation('${groupId}','${q.id}')">✓ Select as Final</button>` : ''}
-      ${showSelectBtn && isSelected ? `<button class="btn btn-danger btn-sm" onclick="selectPOGroupQuotation('${groupId}',null)">Deselect</button>` : ''}
-    </div>
-  </div>`;
-}
-
-// Client-side "which quote is PM currently pointing at" per group, keyed
-// by group id — mirrors the legacy pmSelectedQuotationId pattern but
-// scoped per-group since a request can have several PO Groups open in
-// the same modal at once.
-const _poGroupSelectedQuote = {};
-function selectPOGroupQuotation(groupId, qId) {
-  _poGroupSelectedQuote[groupId] = qId;
-  const card = document.getElementById(`po-group-actions-${groupId}`);
-  if (!card) return;
-  card.querySelectorAll('.quotation-card').forEach(el => {
-    const id = el.id.replace('pogq-card-', '');
-    const isNow = id === qId;
-    el.classList.toggle('selected', isNow);
-  });
-  // Re-render this group's action area so the badge + button states refresh cleanly.
-  const group = (currentPOGroupsCache || []).find(g => g.id === groupId);
-  const quotations = (currentPOGroupQuotationsCache || {})[groupId] || [];
-  const partLines = currentPartLinesCache || [];
-  if (group) renderPOGroupActions(group, partLines, quotations, currentVendorListCache || []);
-}
-window.selectPOGroupQuotation = selectPOGroupQuotation;
-
-// ── ENGINEER VERIFICATION (mirrors legacy buildQuoteReview / selectApprovalPath) ──
-// Client-side state for the in-progress engineer decision, keyed by group id.
-const _poGroupEngineerPath = {};       // groupId -> 'client' | 'project_manager'
-const _poGroupEngineerSelectedQuote = {}; // groupId -> quotation id (client path only)
-const _poGroupEngineerScreenshot = {}; // groupId -> uploaded screenshot URL
-
-function renderEngineerPOGroupReview(group, quotations) {
-  const path = _poGroupEngineerPath[group.id] || null;
-  const selectedQuoteId = _poGroupEngineerSelectedQuote[group.id] || null;
-  const screenshotUrl = _poGroupEngineerScreenshot[group.id] || null;
-  if (!quotations.length) {
-    return `<div style="font-size:0.78rem;color:var(--gray-4)">No quotations on file for this group — ask Procurement to add one.</div>`;
-  }
-  return `
-    <div class="detail-key" style="margin-bottom:8px">Quotations to Verify</div>
-    <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">${quotations.map(q => renderPOGroupQuotationCard(group.id, q, false)).join('')}</div>
-    <div style="border-top:1px solid var(--border);padding-top:14px;margin-bottom:14px">
-      <div class="form-label" style="margin-bottom:10px">Who should approve this? *</div>
-      <div class="approval-options">
-        <div class="approval-option ${path === 'client' ? 'selected' : ''}" id="pogPathClient-${group.id}" onclick="handleEngineerSelectPOGroupPath('${group.id}','client')">
-          <div class="approval-option-icon">👤</div>
-          <div class="approval-option-label">Client Approval</div>
-          <div class="approval-option-sub">Select quote + attach client screenshot, then goes to PM</div>
-        </div>
-        <div class="approval-option ${path === 'project_manager' ? 'selected' : ''}" id="pogPathPM-${group.id}" onclick="handleEngineerSelectPOGroupPath('${group.id}','project_manager')">
-          <div class="approval-option-icon">👔</div>
-          <div class="approval-option-label">Project Manager</div>
-          <div class="approval-option-sub">Forward directly — PM selects quote and approves</div>
-        </div>
-      </div>
-    </div>
-    <div id="pogClientFields-${group.id}" style="display:${path === 'client' ? 'block' : 'none'}">
-      <div class="form-label" style="margin-bottom:8px">Select Final Quotation *</div>
-      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px">${quotations.map(q => renderPOGroupQuotationCard(group.id, q, true, selectedQuoteId)).join('')}</div>
-      <div class="form-label" style="margin-bottom:6px">Client Approval Screenshot *</div>
-      <div class="screenshot-zone" id="pogScreenshotZone-${group.id}" style="display:${screenshotUrl ? 'none' : 'block'}">
-        <input type="file" id="pogScreenshotFile-${group.id}" accept="image/png,image/jpeg" onchange="handleEngineerPOGroupScreenshot(event,'${group.id}')"/>
-        <div style="font-size:1.3rem;margin-bottom:4px">📷</div><div style="font-size:0.8rem;font-weight:600">Upload screenshot</div><div style="font-size:0.72rem;color:var(--gray-4)">PNG or JPG, max 5MB</div>
-      </div>
-      <div id="pogScreenshotPreview-${group.id}" style="display:${screenshotUrl ? 'block' : 'none'};margin-top:8px">
-        <img id="pogScreenshotImg-${group.id}" src="${screenshotUrl || ''}" style="max-width:100%;max-height:200px;object-fit:contain;border-radius:6px;border:1px solid var(--border)"/>
-        <button class="btn btn-ghost btn-sm" style="margin-top:4px" onclick="clearEngineerPOGroupScreenshot('${group.id}')">✕ Remove</button>
-      </div>
-      <div class="form-group" style="margin-top:10px">
-        <label class="form-label">Client Approval Notes</label>
-        <textarea class="form-control" id="pogClientNotes-${group.id}" placeholder="Client name, reference, date..."></textarea>
-      </div>
-    </div>
-    <div id="pogPMFields-${group.id}" style="display:${path === 'project_manager' ? 'block' : 'none'}">
-      <div style="background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.18);border-radius:var(--radius-sm);padding:12px;display:flex;gap:10px">
-        <span style="font-size:1.2rem">👔</span>
-        <div><div style="font-size:0.85rem;font-weight:600;margin-bottom:3px">Forwarding to PM</div>
-        <p style="font-size:0.78rem;color:var(--gray-3)">PM will receive all quotations, select the final one, and give approval.</p></div>
-      </div>
-    </div>
-    ${path ? `<div style="margin-top:14px"><button class="btn btn-primary btn-sm" onclick="handleEngineerSubmitPOGroupPath('${group.id}')">Submit →</button></div>` : ''}`;
-}
-
-function handleEngineerSelectPOGroupPath(groupId, path) {
-  _poGroupEngineerPath[groupId] = path;
-  if (path !== 'client') _poGroupEngineerSelectedQuote[groupId] = null;
-  const group = (currentPOGroupsCache || []).find(g => g.id === groupId);
-  const quotations = (currentPOGroupQuotationsCache || {})[groupId] || [];
-  if (group) {
-    const el = document.getElementById(`po-group-actions-${groupId}`);
-    if (el) el.innerHTML = renderEngineerPOGroupReview(group, quotations);
-  }
-}
-window.handleEngineerSelectPOGroupPath = handleEngineerSelectPOGroupPath;
-
-async function handleEngineerPOGroupScreenshot(e, groupId) {
-  const file = e.target.files[0]; if (!file) return;
-  try {
-    const uploaded = await uploadFileToStorage(file, `pr/${currentPR?.id || 'pending'}/po-group-client-approval`);
-    _poGroupEngineerScreenshot[groupId] = uploaded.url;
-    const group = (currentPOGroupsCache || []).find(g => g.id === groupId);
-    const quotations = (currentPOGroupQuotationsCache || {})[groupId] || [];
-    if (group) {
-      const el = document.getElementById(`po-group-actions-${groupId}`);
-      if (el) el.innerHTML = renderEngineerPOGroupReview(group, quotations);
-    }
-  } catch (err) {
-    showToast('Screenshot upload failed: ' + err.message, 'error');
-  }
-}
-window.handleEngineerPOGroupScreenshot = handleEngineerPOGroupScreenshot;
-
-function clearEngineerPOGroupScreenshot(groupId) {
-  _poGroupEngineerScreenshot[groupId] = null;
-  const group = (currentPOGroupsCache || []).find(g => g.id === groupId);
-  const quotations = (currentPOGroupQuotationsCache || {})[groupId] || [];
-  if (group) {
-    const el = document.getElementById(`po-group-actions-${groupId}`);
-    if (el) el.innerHTML = renderEngineerPOGroupReview(group, quotations);
-  }
-}
-window.clearEngineerPOGroupScreenshot = clearEngineerPOGroupScreenshot;
-
-async function handleEngineerSubmitPOGroupPath(groupId) {
-  const path = _poGroupEngineerPath[groupId];
-  if (!path) { showToast('Please select an approval path', 'error'); return; }
-  const { data: group } = await db.from('po_groups').select('*').eq('id', groupId).single();
-
-  if (path === 'client') {
-    const selectedQuoteId = _poGroupEngineerSelectedQuote[groupId];
-    const screenshotUrl = _poGroupEngineerScreenshot[groupId];
-    if (!selectedQuoteId) { showToast('Please select a final quotation', 'error'); return; }
-    if (!screenshotUrl) { showToast('Please attach client approval screenshot', 'error'); return; }
-    showLoader(true);
+async function dbFetch(queryFn, label = 'data', { retries = 2, retryDelayMs = 500 } = {}) {
+  let lastError = null;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    let data, error;
     try {
-      await db.from('po_group_quotations').update({ is_selected: false }).eq('po_group_id', groupId);
-      await db.from('po_group_quotations').update({ is_selected: true }).eq('id', selectedQuoteId);
-      await setPOGroupPhase(group, 'pending_pm_approval', {
-        approval_path: 'client',
-        selected_quotation_id: selectedQuoteId,
-        client_approval_screenshot: screenshotUrl,
-        client_approval_notes: document.getElementById(`pogClientNotes-${groupId}`)?.value.trim() || null,
-      });
-      showToast('Client approval submitted — forwarded to PM.', 'success');
-      notifyRoleOfPOGroupEvent(currentPR.id, `"${group.group_label}" client-approved and forwarded for PM's final decision on PR-${String(currentPR.request_number).padStart(4,'0')}.`, 'pm');
+      ({ data, error } = await queryFn());
     } catch (e) {
-      showToast('Error: ' + e.message, 'error');
-    } finally {
-      showLoader(false);
+      error = e;
     }
+    if (!error) return data || [];
+    lastError = error;
+    console.error(`[dbFetch] "${label}" failed (attempt ${attempt + 1}/${retries + 1}):`, error.message || error, error);
+    if (attempt < retries) await new Promise(r => setTimeout(r, retryDelayMs * (attempt + 1)));
+  }
+  console.error(`[dbFetch] "${label}" gave up after ${retries + 1} attempts.`, lastError);
+  if (typeof showToast === 'function') {
+    showToast(`Couldn't load ${label}: ${lastError?.message || 'unknown error'} — check console`, 'error');
+  }
+  return [];
+}
+window.dbFetch = dbFetch;
+
+// ══════════════════════════════════════════════════════════════
+// SAFE FILE REGISTRY — eliminates base64-in-HTML-attribute bugs
+// All large file URLs are stored here; buttons reference by index only.
+// ══════════════════════════════════════════════════════════════
+const _fileRegistry = [];
+
+// ── EMAIL NOTIFICATION HELPER ────────────────────────────────
+async function notifyPhaseChange(prId, phase, triggerUserId) {
+  try {
+    await db.functions.invoke('notify-phase', {
+      body: { pr_id: prId, phase: phase, trigger_user_id: triggerUserId }
+    });
+  } catch(e) {
+    console.warn('Notification (non-blocking):', e.message);
+  }
+}
+
+function _regFile(url, name) {
+  // Reuse existing slot if same file already registered
+  const existing = _fileRegistry.findIndex(f => f.url === url && f.name === name);
+  if (existing !== -1) return existing;
+  return _fileRegistry.push({url, name}) - 1;
+}
+
+function _safeDownload(url, fileName) {
+  if (!url) return;
+  if (url.startsWith('data:')) {
+    try {
+      const arr = url.split(','), mime = arr[0].match(/:(.*?);/)[1];
+      const bstr = atob(arr[1]); let n = bstr.length; const u8 = new Uint8Array(n);
+      while(n--) u8[n] = bstr.charCodeAt(n);
+      const blob = new Blob([u8], {type: mime});
+      const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+      a.download = fileName || 'file'; document.body.appendChild(a); a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    } catch(e) { window.open(url, '_blank'); }
   } else {
-    showLoader(true);
-    try {
-      await db.from('po_group_quotations').update({ is_selected: false }).eq('po_group_id', groupId);
-      await setPOGroupPhase(group, 'pending_pm_approval', {
-        approval_path: 'project_manager',
-        client_approval_screenshot: null,
-        client_approval_notes: null,
-        selected_quotation_id: null,
-      });
-      showToast('Forwarded directly to Project Manager.', 'success');
-      notifyRoleOfPOGroupEvent(currentPR.id, `"${group.group_label}" forwarded to PM for quote selection and approval on PR-${String(currentPR.request_number).padStart(4,'0')}.`, 'pm');
-    } catch (e) {
-      showToast('Error: ' + e.message, 'error');
-    } finally {
-      showLoader(false);
-    }
+    const a = document.createElement('a'); a.href = url; a.download = fileName || 'file';
+    a.target = '_blank'; document.body.appendChild(a); a.click(); a.remove();
   }
-  delete _poGroupEngineerPath[groupId];
-  delete _poGroupEngineerSelectedQuote[groupId];
-  delete _poGroupEngineerScreenshot[groupId];
-  await openPRNewModel(currentPR.id);
 }
-window.handleEngineerSubmitPOGroupPath = handleEngineerSubmitPOGroupPath;
 
-// selectPOGroupQuotation is reused inside the engineer's client-path quote
-// picker too — detect which mode we're in (engineer choosing vs PM
-// choosing) by checking whether an engineer path is currently active for
-// this group, and update the matching state bucket.
-const _origSelectPOGroupQuotation = selectPOGroupQuotation;
-function selectPOGroupQuotationRouter(groupId, qId) {
-  if (_poGroupEngineerPath[groupId] === 'client') {
-    _poGroupEngineerSelectedQuote[groupId] = qId;
-    const group = (currentPOGroupsCache || []).find(g => g.id === groupId);
-    const quotations = (currentPOGroupQuotationsCache || {})[groupId] || [];
-    if (group) {
-      const el = document.getElementById(`po-group-actions-${groupId}`);
-      if (el) el.innerHTML = renderEngineerPOGroupReview(group, quotations);
-    }
-    return;
-  }
-  _origSelectPOGroupQuotation(groupId, qId);
+function _safePreview(url, name) {
+  if (!url) return;
+  // Use page-level preview if available (procurement/accounts pages inject attPreviewOverlay)
+  if (typeof openAttPreview === 'function') { openAttPreview(url, name); return; }
+  // Fallback: inline modal (for pages without the full preview engine)
+  const isImg = /\.(png|jpe?g|gif|webp)$/i.test(name) || url.startsWith('data:image');
+  const isPDF = /\.pdf$/i.test(name) || url.startsWith('data:application/pdf');
+  const o = document.createElement('div');
+  o.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.82);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
+  const inner = isImg
+    ? `<div style="max-width:90vw;max-height:85vh;overflow:auto;border-radius:10px;background:white;padding:4px"><img src="${url}" style="max-width:100%;display:block;border-radius:8px" alt="${name}"/></div>`
+    : isPDF
+    ? `<div style="width:84vw;height:82vh;border-radius:10px;overflow:hidden;background:white"><iframe src="${url}" style="width:100%;height:100%;border:none" title="${name}"></iframe></div>`
+    : `<div style="padding:48px;background:white;border-radius:10px;text-align:center;color:#6b7280"><div style="font-size:3rem;margin-bottom:12px">📄</div><div style="font-weight:600">${name}</div><div style="font-size:0.8rem;margin-top:8px">Preview not available</div></div>`;
+  o.innerHTML = inner + `<div style="display:flex;gap:10px;margin-top:14px">
+    <button style="background:white;border:none;padding:8px 22px;border-radius:6px;font-weight:600;cursor:pointer" onclick="_safeDownload(_fileRegistry[${_fileRegistry.length}]?.url,_fileRegistry[${_fileRegistry.length}]?.name)">⬇ Download</button>
+    <button style="background:white;border:none;padding:8px 22px;border-radius:6px;font-weight:600;cursor:pointer" onclick="this.closest('[style*=fixed]').remove()">✕ Close</button>
+  </div>`;
+  o.onclick = e => { if(e.target===o) o.remove(); };
+  document.body.appendChild(o);
 }
-window.selectPOGroupQuotation = selectPOGroupQuotationRouter;
 
-// ── RENDER: expandable PO Group detail card (used inside request modal) ──
-// ── RENDER: per-PO-Group workflow timeline ──────────────────────────
-// Mirrors legacy renderWorkflowTrack (shared.js) but reads a PO Group's
-// own `phase`/`phase_timestamps` instead of the parent PR's. Once a
-// request is split into groups, each group runs its own independent
-// lifecycle — the PR-level timeline stops advancing, so this is the
-// only place progress/dates for a given vendor split are visible.
-const PO_GROUP_TRACK_STEPS = [
-  { key: 'quotation_pending', label: 'Quote Pending' },
-  { key: 'quoted', label: 'Engineer Review' },
-  { key: 'pending_pm_approval', label: 'PM Approval' },
-  { key: 'pm_approved', label: 'Approved' },
-  { key: 'order_placed', label: 'Order Placed' },
-  { key: 'grn_pending', label: 'GRN / QC' },
-  { key: 'qc_passed', label: 'QC Passed' },
-  { key: 'payment_pending', label: 'Payment' },
-  { key: 'closed', label: 'Closed' },
+function _downloadByIdx(i) { const f=_fileRegistry[i]; if(f) _safeDownload(f.url,f.name); }
+function _previewByIdx(i)  { const f=_fileRegistry[i]; if(f) _safePreview(f.url,f.name); }
+// ══════════════════════════════════════════════════════════════
+// ── DOUBLE-LOAD GUARD ───────────────────────────────────────
+if (!window._procureSharedLoaded) {
+window._procureSharedLoaded = true;
+
+// ── TOAST / LOADER / MODAL ──────────────────────────────────
+function showToast(msg, type='info') {
+  const c=document.getElementById('toast-container'); if(!c)return;
+  const t=document.createElement('div'); t.className=`toast ${type}`;
+  t.innerHTML=`<span>${{success:'✓',error:'✗',info:'ℹ'}[type]||'ℹ'}</span><span>${msg}</span>`;
+  c.appendChild(t); setTimeout(()=>t.remove(),4000);
+}
+function showLoader(s){ const e=document.getElementById('loadingOverlay'); if(e)e.classList.toggle('active',s); }
+function openModal(id){ const m=document.getElementById(id); if(m){m.classList.add('active');document.body.style.overflow='hidden';} }
+function closeModal(id){ const m=document.getElementById(id); if(m){m.classList.remove('active');document.body.style.overflow='';} }
+
+// ── CONSTANTS ────────────────────────────────────────────────
+var CURRENCIES = typeof CURRENCIES !== 'undefined' ? CURRENCIES : ['AED','USD','EUR','GBP','INR','SAR','OMR','KWD','QAR','BHD'];
+var SOURCING_OPTIONS = typeof SOURCING_OPTIONS !== 'undefined' ? SOURCING_OPTIONS : [{value:'domestic',label:'🏠 Domestic'},{value:'international',label:'🌍 International'}];
+var PAYMENT_TERMS_OPTIONS = typeof PAYMENT_TERMS_OPTIONS !== 'undefined' ? PAYMENT_TERMS_OPTIONS : [
+  {value:'50_50',label:'50% Advance — 50% Post Delivery'},
+  {value:'full_advance',label:'100% Full Advance'},
+  {value:'full_on_delivery',label:'100% On Delivery'},
+  {value:'30_70',label:'30% Advance — 70% Post Delivery'},
+  {value:'no_advance',label:'No Advance (Net 30/60/90)'},
+  {value:'custom',label:'Custom Terms'}
 ];
-const PO_GROUP_TRACK_ORDER = PO_GROUP_TRACK_STEPS.map(s => s.key);
+// Legacy phase compat: map old keys to new
+const PHASE_LEGACY_MAP = {
+  'advance_requested':  'advance_raised_to_accounts',
+  'advance_approved':   'advance_payment_received',
+  'advance_rejected':   'advance_raised_to_accounts',
+  'payment_requested':  'payment_raised_to_accounts',
+};
 
-function renderPOGroupTimeline(group) {
-  const ts = group.phase_timestamps || {};
-  const phase = group.phase;
-  const isTerminalBad = phase === 'rejected' || phase === 'declined';
-  const isRework = phase === 'rework_pending';
-  // Rework isn't on the main track — it's a loop back into GRN/QC — so it
-  // occupies that same slot for progress purposes and gets its own tag.
-  const effectivePhase = isRework ? 'grn_pending' : phase;
-  const idx = isTerminalBad ? PO_GROUP_TRACK_ORDER.length : PO_GROUP_TRACK_ORDER.indexOf(effectivePhase);
+function getPhaseBadge(phase){
+  const map={
+    submitted:['Submitted','badge-gray'],
+    pending_initial_pm_approval:['PM Clearance','badge-orange'],
+    procurement_active:['Procurement','badge-blue'],
+    vendor_info_shared:['Vendor Info Shared','badge-purple'],
+    quotations_shared:['Quotes Shared','badge-purple'],
+    pending_pm_final_approval:['PM Approval','badge-orange'],
+    approved:['Approved','badge-green'],
+    order_placed:['Order Placed','badge-blue'],
+    grn_pending:['GRN / QC','badge-orange'],
+    qc_passed:['QC Passed','badge-green'],
+    accepted:['Accepted & Closed','badge-green'],
+    rejected:['Rejected','badge-red'],
+    payment_requested:['Payment Requested','badge-purple'],
+    advance_requested:['Advance Requested','badge-orange'],
+    advance_approved:['Advance Approved','badge-green'],
+    advance_rejected:['Advance Rejected','badge-red'],
+    declined:['Declined','badge-red'],
+    pending_decline_approval:['Pending Decline Approval','badge-orange'],
+  };
+  const[label,cls]=map[phase]||[phase,'badge-gray'];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+// ── NAVBAR / FOOTER ─────────────────────────────────────────
+function initNavbar(user) {
+  const g=id=>document.getElementById(id);
+  if(g('navUserName')) g('navUserName').textContent=user.name;
+  if(g('navUserDept')) g('navUserDept').textContent=user.department?DEPARTMENTS[user.department]:roleLabel(user.role);
+  if(g('navUserAvatar')) g('navUserAvatar').textContent=user.name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase();
+  if(g('navRoleBadge')) g('navRoleBadge').textContent=roleLabel(user.role);
+  // Inject shared modals (password change, etc.)
+  injectSharedModals();
+  // Close user menu on outside click
+  document.addEventListener('click', e => {
+    const menu = document.getElementById('userNavMenu');
+    const wrap = document.getElementById('navUserWrap');
+    if (menu && wrap && !wrap.contains(e.target)) {
+      menu.style.display = 'none';
+    }
+  });
+}
+function roleLabel(r){return{master:'Master Admin',procurement_manager:'Procurement',engineer:'Engineer',project_manager:'Project Manager',accounts:'Accounts'}[r]||r;}
+function logout(){Session.clear();window.location.href='../index.html';}
+
+window.toggleUserMenu = function toggleUserMenu(e) {
+  e.stopPropagation();
+  const menu = document.getElementById('userNavMenu');
+  if (!menu) return;
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+
+function buildNavbar(user) {
+  const navLinks = {
+    master: [
+      {href:'master.html',label:'Dashboard'},
+      {href:'projects.html',label:'Projects'},
+      {href:'accounts.html',label:'Accounts'}
+    ],
+    project_manager: [
+      {href:'pm.html',label:'My Requests'},
+      {href:'projects.html',label:'Manage Projects'},
+    ],
+    procurement_manager: [
+      {href:'procurement.html',label:'Procurement'},
+    ],
+    accounts: [
+      {href:'accounts.html',label:'Payments'},
+    ],
+    engineer: [
+      {href:'engineer.html',label:'My Requests'},
+    ]
+  };
+  const links = navLinks[user.role]||[];
+  return `<nav class="navbar">
+    <a class="nav-logo" href="#">
+      <div class="nav-logo-mark">
+        <img src="https://nxhvxfvfhvbkymgvmwwi.supabase.co/storage/v1/object/public/assets/Inventindia_Logo-2.png" alt="Logo" width="50" height="20">
+      </div>
+      <div><div class="nav-logo-text">Procure<span>X</span></div></div>
+    </a>
+    <div class="nav-links" style="display:flex;gap:4px;margin-left:18px">
+      ${links.map(l=>`<a href="${l.href}" class="nav-link ${window.location.pathname.includes(l.href)?'active':''}" style="font-size:0.78rem;padding:5px 12px;border-radius:5px;color:rgba(255,255,255,0.8);text-decoration:none;transition:background 0.15s;${window.location.pathname.includes(l.href)?'background:rgba(255,255,255,0.15);color:white':''}" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='${window.location.pathname.includes(l.href)?'rgba(255,255,255,0.15)':'transparent'}'">${l.label}</a>`).join('')}
+    </div>
+    <div class="nav-spacer"></div>
+    <span class="nav-role-badge" id="navRoleBadge"></span>
+
+    <!-- User Menu Wrap -->
+    <div id="navUserWrap" style="position:relative">
+      <div class="nav-user" style="cursor:pointer;user-select:none" onclick="toggleUserMenu(event)" title="Account options">
+        <div class="nav-user-avatar" id="navUserAvatar"></div>
+        <div>
+          <div class="nav-user-name" id="navUserName"></div>
+          <div class="nav-user-dept" id="navUserDept"></div>
+        </div>
+        <svg width="10" height="6" viewBox="0 0 10 6" fill="none" style="margin-left:6px;opacity:0.6;flex-shrink:0"><path d="M1 1l4 4 4-4" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <!-- Dropdown -->
+      <div id="userNavMenu" style="display:none;position:absolute;top:calc(100% + 8px);right:0;background:white;border:1px solid #e5e7eb;border-radius:10px;padding:6px;min-width:190px;z-index:9999;box-shadow:0 8px 24px rgba(0,0,0,0.14)">
+        <div style="padding:8px 10px 10px;border-bottom:1px solid #f3f4f6;margin-bottom:4px">
+          <div style="font-weight:700;font-size:0.82rem;color:#111">${user.name}</div>
+          <div style="font-size:0.72rem;color:#6b7280">${roleLabel(user.role)}</div>
+        </div>
+        <button onclick="openChangePasswordModal()" style="width:100%;text-align:left;padding:8px 10px;border:none;background:none;cursor:pointer;font-size:0.8rem;color:#374151;border-radius:6px;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='#f9fafb'" onmouseout="this.style.background='none'">
+          🔑 <span>Change Password</span>
+        </button>
+        <div style="height:1px;background:#f3f4f6;margin:4px 0"></div>
+        <button onclick="logout()" style="width:100%;text-align:left;padding:8px 10px;border:none;background:none;cursor:pointer;font-size:0.8rem;color:#dc2626;border-radius:6px;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='#fef2f2'" onmouseout="this.style.background='none'">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16,17 21,12 16,7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          <span>Logout</span>
+        </button>
+      </div>
+    </div>
+  </nav>`;
+}
+
+function buildFooter() {
+  return `<footer>
+    <div class="footer-logo">
+      <div class="footer-logo-mark">
+      <img src="../ii favicon.png" alt="Logo" width="50" height="20">
+      </div>
+      <div class="footer-logo-text">Procure<span>X</span></div>
+    </div>
+    <div class="footer-copy">© ${new Date().getFullYear()} ProcureX</div>
+    <div class="footer-links"><a href="#">Support</a><a href="#">Docs</a><a href="change-password.html">Change Password</a></div>
+  </footer>`;
+}
+
+
+// ── PASSWORD CHANGE MODAL (injected once per page) ───────────
+function injectSharedModals() {
+  if (document.getElementById('_sharedChangePasswordModal')) return;
+  const el = document.createElement('div');
+  el.innerHTML = `
+    <div class="modal-overlay" id="_sharedChangePasswordModal" onclick="event.target===this&&closeChangePasswordModal()">
+      <div class="modal" style="max-width:420px">
+        <div class="modal-header">
+          <div><div class="modal-title">🔑 Change Password</div><div class="modal-title-sub">Update your account password</div></div>
+          <button class="modal-close" onclick="closeChangePasswordModal()">✕</button>
+        </div>
+        <div class="modal-body">
+          <div id="_cpError" style="display:none;padding:9px 12px;background:rgba(214,43,43,0.08);border:1px solid rgba(214,43,43,0.22);border-radius:6px;color:var(--red);font-size:0.8rem;margin-bottom:14px"></div>
+          <div class="form-group" style="margin-bottom:14px">
+            <label class="form-label">Current Password *</label>
+            <input class="form-control" id="_cpOld" type="password" placeholder="Enter your current password" autocomplete="current-password"/>
+          </div>
+          <div class="form-group" style="margin-bottom:14px">
+            <label class="form-label">New Password *</label>
+            <input class="form-control" id="_cpNew" type="password" placeholder="At least 6 characters" autocomplete="new-password"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Confirm New Password *</label>
+            <input class="form-control" id="_cpConfirm" type="password" placeholder="Repeat new password" autocomplete="new-password" onkeydown="if(event.key==='Enter')submitPasswordChange()"/>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeChangePasswordModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="submitPasswordChange()">Update Password</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.appendChild(el.firstElementChild);
+}
+
+window.openChangePasswordModal = function openChangePasswordModal() {
+  const menu = document.getElementById('userNavMenu');
+  if (menu) menu.style.display = 'none';
+  const m = document.getElementById('_sharedChangePasswordModal');
+  if (!m) { injectSharedModals(); }
+  ['_cpOld','_cpNew','_cpConfirm'].forEach(id => { const e=document.getElementById(id); if(e) e.value=''; });
+  const err = document.getElementById('_cpError');
+  if (err) { err.style.display='none'; err.textContent=''; }
+  const modal = document.getElementById('_sharedChangePasswordModal');
+  if (modal) { modal.classList.add('active'); document.body.style.overflow='hidden'; }
+}
+
+window.closeChangePasswordModal = function closeChangePasswordModal() {
+  const m = document.getElementById('_sharedChangePasswordModal');
+  if (m) { m.classList.remove('active'); document.body.style.overflow=''; }
+}
+
+window.submitPasswordChange = async function submitPasswordChange() {
+  const oldPw = document.getElementById('_cpOld')?.value || '';
+  const newPw = document.getElementById('_cpNew')?.value || '';
+  const confirmPw = document.getElementById('_cpConfirm')?.value || '';
+  const errEl = document.getElementById('_cpError');
+
+  const showErr = msg => { if(errEl){errEl.textContent=msg;errEl.style.display='block';} };
+  errEl.style.display = 'none';
+
+  if (!oldPw || !newPw || !confirmPw) { showErr('All fields are required.'); return; }
+  if (newPw.length < 6) { showErr('New password must be at least 6 characters.'); return; }
+  if (newPw !== confirmPw) { showErr('New passwords do not match.'); return; }
+
+  const user = Session.get();
+  if (!user) { showErr('Session expired. Please log in again.'); return; }
+
+  showLoader(true);
+  // Verify current password
+  const { data: userRec, error: fetchErr } = await db.from('users').select('id,password').eq('id', user.id).single();
+  if (fetchErr || !userRec) { showLoader(false); showErr('Could not verify identity. Try logging out and in.'); return; }
+  if (userRec.password !== oldPw) { showLoader(false); showErr('Current password is incorrect.'); return; }
+
+  // Update password
+  const { error: updateErr } = await db.from('users').update({ password: newPw }).eq('id', user.id);
+  showLoader(false);
+  if (updateErr) { showErr('Update failed: ' + updateErr.message); return; }
+
+  closeChangePasswordModal();
+  showToast('Password updated successfully!', 'success');
+}
+
+// ── WORKFLOW TRACK ──────────────────────────────────────────
+const WF_STEPS = [
+  {key:'submitted',label:'Submitted'},
+  {key:'pending_initial_pm_approval',label:'PM Clearance'},
+  {key:'procurement_active',label:'Procurement'},
+  {key:'quotations_shared',label:'Quotations'},
+  {key:'pending_pm_final_approval',label:'PM Approval'},
+  {key:'approved',label:'Approved'},
+  {key:'advance_raised_to_accounts',label:'Adv. Raised',optional:true},
+  {key:'advance_payment_received',label:'Adv. Received',optional:true},
+  {key:'order_placed',label:'Ordered'},
+  {key:'grn_pending',label:'GRN/QC'},
+  {key:'qc_passed',label:'QC Passed'},
+  {key:'payment_raised_to_accounts',label:'Pay. Raised'},
+  {key:'payment_received',label:'Pay. Received'},
+  {key:'accepted',label:'Complete'}
+];
+
+function renderWorkflowTrack(phase, phaseTimestamps, createdAt) {
+  var ts = Object.assign({}, phaseTimestamps || {});
+  // Fall back to created_at for submitted timestamp
+  if (!ts.submitted && createdAt) ts.submitted = createdAt;
+  var phaseToStep = {
+    'advance_approved': 'advance_payment_received',
+    'advance_rejected': 'advance_raised_to_accounts',
+    // legacy compat
+    'advance_requested': 'advance_raised_to_accounts',
+    'payment_requested': 'payment_raised_to_accounts'
+  };
+  var effectivePhase = phaseToStep[phase] || phase;
+  var idx = PHASE_ORDER.indexOf(effectivePhase);
+  var isRej = phase === 'rejected';
 
   function shortDate(iso) {
     if (!iso) return '';
-    return new Date(iso).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+    var d = new Date(iso);
+    return d.toLocaleDateString('en-GB', {day:'2-digit', month:'short'});
+  }
+  function shortTime(iso) {
+    if (!iso) return '';
+    var d = new Date(iso);
+    return d.toLocaleTimeString('en-GB', {hour:'2-digit', minute:'2-digit'});
   }
 
-  const stepsHTML = PO_GROUP_TRACK_STEPS.map((s, i) => {
-    const si = PO_GROUP_TRACK_ORDER.indexOf(s.key);
-    const isCurrent = !isTerminalBad && effectivePhase === s.key;
-    const isDone = isTerminalBad || si < idx;
-    const cls = isCurrent ? 'current' : isDone ? 'done' : '';
-    const dateStr = (isDone || isCurrent) ? shortDate(ts[s.key]) : '';
-    return `<div class="wf-step ${cls}">
-      <div class="wf-node">${isDone ? '✓' : i + 1}</div>
-      <div class="wf-label">${s.label}</div>
-      <div class="wf-date">${dateStr}</div>
-    </div>`;
-  }).join('');
+  return '<div class="workflow-track">' + WF_STEPS.map(function(s, i) {
+    var si = PHASE_ORDER.indexOf(s.key);
+    var isCurrent = effectivePhase === s.key;
+    var isDone = si < idx;
+    var hasTs = !!ts[s.key];
+    // Optional phases (advance) shown as skipped if done but no timestamp
+    var isSkipped = isDone && !hasTs && s.optional;
+    var cls = isCurrent ? 'current' : (isDone && !isSkipped) ? 'done' : isSkipped ? 'skipped' : '';
 
-  const reworkHTML = isRework
-    ? `<div class="wf-step current"><div class="wf-node" style="background:var(--red);border-color:var(--red);color:white">↺</div><div class="wf-label" style="color:var(--red)">Rework/Return</div><div class="wf-date">${shortDate(ts['rework_pending'])}</div></div>`
-    : '';
-  const rejHTML = isTerminalBad
-    ? `<div class="wf-step current"><div class="wf-node" style="background:var(--red);border-color:var(--red);color:white">✗</div><div class="wf-label" style="color:var(--red)">${phase === 'rejected' ? 'Rejected' : 'Declined'}</div><div class="wf-date">${shortDate(ts[phase])}</div></div>`
-    : '';
+    // Email notification indicator
+    var emailKey = s.key + '_email_sent';
+    var emailTs = ts[emailKey];
+    var emailHtml = emailTs
+      ? '<div class="wf-email-tag">✉ ' + shortDate(emailTs) + '</div>'
+      : (isCurrent || isDone) && !isSkipped ? '<div class="wf-email-tag wf-email-pending"></div>' : '';
 
-  return `<div class="workflow-track" style="margin:2px 0 10px">${stepsHTML}${reworkHTML}${rejHTML}</div>`;
+    var nodeStyle = '', labelStyle = '', nodeContent = isDone && !isSkipped ? '✓' : i + 1;
+    var nodeLabel = s.label;
+    if (isSkipped) { nodeStyle = 'style="background:var(--off-white);border-color:var(--border);color:var(--gray-4)"'; labelStyle = 'style="color:var(--gray-4)"'; nodeContent = '—'; }
+
+    // Date: show for all done/current phases even if timestamp missing (show '—' placeholder)
+    var dateStr = (isDone || isCurrent) && !isSkipped ? (shortDate(ts[s.key]) || '') : '';
+    var dateHtml = '<div class="wf-date">' + dateStr + '</div>';
+
+    return '<div class="wf-step ' + cls + '">' +
+      '<div class="wf-node" ' + nodeStyle + '>' + nodeContent + '</div>' +
+      '<div class="wf-label" ' + labelStyle + '>' + nodeLabel + '</div>' +
+      dateHtml +
+      '</div>';
+  }).join('') +
+  (isRej ? '<div class="wf-step current"><div class="wf-node" style="background:var(--red);border-color:var(--red);color:white">✗</div><div class="wf-label" style="color:var(--red)">Rejected</div><div class="wf-date">' + shortDate(ts['rejected']) + '</div></div>' : '') +
+  '</div>';
 }
-window.renderPOGroupTimeline = renderPOGroupTimeline;
 
-// ── RENDER: read-only docs/payments panel, same for every role ─────────
-// Quotation files, the generated PO, and payment records are shown here
-// unconditionally (not gated by role or phase like the action area below),
-// since PM/Engineer/Accounts should be able to see everything Procurement
-// has on a group at any time, not just what that phase's action branch
-// happens to render for their role.
-function renderPOGroupDocsAndPayments(group, quotations, po, poAttachment, paymentRows) {
-  let html = '';
-
-  // Client approval screenshot: previously only rendered inline inside the
-  // pending_pm_approval action panel (PM/master role only), so it vanished
-  // for everyone — including Procurement — the moment the group advanced
-  // past that phase. Rendered here instead so it persists in the card body
-  // across every phase and every role, same as quotations/PO/payments below.
-  if (group.client_approval_screenshot) {
-    html += `<div style="margin-top:8px;padding:10px;background:rgba(22,163,74,0.06);border:1px solid rgba(22,163,74,0.2);border-radius:var(--radius)">
-      <div class="detail-key" style="color:#16a34a;margin-bottom:6px">✓ Client Approval Screenshot</div>
-      <img src="${group.client_approval_screenshot}" style="max-width:100%;max-height:220px;object-fit:contain;border-radius:6px;border:1px solid var(--border)" onerror="this.style.display='none'"/>
-      ${group.client_approval_notes ? `<p style="margin-top:6px;font-size:0.8rem;color:var(--gray-3)">${group.client_approval_notes}</p>` : ''}
-    </div>`;
-  }
-
-  if (quotations && quotations.length) {
-    html += `<div style="margin-top:8px">
-      <div class="detail-key" style="margin-bottom:6px">📎 Quotations &amp; Files</div>
-      <div style="display:flex;flex-direction:column;gap:6px">${quotations.map(q => renderPOGroupQuotationCard(group.id, q, false)).join('')}</div>
-    </div>`;
-  }
-
-  if (po) {
-    const fi = poAttachment?.file_url ? _regFile(poAttachment.file_url, poAttachment.file_name || `PO_${po.po_number}.pdf`) : null;
-    // The PO record and its PDF are saved in two separate steps (see
-    // confirmGeneratePOGroupOrder) — the DB write basically can't fail,
-    // but the html2canvas/jsPDF render + Storage upload can, silently,
-    // leaving a PO with no attached file. Surface that clearly instead of
-    // just omitting the buttons, and give Procurement a one-click retry
-    // that backfills the PDF without touching the PO record itself.
-    // Only procurement.html has the #poModal markup this needs, so the
-    // retry action is scoped to that role.
-    const role = window.PO_GROUP_PAGE_ROLE || 'procurement';
-    const missingPdfHTML = (fi === null)
-      ? `<div style="width:100%;display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding-top:6px;border-top:1px dashed rgba(214,43,43,0.25);margin-top:4px">
-          <span style="font-size:0.74rem;color:var(--red)">⚠️ PDF not attached — the file failed to save when this PO was generated.</span>
-          ${role === 'procurement' ? `<button class="btn btn-secondary btn-sm" onclick="openPOGroupModal('${group.id}')">🔄 Generate PDF</button>` : ''}
-        </div>`
-      : '';
-    html += `<div style="margin-top:8px;border:1px solid rgba(99,102,241,0.25);border-radius:var(--radius-sm);overflow:hidden">
-      <div style="padding:8px 12px;background:rgba(99,102,241,0.07);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
-        <div style="font-weight:700;font-size:0.8rem;color:#4f46e5">📄 Purchase Order</div>
-        <span style="font-family:var(--font-mono);font-size:0.7rem;font-weight:700;padding:2px 8px;border-radius:3px;background:rgba(99,102,241,0.12);color:#4f46e5">${po.po_number}</span>
-      </div>
-      <div style="padding:10px 12px;background:white;display:flex;flex-wrap:wrap;gap:14px;align-items:center">
-        <div><div class="detail-key">PO Date</div><div class="detail-value" style="font-family:var(--font-mono);font-size:0.8rem">${fmtDate(po.po_date || po.created_at)}</div></div>
-        <div><div class="detail-key">Total Amount</div><div class="detail-value" style="font-family:var(--font-mono);font-weight:700;font-size:0.85rem">${po.currency || 'INR'} ${Number(po.total_amount || 0).toLocaleString()}</div></div>
-        ${fi !== null ? `<div style="display:flex;gap:6px">
-          <button class="btn btn-secondary btn-sm" onclick="_previewByIdx(${fi})">👁 Preview PO</button>
-          <button class="btn btn-secondary btn-sm" onclick="_downloadByIdx(${fi})">⬇ Download</button>
-        </div>` : ''}
-        ${missingPdfHTML}
-      </div>
-    </div>`;
-  }
-
-  if (paymentRows && paymentRows.length) {
-    html += `<div style="margin-top:8px;border:1px solid rgba(139,92,246,0.3);border-radius:var(--radius-sm);overflow:hidden">
-      <div style="padding:8px 12px;background:rgba(139,92,246,0.07)"><div style="font-weight:700;font-size:0.8rem;color:#7c3aed">💰 Payments</div></div>
-      <div style="padding:10px 12px;background:white;display:flex;flex-direction:column;gap:8px">
-        ${paymentRows.map(p => `<div style="display:flex;flex-wrap:wrap;gap:12px;align-items:center;font-size:0.78rem;border-bottom:1px dashed var(--border);padding-bottom:6px">
-          <span style="font-weight:600;text-transform:capitalize">${p.payment_type}</span>
-          <span style="font-family:var(--font-mono);font-weight:700">${p.currency || 'INR'} ${Number(p.amount || 0).toLocaleString()}</span>
-          <span style="color:var(--gray-4)">Running total: ${p.currency || 'INR'} ${Number(p.running_total_paid || 0).toLocaleString()}</span>
-          <span class="badge ${p.status === 'paid' ? 'badge-green' : 'badge-orange'}">${(p.status || '').toUpperCase()}</span>
-          <span style="color:var(--gray-4);font-size:0.72rem">${fmtDate(p.raised_at || p.paid_at)}</span>
-          ${p.smartsheet_payment_id ? `<span style="color:#6366f1;font-family:var(--font-mono);font-size:0.72rem">📋 ${p.smartsheet_payment_id}</span>` : ''}
-          ${p.screenshot ? `<button class="btn btn-secondary btn-sm" onclick="_previewByIdx(${_regFile(p.screenshot, 'payment_screenshot')})">👁 Screenshot</button>` : ''}
-        </div>`).join('')}
-      </div>
-    </div>`;
-  }
-
-  return html;
+// ── LEAD TIME HELPERS ────────────────────────────────────────
+// endAt: optional ISO string — if provided (e.g. rejection/decline/acceptance date),
+// the timer is frozen at that moment instead of counting up to today.
+function calcLeadTimeDays(createdAt, endAt) {
+  if (!createdAt) return null;
+  var end = endAt ? new Date(endAt).getTime() : Date.now();
+  return Math.floor((end - new Date(createdAt)) / 86400000);
 }
-window.renderPOGroupDocsAndPayments = renderPOGroupDocsAndPayments;
+// terminalTimestamp: optional ISO string for closed/rejected/declined requests
+function leadTimeBadge(createdAt, terminalTimestamp) {
+  var days = calcLeadTimeDays(createdAt, terminalTimestamp);
+  if (days === null) return '';
+  var color = days <= 7 ? '#22c55e' : days <= 21 ? '#f59e0b' : '#ef4444';
+  return '<span style="font-family:var(--font-mono);font-size:0.7rem;padding:1px 7px;border-radius:10px;background:'+color+'15;color:'+color+';border:1px solid '+color+'35">'+days+'d</span>';
+}
 
-function renderPOGroupCard(group, partLines, quotations, po, poAttachment, paymentRows) {
-  const meta = poGroupPhaseMeta(group.phase);
-  const groupParts = (partLines || []).filter(p => p.po_group_id === group.id);
-  const partsRows = groupParts.map(p =>
-    `<tr><td>${p.name}</td><td style="text-align:center;font-family:var(--font-mono)">${p.qty}</td><td>${p.uom || '—'}</td></tr>`
-  ).join('');
 
-  return `
-  <div class="po-group-card" data-group-id="${group.id}" style="border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-      <div style="font-weight:700;font-size:0.88rem">${group.group_label} <span style="color:var(--gray-4);font-weight:400;font-size:0.75rem">· Cycle ${group.cycle_number}</span></div>
-      ${poGroupPhaseBadgeHTML(group.phase)}
-    </div>
-    <table class="parts-table" style="width:100%;margin-bottom:10px">
-      <thead><tr><th>Part</th><th style="width:60px">Qty</th><th style="width:60px">UOM</th></tr></thead>
-      <tbody>${partsRows || '<tr><td colspan="3" style="color:var(--gray-4)">No parts in this group</td></tr>'}</tbody>
-    </table>
-    ${renderPOGroupTimeline(group)}
-    <div id="po-group-actions-${group.id}"></div>
-    ${renderPOGroupDocsAndPayments(group, quotations, po, poAttachment, paymentRows)}
+
+// ── PARTS TABLE RENDER (read-only) ──────────────────────────
+function renderPartsTable(parts) {
+  if(!parts||!parts.length) return '';
+  return `<div style="margin-top:14px">
+    <div class="detail-key" style="margin-bottom:8px">Parts / Items (BOM)</div>
+    <div style="overflow-x:auto">
+    <table class="parts-table">
+      <thead><tr><th style="width:28px">#</th><th>Part Name</th><th style="width:80px">Qty</th><th>Specification</th></tr></thead>
+      <tbody>${parts.map((p,i)=>`<tr><td style="color:var(--gray-4);text-align:center;font-family:var(--font-mono);font-size:0.72rem">${i+1}</td>
+        <td>${p.name||'—'}</td>
+        <td style="text-align:center;font-family:var(--font-mono)">${p.qty||0}</td>
+        <td style="color:var(--gray-3)">${p.spec||'—'}</td></tr>`).join('')}
+      </tbody>
+    </table></div>
   </div>`;
 }
 
-// ── RENDER: basic request details — Request #, Project, Team Member, PM,
-// Department etc. Mirrors the fields shown in the legacy buildPRDetailHTML()
-// (shared.js) header, since the part-level modal has its own body layout
-// and doesn't call into that function at all — without this, none of that
-// identifying info is visible anywhere in the split-cycle modal.
-function buildPOGroupBasicDetailsHTML(pr) {
+// ── PR DETAIL HTML ──────────────────────────────────────────
+function buildPRDetailHTML(pr, quotations=[], vendorName='', pmName='', extras={}) {
+  // extras: { poData, advPayRec, payRec }
+  // poData       = purchase_orders row (or null)
+  // advPayRec    = advance_payment_requests row (or null)
+  // payRec       = payment_requests row (or null)
+  const parts = pr.parts||[];
   return `
-    <div class="detail-grid" style="margin-bottom:14px">
+    <div class="detail-grid">
       <div class="detail-item"><div class="detail-key">Request #</div>
-        <div class="detail-value"><span class="pr-number${pr.is_modification ? ' modified' : ''}">PR-${String(pr.request_number).padStart(4, '0')}</span>
-        ${pr.is_modification ? `<span class="mod-badge" style="margin-left:6px">↺ Modified</span>` : ''}
+        <div class="detail-value"><span class="pr-number${pr.is_modification?' modified':''}">PR-${String(pr.request_number).padStart(4,'0')}</span>
+        ${pr.is_modification?`<span class="mod-badge" style="margin-left:6px">↺ Modified</span>`:''}
         </div></div>
-      <div class="detail-item"><div class="detail-key">Category</div><div class="detail-value">${pr.request_category === 'vendor_info' ? 'Vendor Info Request' : 'RFQ'}</div></div>
+      <div class="detail-item"><div class="detail-key">Category</div><div class="detail-value">${pr.request_category==='vendor_info'?'Vendor Info Request':'RFQ'}</div></div>
       <div class="detail-item"><div class="detail-key">Project</div><div class="detail-value">${pr.project_name}</div></div>
       <div class="detail-item"><div class="detail-key">Phase</div><div class="detail-value">${pr.project_phase}</div></div>
-      <div class="detail-item"><div class="detail-key">Project Manager</div><div class="detail-value">${pr.project_manager_name || '—'}</div></div>
+      <div class="detail-item"><div class="detail-key">Project Manager</div><div class="detail-value">${pmName||pr.project_manager_name||'—'}</div></div>
       <div class="detail-item"><div class="detail-key">Team Member</div><div class="detail-value">${pr.team_member_name}</div></div>
-      <div class="detail-item"><div class="detail-key">Department</div><div class="detail-value">${DEPARTMENTS[pr.department] || pr.department}</div></div>
-      ${pr.order_type ? `<div class="detail-item"><div class="detail-key">Order Type</div><div class="detail-value">${ORDER_TYPES[pr.order_type] || pr.order_type}</div></div>` : ''}
-      ${pr.product_link ? `<div class="detail-item"><div class="detail-key">Product Link</div><div class="detail-value"><a href="${pr.product_link}" target="_blank" style="color:var(--red)">🔗 View Product</a></div></div>` : ''}
+      <div class="detail-item"><div class="detail-key">Department</div><div class="detail-value">${DEPARTMENTS[pr.department]||pr.department}</div></div>
+      ${pr.order_type?`<div class="detail-item"><div class="detail-key">Order Type</div><div class="detail-value">${ORDER_TYPES[pr.order_type]||pr.order_type}</div></div>`:''}
+      ${pr.product_link?`<div class="detail-item"><div class="detail-key">Product Link</div><div class="detail-value"><a href="${pr.product_link}" target="_blank" style="color:var(--red)">🔗 View Product</a></div></div>`:''}
+      ${pr.sourcing?`<div class="detail-item"><div class="detail-key">Sourcing</div><div class="detail-value">${(Array.isArray(pr.sourcing)?pr.sourcing:JSON.parse(pr.sourcing||'[]')).map(s=>s==='domestic'?'🏠 Domestic':'🌍 International').join(', ')}</div></div>`:''}
+      <div class="detail-item"><div class="detail-key">Assigned Vendor</div><div class="detail-value">${vendorName||'—'}</div></div>
       <div class="detail-item"><div class="detail-key">Submitted</div><div class="detail-value">${fmtDate(pr.created_at)}</div></div>
-      ${pr.description ? `<div class="detail-item" style="grid-column:1/-1"><div class="detail-key">Description / Notes</div><div class="detail-value" style="line-height:1.5">${pr.description}</div></div>` : ''}
-      ${pr.modification_note ? `<div class="detail-item" style="grid-column:1/-1"><div class="detail-key" style="color:#6366f1">Modification Note</div><div class="detail-value">${pr.modification_note}</div></div>` : ''}
-    </div>`;
+      ${pr.description?`<div class="detail-item" style="grid-column:1/-1"><div class="detail-key">Description / Notes</div><div class="detail-value" style="line-height:1.5">${pr.description}</div></div>`:''}
+      ${pr.modification_note?`<div class="detail-item" style="grid-column:1/-1"><div class="detail-key" style="color:#6366f1">Modification Note</div><div class="detail-value">${pr.modification_note}</div></div>`:''}
+    </div>
+
+    ${pr.qc_criteria&&(pr.qc_criteria.preferred_color||pr.qc_criteria.preferred_material||pr.qc_criteria.custom)?`
+    <div style="margin-top:14px;padding:12px 14px;background:rgba(99,102,241,0.05);border:1px solid rgba(99,102,241,0.18);border-radius:var(--radius)">
+      <div class="detail-key" style="color:#6366f1;margin-bottom:8px">🔍 QC Criteria</div>
+      <div class="detail-grid" style="gap:8px">
+        ${pr.qc_criteria.preferred_color?`<div class="detail-item"><div class="detail-key">Preferred Color</div><div class="detail-value">${pr.qc_criteria.preferred_color}</div></div>`:''}
+        ${pr.qc_criteria.preferred_material?`<div class="detail-item"><div class="detail-key">Preferred Material</div><div class="detail-value">${pr.qc_criteria.preferred_material}</div></div>`:''}
+        ${pr.qc_criteria.custom?`<div class="detail-item" style="grid-column:1/-1"><div class="detail-key">Additional Criteria</div><div class="detail-value">${pr.qc_criteria.custom}</div></div>`:''}
+      </div>
+    </div>`:''}
+
+    ${renderPartsTable(parts)}
+    ${(function(){
+      var ts = pr.phase_timestamps || {};
+      var terminalTs = ts['rejected'] || ts['declined'] || ts['accepted'] || null;
+      var terminalLabel = ts['rejected'] ? 'rejected' : ts['declined'] ? 'declined' : ts['accepted'] ? 'closed' : null;
+      var endLabel = terminalTs ? fmtDate(terminalTs) : 'today';
+      var statusNote = terminalLabel ? ' <span style="font-size:0.72rem;color:var(--gray-4);font-style:italic">(closed — '+terminalLabel+')</span>' : '';
+      return '<div style="margin-top:12px;display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--off-white);border:1px solid var(--border);border-radius:var(--radius)">'
+        + '<span style="font-size:0.8rem;color:var(--gray-3)">Total Lead Time:</span>'
+        + '<strong style="font-family:var(--font-mono);font-size:0.88rem">'+calcLeadTimeDays(pr.created_at, terminalTs)+' days</strong>'
+        + '<span style="font-size:0.75rem;color:var(--gray-4)">(from '+fmtDate(pr.created_at)+' to '+endLabel+')</span>'
+        + statusNote
+        + '</div>';
+    })()}
+    <div style="margin-top:16px">${renderWorkflowTrack(pr.phase, pr.phase_timestamps, pr.created_at)}</div>
+
+    ${(pr.phase==='advance_requested'||pr.phase==='advance_approved'||pr.phase==='advance_rejected')?`<div style="margin-top:14px;padding:12px 14px;background:${pr.phase==='advance_approved'?'rgba(22,163,74,0.06)':pr.phase==='advance_rejected'?'rgba(214,43,43,0.06)':'rgba(245,158,11,0.06)'};border:1px solid ${pr.phase==='advance_approved'?'rgba(22,163,74,0.25)':pr.phase==='advance_rejected'?'rgba(214,43,43,0.25)':'rgba(245,158,11,0.25)'};border-radius:var(--radius)">
+      <div class="detail-key" style="color:${pr.phase==='advance_approved'?'#16a34a':pr.phase==='advance_rejected'?'var(--red)':'#b45309'};margin-bottom:6px">
+        ${{advance_approved:' Advance Payment Approved',advance_rejected:' Advance Payment Rejected',advance_requested:'⏳ Advance Payment Pending'}[pr.phase]||'💳 Advance Payment'}
+      </div>
+    </div>`:''}
+    ${quotations.length?`<div style="margin-top:14px">
+      <div class="detail-key" style="margin-bottom:8px">Quotations (${quotations.length})</div>
+      <div style="display:flex;flex-direction:column;gap:8px">${quotations.map(q=>renderQuotationCard(q,false,pr.selected_quotation_id)).join('')}</div>
+    </div>`:''}
+
+    ${pr.vendor_info_details?`<div style="margin-top:14px;padding:14px;background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.2);border-radius:var(--radius)">
+      <div class="detail-key" style="color:#7c3aed;margin-bottom:6px">🏢 Vendor Information (from Procurement)</div>
+      <p style="font-size:0.83rem;line-height:1.5;white-space:pre-wrap">${pr.vendor_info_details}</p>
+    </div>`:''}
+
+    ${pr.client_approval_screenshot?`<div style="margin-top:14px;padding:12px;background:rgba(22,163,74,0.06);border:1px solid rgba(22,163,74,0.2);border-radius:var(--radius)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+        <div class="detail-key" style="color:#16a34a">✓ Client Approval</div>
+        <button class="btn btn-secondary btn-sm" onclick="_previewByIdx(${_regFile(pr.client_approval_screenshot,'client_approval')})">👁 Preview</button>
+        <button class="btn btn-secondary btn-sm" onclick="_downloadByIdx(${_regFile(pr.client_approval_screenshot,'client_approval')})">⬇ Download</button>
+      </div>
+      <img src="${pr.client_approval_screenshot}" style="max-width:100%;max-height:240px;object-fit:contain;border-radius:6px;border:1px solid var(--border)" onerror="this.style.display='none'"/>
+      ${pr.client_approval_notes?`<p style="font-size:0.8rem;color:var(--gray-3);margin-top:6px">${pr.client_approval_notes}</p>`:''}
+    </div>`:''}
+
+    ${pr.pm_final_approval_notes?`<div style="margin-top:14px;padding:12px;background:${pr.pm_final_approval_status==='approved'?'rgba(22,163,74,0.06)':'rgba(214,43,43,0.06)'};border:1px solid ${pr.pm_final_approval_status==='approved'?'rgba(22,163,74,0.2)':'rgba(214,43,43,0.2)'};border-radius:var(--radius)">
+      <div class="detail-key" style="color:${pr.pm_final_approval_status==='approved'?'#16a34a':'var(--red)'};margin-bottom:4px">PM ${pr.pm_final_approval_status==='approved'?'Approved':'Rejected'}</div>
+      <p style="font-size:0.83rem">${pr.pm_final_approval_notes}</p>
+    </div>`:''}
+
+    ${pr.rejection_reason?`<div style="margin-top:14px;padding:12px;background:rgba(214,43,43,0.06);border:1px solid rgba(214,43,43,0.18);border-radius:var(--radius)">
+      <div class="detail-key" style="color:var(--red);margin-bottom:4px">Rejection Reason</div>
+      <p style="font-size:0.83rem">${pr.rejection_reason}</p>
+    </div>`:''}
+
+    ${pr.qc_notes?`<div style="margin-top:14px;padding:12px;background:${pr.qc_result==='qc_passed'||pr.qc_result==='accepted'?'rgba(22,163,74,0.06)':'rgba(214,43,43,0.06)'};border:1px solid ${pr.qc_result==='qc_passed'||pr.qc_result==='accepted'?'rgba(22,163,74,0.2)':'rgba(214,43,43,0.2)'};border-radius:var(--radius)">
+      <div class="detail-key" style="color:${pr.qc_result==='qc_passed'||pr.qc_result==='accepted'?'#16a34a':'var(--red)'};margin-bottom:4px">QC — ${pr.qc_result==='qc_passed'||pr.qc_result==='accepted'?'Passed ✓':'Failed ✗'}</div>
+      <p style="font-size:0.83rem">${pr.qc_notes}</p>
+    </div>`:''}
+
+    ${(()=>{
+      /* ── GRN / QC FORM (stored in qc_criteria.grn after engineer submits) ── */
+      const grn = pr.qc_criteria?.grn;
+      if (!grn) return '';
+      const lines = grn.lines||[];
+      const resultVal = pr.qc_result;
+      const isPassed = resultVal==='accepted'||resultVal==='qc_passed';
+      return `<div style="margin-top:16px;border:1px solid ${isPassed?'rgba(22,163,74,0.25)':'rgba(214,43,43,0.25)'};border-radius:var(--radius);overflow:hidden">
+        <div style="padding:10px 14px;background:${isPassed?'rgba(22,163,74,0.08)':'rgba(214,43,43,0.08)'};display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+          <div style="font-weight:700;font-size:0.85rem;color:${isPassed?'#16a34a':'var(--red)'}">📋 GRN / QC Form — ${isPassed?'Passed ✓':'Rejected ✗'}</div>
+          <span style="font-family:var(--font-mono);font-size:0.72rem;font-weight:600;padding:2px 8px;border-radius:3px;background:${isPassed?'rgba(22,163,74,0.12)':'rgba(214,43,43,0.12)'};color:${isPassed?'#16a34a':'var(--red)'}">GRN# ${grn.grn_number||'—'}</span>
+        </div>
+        <div style="padding:12px 14px;background:white">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:8px 14px;margin-bottom:12px">
+            ${grn.grn_date?`<div><div class="detail-key">GRN Date</div><div class="detail-value" style="font-family:var(--font-mono);font-size:0.82rem">${grn.grn_date}</div></div>`:''}
+            ${grn.invoice_no?`<div><div class="detail-key">Invoice No</div><div class="detail-value" style="font-family:var(--font-mono);font-size:0.82rem">${grn.invoice_no}</div></div>`:''}
+            ${grn.transporter?`<div><div class="detail-key">Transporter</div><div class="detail-value" style="font-size:0.82rem">${grn.transporter}</div></div>`:''}
+            ${grn.gate_inward_no?`<div><div class="detail-key">Gate Inward No</div><div class="detail-value" style="font-family:var(--font-mono);font-size:0.82rem">${grn.gate_inward_no}</div></div>`:''}
+            ${grn.gate_inward_date?`<div><div class="detail-key">Gate Inward Date</div><div class="detail-value" style="font-family:var(--font-mono);font-size:0.82rem">${grn.gate_inward_date}</div></div>`:''}
+            ${grn.received_by?`<div><div class="detail-key">Received By</div><div class="detail-value" style="font-size:0.82rem">${grn.received_by}</div></div>`:''}
+            ${grn.qc_checked_by?`<div><div class="detail-key">QC Checked By</div><div class="detail-value" style="font-size:0.82rem">${grn.qc_checked_by}</div></div>`:''}
+          </div>
+          ${lines.length?`<div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:0.78rem">
+              <thead><tr style="background:var(--gray-6)">
+                <th style="padding:5px 8px;border:1px solid var(--border);text-align:center;font-size:0.68rem">SR#</th>
+                <th style="padding:5px 8px;border:1px solid var(--border);font-size:0.68rem">ITEM CODE</th>
+                <th style="padding:5px 8px;border:1px solid var(--border);font-size:0.68rem">ITEM NAME</th>
+                <th style="padding:5px 8px;border:1px solid var(--border);text-align:center;font-size:0.68rem">UOM</th>
+                <th style="padding:5px 8px;border:1px solid var(--border);text-align:center;font-size:0.68rem;background:rgba(99,102,241,0.06)">PO QTY</th>
+                <th style="padding:5px 8px;border:1px solid var(--border);text-align:center;font-size:0.68rem">RCVD</th>
+                <th style="padding:5px 8px;border:1px solid var(--border);text-align:center;font-size:0.68rem;background:rgba(34,197,94,0.06)">ACCEPTED</th>
+                <th style="padding:5px 8px;border:1px solid var(--border);text-align:center;font-size:0.68rem;background:rgba(239,68,68,0.06)">REJECTED</th>
+              </tr></thead>
+              <tbody>${lines.map(l=>`<tr>
+                <td style="padding:5px 8px;border:1px solid var(--border);text-align:center;font-family:var(--font-mono);font-size:0.72rem">${l.sr}</td>
+                <td style="padding:5px 8px;border:1px solid var(--border);font-family:var(--font-mono);font-size:0.72rem">${l.item_code||'—'}</td>
+                <td style="padding:5px 8px;border:1px solid var(--border);font-size:0.78rem;font-weight:500">${l.item_name||'—'}</td>
+                <td style="padding:5px 8px;border:1px solid var(--border);text-align:center;font-family:var(--font-mono);font-size:0.72rem">${l.uom||'pcs'}</td>
+                <td style="padding:5px 8px;border:1px solid var(--border);text-align:center;font-family:var(--font-mono);font-weight:700;color:#6366f1">${l.po_qty}</td>
+                <td style="padding:5px 8px;border:1px solid var(--border);text-align:center;font-family:var(--font-mono)">${l.received}</td>
+                <td style="padding:5px 8px;border:1px solid var(--border);text-align:center;font-family:var(--font-mono);color:#16a34a;font-weight:600">${l.accepted}</td>
+                <td style="padding:5px 8px;border:1px solid var(--border);text-align:center;font-family:var(--font-mono);color:var(--red);font-weight:600">${l.rejected}</td>
+              </tr>`).join('')}</tbody>
+            </table>
+          </div>`:''}
+        </div>
+      </div>`;
+    })()}
+
+    ${(()=>{
+      /* ── GENERATED PURCHASE ORDER ── */
+      const po = extras.poData;
+      if (!po) return '';
+      return `<div style="margin-top:16px;border:1px solid rgba(99,102,241,0.25);border-radius:var(--radius);overflow:hidden">
+        <div style="padding:10px 14px;background:rgba(99,102,241,0.07);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+          <div style="font-weight:700;font-size:0.85rem;color:#4f46e5">📄 Purchase Order</div>
+          <span style="font-family:var(--font-mono);font-size:0.75rem;font-weight:700;padding:3px 10px;border-radius:3px;background:rgba(99,102,241,0.12);color:#4f46e5">${po.po_number}</span>
+        </div>
+        <div style="padding:12px 14px;background:white;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px 14px">
+          <div><div class="detail-key">PO Date</div><div class="detail-value" style="font-family:var(--font-mono);font-size:0.82rem">${fmtDate(po.po_date||po.created_at)}</div></div>
+          <div><div class="detail-key">Total Amount</div><div class="detail-value" style="font-family:var(--font-mono);font-weight:700;font-size:0.9rem">${po.currency||'AED'} ${Number(po.total_amount||0).toLocaleString()}</div></div>
+          ${po.ship_to?`<div style="grid-column:1/-1"><div class="detail-key">Ship To</div><div class="detail-value" style="font-size:0.82rem">${po.ship_to}</div></div>`:''}
+        </div>
+      </div>`;
+    })()}
+
+    ${(()=>{
+      /* ── SMARTSHEET PAYMENT SCREENSHOTS ── */
+      const adv = extras.advPayRec;
+      const pay = extras.payRec;
+      if (!adv && !pay) return '';
+      let html = `<div style="margin-top:16px">`;
+      if (adv && (adv.smartsheet_screenshot || adv.smartsheet_payment_id)) {
+        html += `<div style="margin-bottom:10px;border:1px solid rgba(245,158,11,0.3);border-radius:var(--radius);overflow:hidden">
+          <div style="padding:9px 14px;background:rgba(245,158,11,0.07);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+            <div style="font-weight:700;font-size:0.83rem;color:#b45309">🧾 Advance Payment — Smartsheet</div>
+            ${adv.smartsheet_payment_id?`<span style="font-family:var(--font-mono);font-size:0.72rem;font-weight:700;padding:2px 8px;background:rgba(245,158,11,0.12);color:#b45309;border-radius:3px">ID: ${adv.smartsheet_payment_id}</span>`:''}
+          </div>
+          <div style="padding:10px 14px;background:white">
+            <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:${adv.smartsheet_screenshot?'10px':'0'}">
+              <div><div class="detail-key">Amount</div><div class="detail-value" style="font-family:var(--font-mono);font-weight:700">${adv.currency||'AED'} ${Number(adv.amount||0).toLocaleString()}</div></div>
+              <div><div class="detail-key">Raised On</div><div class="detail-value" style="font-size:0.82rem">${fmtDate(adv.raised_at||adv.created_at)}</div></div>
+              <div><div class="detail-key">Status</div><div class="detail-value"><span style="font-size:0.72rem;font-weight:600;padding:2px 8px;border-radius:3px;background:${adv.status==='payment_received'?'rgba(22,163,74,0.1)':'rgba(245,158,11,0.1)'};color:${adv.status==='payment_received'?'#16a34a':'#b45309'}">${(adv.status||'').replace(/_/g,' ').toUpperCase()}</span></div></div>
+            </div>
+            ${adv.smartsheet_screenshot?`<div>
+              <div class="detail-key" style="margin-bottom:6px">Screenshot</div>
+              <img src="${adv.smartsheet_screenshot}" style="max-width:100%;max-height:220px;object-fit:contain;border-radius:6px;border:1px solid var(--border);display:block" onerror="this.style.display='none'"/>
+              <div style="margin-top:6px;display:flex;gap:6px">
+                <button class="btn btn-secondary btn-sm" onclick="_previewByIdx(${_regFile(adv.smartsheet_screenshot,'adv_smartsheet_screenshot')})">👁 Preview</button>
+                <button class="btn btn-secondary btn-sm" onclick="_downloadByIdx(${_regFile(adv.smartsheet_screenshot,'adv_smartsheet_screenshot')})">⬇ Download</button>
+              </div>
+            </div>`:''}
+            ${adv.notes?`<p style="font-size:0.78rem;color:var(--gray-3);margin-top:6px">${adv.notes}</p>`:''}
+          </div>
+        </div>`;
+      }
+      if (pay && (pay.smartsheet_screenshot || pay.smartsheet_payment_id)) {
+        html += `<div style="border:1px solid rgba(139,92,246,0.3);border-radius:var(--radius);overflow:hidden">
+          <div style="padding:9px 14px;background:rgba(139,92,246,0.07);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">
+            <div style="font-weight:700;font-size:0.83rem;color:#7c3aed">💰 Full Payment — Smartsheet</div>
+            ${pay.smartsheet_payment_id?`<span style="font-family:var(--font-mono);font-size:0.72rem;font-weight:700;padding:2px 8px;background:rgba(139,92,246,0.12);color:#7c3aed;border-radius:3px">ID: ${pay.smartsheet_payment_id}</span>`:''}
+          </div>
+          <div style="padding:10px 14px;background:white">
+            <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:${pay.smartsheet_screenshot?'10px':'0'}">
+              <div><div class="detail-key">Invoice Amount</div><div class="detail-value" style="font-family:var(--font-mono);font-weight:700">${pay.currency||'AED'} ${Number(pay.invoice_amount||0).toLocaleString()}</div></div>
+              <div><div class="detail-key">Raised On</div><div class="detail-value" style="font-size:0.82rem">${fmtDate(pay.raised_at||pay.request_date)}</div></div>
+              <div><div class="detail-key">Status</div><div class="detail-value"><span style="font-size:0.72rem;font-weight:600;padding:2px 8px;border-radius:3px;background:${pay.status==='paid'?'rgba(22,163,74,0.1)':'rgba(139,92,246,0.1)'};color:${pay.status==='paid'?'#16a34a':'#7c3aed'}">${(pay.status||'').replace(/_/g,' ').toUpperCase()}</span></div></div>
+            </div>
+            ${pay.smartsheet_screenshot?`<div>
+              <div class="detail-key" style="margin-bottom:6px">Screenshot</div>
+              <img src="${pay.smartsheet_screenshot}" style="max-width:100%;max-height:220px;object-fit:contain;border-radius:6px;border:1px solid var(--border);display:block" onerror="this.style.display='none'"/>
+              <div style="margin-top:6px;display:flex;gap:6px">
+                <button class="btn btn-secondary btn-sm" onclick="_previewByIdx(${_regFile(pay.smartsheet_screenshot,'pay_smartsheet_screenshot')})">👁 Preview</button>
+                <button class="btn btn-secondary btn-sm" onclick="_downloadByIdx(${_regFile(pay.smartsheet_screenshot,'pay_smartsheet_screenshot')})">⬇ Download</button>
+              </div>
+            </div>`:''}
+            ${pay.notes||pay.payment_notes?`<p style="font-size:0.78rem;color:var(--gray-3);margin-top:6px">${pay.notes||pay.payment_notes}</p>`:''}
+          </div>
+        </div>`;
+      }
+      html += `</div>`;
+      return html;
+    })()}`;
 }
 
-// ── RENDER: "Group Parts" panel — ungrouped parts + vendor assignment ──
-function renderUngroupedPartsPanel(prId, ungroupedParts, vendorOptionsHTML) {
-  if (!ungroupedParts || !ungroupedParts.length) return '';
-  const rows = ungroupedParts.map(p => `
-    <tr>
-      <td><input type="checkbox" class="ungrouped-part-cb" value="${p.id}"/></td>
-      <td>${p.name}</td>
-      <td style="text-align:center;font-family:var(--font-mono)">${p.qty}</td>
-      <td>${p.spec || '—'}</td>
-    </tr>`).join('');
-
-  return `
-  <div class="action-section" style="border:1px solid rgba(99,102,241,0.3);background:rgba(99,102,241,0.04);border-radius:var(--radius);padding:16px;margin-bottom:14px">
-    <div class="action-section-title" style="color:#4f46e5">🧩 Group Parts to a Vendor <span class="action-badge">ACTION AVAILABLE</span></div>
-    <p style="font-size:0.82rem;color:var(--gray-3);margin-bottom:10px">Select the parts going to the same vendor, choose the vendor, and create a PO Group. Repeat for each vendor split.</p>
-    <table class="parts-table" style="width:100%;margin-bottom:10px">
-      <thead><tr><th style="width:28px"></th><th>Part</th><th style="width:60px">Qty</th><th>Spec</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <select id="groupVendorSelect" class="form-control" style="max-width:240px">${vendorOptionsHTML}</select>
-      <button class="btn btn-primary btn-sm" onclick="handleCreatePOGroup('${prId}')">Create PO Group from Selected Parts</button>
+// ── QUOTATION CARD ──────────────────────────────────────────
+function renderQuotationCard(q, showSelectBtn=false, selectedId=null) {
+  const isSelected = q.id===selectedId||q.is_selected;
+  const isImg = q.file_type?.includes('image');
+  const isPDF = q.file_type==='application/pdf'||q.file_name?.toLowerCase().includes('.pdf');
+  const currency = q.currency||'AED';
+  const fi = _regFile(q.file_url, q.file_name||'quotation');
+  return `<div class="quotation-card ${isSelected?'selected':''}" id="qcard-${q.id}">
+    <div class="quotation-card-header">
+      <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
+        <span style="font-size:1.1rem;flex-shrink:0">${isPDF?'📄':isImg?'🖼️':'🔗'}</span>
+        <div style="min-width:0">
+          <div style="font-weight:600;font-size:0.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.file_name}</div>
+          <div style="font-family:var(--font-mono);font-size:0.65rem;color:var(--gray-4)">${q.vendor_name||'—'} · ${fmtDate(q.created_at)}</div>
+        </div>
+      </div>
+      ${isSelected?`<span style="background:#22c55e14;color:#16a34a;border:1px solid #22c55e30;padding:2px 8px;border-radius:3px;font-family:var(--font-mono);font-size:0.62rem;font-weight:600;white-space:nowrap">✓ SELECTED</span>`:''}
+    </div>
+    <div class="quotation-card-body">
+      ${q.amount?`<div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:8px">
+        <div><div class="detail-key">Amount</div><div style="font-family:var(--font-mono);font-size:0.95rem;font-weight:700">${currency} ${Number(q.amount).toLocaleString()}</div></div>
+        ${q.lead_time_days?`<div><div class="detail-key">Lead Time</div><div style="font-family:var(--font-mono);font-weight:600">${q.lead_time_days}d</div></div>`:''}
+      </div>`:''}
+      ${q.notes?`<p style="font-size:0.78rem;color:var(--gray-3);margin-bottom:8px">${q.notes}</p>`:''}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <button class="btn btn-secondary btn-sm" onclick="_previewByIdx(${fi})">👁 Preview</button>
+        <button class="btn btn-secondary btn-sm" onclick="_downloadByIdx(${fi})">⬇ Download</button>
+        ${showSelectBtn&&!isSelected?`<button class="btn btn-primary btn-sm" onclick="selectQuotation('${q.id}')">✓ Select as Final</button>`:''}
+        ${showSelectBtn&&isSelected?`<button class="btn btn-danger btn-sm" onclick="selectQuotation(null)">Deselect</button>`:''}
+      </div>
     </div>
   </div>`;
 }
 
-// ══════════════════════════════════════════════════════════════
-// FULL MODAL RENDER — new-model requests only (procurement.html)
-//
-// Mirrors the shape of legacy openPR() but drives everything off
-// po_groups / request_part_lines instead of a single phase/PO.
-// Relies on globals already present on procurement.html at call time:
-// currentPR, currentUser, allVendors, loadComments, renderComments,
-// openModal, closeModal, showToast, showLoader, DEPARTMENTS.
-// ══════════════════════════════════════════════════════════════
-// Self-contained vendor fetch — does NOT rely on each page's own
-// loadVendors()/allVendors global, since those only exist on
-// procurement.html and master.html. Engineer/PM/Accounts don't define
-// them at all, so calling into a page-specific loadVendors() from here
-// would throw "loadVendors is not defined" and crash the modal for
-// those three roles. This is scoped to po-groups.js and cached for the
-// lifetime of the page load.
-let _vendorCache = null;
-// Cross-function caches for the currently-open modal, used by
-// selectPOGroupQuotation() to re-render a single group's actions
-// without re-fetching or re-rendering the whole modal body.
-let currentPOGroupsCache = [];
-let currentPOGroupQuotationsCache = {};
-let currentPartLinesCache = [];
-let currentVendorListCache = [];
-async function fetchVendorsForGroupingPanel() {
-  if (_vendorCache) return _vendorCache;
-  const rows = await dbFetch(() => db.from('vendors').select('*').order('name'), 'vendors');
-  _vendorCache = rows || [];
-  return _vendorCache;
-}
-window.fetchVendorsForGroupingPanel = fetchVendorsForGroupingPanel;
+function previewImage(url, name) { _safePreview(url, name); }
 
-async function openPRNewModel(id) {
-  // Fetches the request directly rather than searching a page-local
-  // allRequests/myRequests array. Those arrays are declared with `let`
-  // on each page, which never attaches to `window` — relying on a
-  // cross-script global lookup here would be fragile and silently break.
-  // A direct fetch is simpler, works identically from every page and
-  // every entry point (including Accounts' payments-due list, which
-  // opens a request by id without it being in any locally loaded list),
-  // and guarantees fresh data instead of a possibly-stale cached copy.
-  showLoader(true);
-  const { data: pr, error } = await db.from('procurement_requests').select(PR_LIST_COLUMNS).eq('id', id).single();
-  if (error || !pr) {
-    showLoader(false);
-    showToast('Could not load this request: ' + (error?.message || 'not found'), 'error');
-    return;
+// ── VENDOR VIEW ─────────────────────────────────────────────
+async function loadAndRenderVendors(gridId, searchId) {
+  const {data} = await db.from('vendors').select('*').order('name');
+  const allVendors = data||[];
+  renderVendorCards(allVendors, gridId);
+  if(searchId) {
+    document.getElementById(searchId)?.addEventListener('input', e=>{
+      const s=e.target.value.toLowerCase();
+      renderVendorCards(allVendors.filter(v=>!s||v.name.toLowerCase().includes(s)||(v.specialization||'').toLowerCase().includes(s)), gridId);
+    });
   }
-  currentPR = pr;
+  return allVendors;
+}
 
-  document.getElementById('prModalTitle').textContent = `PR-${String(currentPR.request_number).padStart(4, '0')} — ${currentPR.project_name}`;
-  document.getElementById('prModalSub').textContent = `${currentPR.request_category === 'vendor_info' ? 'Vendor Info' : 'RFQ'} · ${DEPARTMENTS[currentPR.department] || currentPR.department} · Part-Level PO Tracking`;
+function renderVendorCards(vendors, gridId, canEdit=false) {
+  const grid=document.getElementById(gridId);
+  if(!grid) return;
+  if(!vendors.length){grid.innerHTML=`<div style="grid-column:1/-1;color:var(--gray-4);padding:32px;text-align:center">No vendors found.</div>`;return;}
+  grid.innerHTML=vendors.map(v=>{
+    const pt = PAYMENT_TERMS_OPTIONS.find(p=>p.value===v.payment_terms);
+    return `
+    <div class="vendor-card">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:7px">
+        <div><div class="vendor-name">${v.name}</div><div class="vendor-spec">${v.specialization||'—'}</div></div>
+        <span style="font-size:0.62rem;font-family:var(--font-mono);padding:2px 6px;border-radius:3px;white-space:nowrap;flex-shrink:0;${v.is_active?'background:rgba(5,150,105,0.08);color:#047857;border:1px solid rgba(5,150,105,0.2)':'background:var(--off-white);color:var(--gray-4);border:1px solid var(--border)'}">
+          ${v.is_active?'Active':'Inactive'}
+        </span>
+      </div>
+      <div style="margin-bottom:6px">${starRating(v.avg_rating,v.rating_count)}</div>
+      ${pt?`<div style="font-size:0.7rem;margin-bottom:8px;padding:3px 7px;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.18);border-radius:3px;color:#6366f1">💳 ${pt.label}</div>`:''}
+      <div style="display:flex;flex-direction:column;gap:2px;margin-bottom:9px">
+      ${v.contact_person?`<div style="font-size:0.75rem;color:var(--gray-3)">👤 ${v.contact_person}</div>`:''}
+      ${v.email?`<div style="font-size:0.75rem">✉ <a href="mailto:${v.email}" style="color:var(--red);text-decoration:none">${v.email}</a></div>`:''}
+      ${v.phone?`<div style="font-size:0.75rem;color:var(--gray-3)">📞 ${v.phone}</div>`:''}
 
-  const vendorList = (window.PO_GROUP_PAGE_ROLE === 'procurement' || window.PO_GROUP_PAGE_ROLE === 'master')
-    ? await fetchVendorsForGroupingPanel()
-    : [];
-  await ensurePartLinesExist(currentPR);
+      ${(v.gstin||v.GSTIN)?`<div style="font-size:0.75rem;color:var(--gray-3)">🧾 GSTIN: ${v.gstin||v.GSTIN}</div>`:''}
+        ${v.country?`<div style="font-size:0.75rem;color:var(--gray-3)">🌍 ${v.country}</div>`:''}
+        ${v.vendor_type?`<div style="font-size:0.75rem;color:var(--gray-3)">🏷 ${v.vendor_type}</div>`:''}
+    </div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap">
+        ${canEdit?`
+          <button class="btn btn-secondary btn-sm" onclick="editVendor('${v.id}')">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="toggleVendorActive('${v.id}',${v.is_active})">${v.is_active?'Deactivate':'Activate'}</button>
+          <button class="btn btn-ghost btn-sm" onclick="openVendorHistory('${v.id}')">📋 History</button>
+        `:`
+          <button class="btn btn-secondary btn-sm" onclick="openVendorEnquiry(${JSON.stringify(v).split('"').join('&quot;')})">📬 Enquire</button>
+          <button class="btn btn-ghost btn-sm" onclick="openVendorHistory('${v.id}')">📋 History</button>
+        `}
+      </div>
+    </div>`;
+  }).join('');
+}
 
-  const [partLines, poGroups, comments] = await Promise.all([
-    fetchPartLines(id),
-    fetchPOGroups(id),
-    loadComments(id),
+// ── VENDOR HISTORY MODAL ─────────────────────────────────────
+async function openVendorHistory(vendorId) {
+  let ov=document.getElementById('_vendorHistoryModal');
+  if(!ov){
+    ov=document.createElement('div');ov.id='_vendorHistoryModal';ov.className='modal-overlay';
+    ov.onclick=e=>{if(e.target===ov)ov.classList.remove('active');};
+    document.body.appendChild(ov);
+  }
+  ov.innerHTML=`<div class="modal" style="max-width:960px"><div class="modal-header"><div class="modal-title">Vendor History</div><button class="modal-close" onclick="document.getElementById('_vendorHistoryModal').classList.remove('active')">✕</button></div><div class="modal-body" id="_vhBody"><div style="text-align:center;padding:24px;color:var(--gray-4)">Loading...</div></div><div class="modal-footer"><button class="btn btn-secondary" onclick="document.getElementById('_vendorHistoryModal').classList.remove('active')">Close</button></div></div>`;
+  ov.classList.add('active');
+
+  const [vendorRes, ratingsRes, ordersRes] = await Promise.all([
+    db.from('vendors').select('*').eq('id',vendorId).single(),
+    db.from('vendor_ratings').select('*,users(name),procurement_requests(project_name,request_number)').eq('vendor_id',vendorId).order('created_at',{ascending:false}),
+    db.from('procurement_requests').select(PR_LIST_COLUMNS).eq('assigned_vendor_id',vendorId).order('created_at',{ascending:false})
   ]);
 
-  const groupIds = poGroups.map(g => g.id);
-  const quotationsByGroup = {};
-  const poByGroup = {};
-  const poAttachmentByGroup = {};
-  const paymentsByGroup = {};
-  if (groupIds.length) {
-    const [allQuotes, allPOs, allPOAttachments, allPayments] = await Promise.all([
-      dbFetch(() => db.from('po_group_quotations').select('*').in('po_group_id', groupIds).order('created_at'), 'PO group quotations'),
-      dbFetch(() => db.from('purchase_orders').select('*').in('po_group_id', groupIds), 'PO group purchase orders'),
-      dbFetch(() => db.from('pr_attachments').select('*').in('po_group_id', groupIds).order('created_at', { ascending: false }), 'PO group PO attachments'),
-      dbFetch(() => db.from('po_group_payments').select('*').in('po_group_id', groupIds).order('raised_at'), 'PO group payments'),
-    ]);
-    (allQuotes || []).forEach(q => {
-      (quotationsByGroup[q.po_group_id] = quotationsByGroup[q.po_group_id] || []).push(q);
-    });
-    (allPOs || []).forEach(po => { poByGroup[po.po_group_id] = po; });
-    // Attachments are ordered newest-first above, so the first match per
-    // group is the current PO's PDF (a re-quote cycle keeps prior PDFs
-    // around under the old, superseded group id — they aren't touched).
-    (allPOAttachments || []).forEach(a => {
-      if (!poAttachmentByGroup[a.po_group_id]) poAttachmentByGroup[a.po_group_id] = a;
-    });
-    (allPayments || []).forEach(p => {
-      (paymentsByGroup[p.po_group_id] = paymentsByGroup[p.po_group_id] || []).push(p);
-    });
-  }
-  showLoader(false);
+  const v = vendorRes.data||{};
+  const ratings = ratingsRes.data||[];
+  const orders = ordersRes.data||[];
+  const pt = PAYMENT_TERMS_OPTIONS.find(p=>p.value===v.payment_terms);
 
-  // Cache the currently-rendered state so selectPOGroupQuotation() can
-  // re-render a single group's action area without a full modal reload.
-  currentPOGroupsCache = poGroups;
-  currentPOGroupQuotationsCache = quotationsByGroup;
-  currentPartLinesCache = partLines;
-  currentVendorListCache = vendorList;
-
-  const ungroupedParts = partLines.filter(p => p.status === 'unassigned');
-  const rollup = computeRollupLabel(poGroups);
-
-  const vendorOptionsHTML = `<option value="">— Select vendor —</option>` +
-    vendorList.map(v => `<option value="${v.id}" data-name="${v.name}">${v.name}${v.specialization ? ' (' + v.specialization + ')' : ''}</option>`).join('');
-
-  // Generated-PO summary, so "has a PO actually been generated for this
-  // request?" is answerable at a glance instead of having to open every
-  // group card. Each chip jumps to its group's card, where the full PO
-  // details (date, amount, PDF) live via renderPOGroupDocsAndPayments().
-  const generatedPOs = poGroups.filter(g => poByGroup[g.id]).map(g => ({ group: g, po: poByGroup[g.id] }));
-  const poSummaryHTML = generatedPOs.length ? `
-    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px;padding-top:8px;border-top:1px solid rgba(99,102,241,0.15)">
-      <span style="font-size:0.72rem;color:var(--gray-4)">📄 PO${generatedPOs.length > 1 ? 's' : ''} generated:</span>
-      ${generatedPOs.map(({ group: g, po }) => `<span class="badge badge-blue" style="cursor:pointer;font-family:var(--font-mono)" onclick="document.querySelector('[data-group-id=&quot;${g.id}&quot;]')?.scrollIntoView({behavior:'smooth',block:'center'})" title="${po.currency || 'INR'} ${Number(po.total_amount || 0).toLocaleString()} — ${g.group_label}">${po.po_number}</span>`).join('')}
-    </div>` : '';
-
-  const rollupBannerHTML = `
-    <div style="margin-bottom:14px;padding:10px 14px;border-radius:var(--radius);background:${rollup.closed ? 'rgba(22,163,74,0.06)' : 'rgba(99,102,241,0.06)'};border:1px solid ${rollup.closed ? 'rgba(22,163,74,0.2)' : 'rgba(99,102,241,0.2)'}">
-      <div style="display:flex;align-items:center;justify-content:space-between">
-        <div style="font-weight:700;font-size:0.85rem;color:${rollup.closed ? '#16a34a' : '#4f46e5'}">${rollup.closed ? '✅' : '🧩'} ${rollup.label}</div>
-        <div style="font-size:0.72rem;color:var(--gray-4)">${partLines.length} part${partLines.length !== 1 ? 's' : ''} total · Part-Level PO Tracking</div>
+  document.getElementById('_vhBody').innerHTML=`
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border)">
+      <div style="width:48px;height:48px;border-radius:10px;background:var(--off-white);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:1.4rem">🏢</div>
+      <div>
+        <div style="font-weight:700;font-size:1rem">${v.name}</div>
+        <div style="font-size:0.78rem;color:var(--gray-3)">${v.specialization||''}</div>
+        <div style="margin-top:3px">${starRating(v.avg_rating,v.rating_count)}</div>
       </div>
-      ${poSummaryHTML}
-    </div>`;
-
-  const groupingPanelHTML = (window.PO_GROUP_PAGE_ROLE === 'procurement' || window.PO_GROUP_PAGE_ROLE === 'master')
-    ? renderUngroupedPartsPanel(id, ungroupedParts, vendorOptionsHTML)
-    : (ungroupedParts.length ? `<div style="font-size:0.78rem;color:var(--gray-4);margin-bottom:10px">🧩 ${ungroupedParts.length} part(s) not yet grouped to a vendor by Procurement.</div>` : '');
-
-  const groupCardsHTML = poGroups.map(g => {
-    const card = renderPOGroupCard(g, partLines, quotationsByGroup[g.id] || [], poByGroup[g.id] || null, poAttachmentByGroup[g.id] || null, paymentsByGroup[g.id] || []);
-    return card;
-  }).join('') || (ungroupedParts.length ? '' : `<div style="text-align:center;padding:20px;color:var(--gray-4);font-size:0.82rem">No parts on this request yet.</div>`);
-
-  document.getElementById('prModalBody').innerHTML =
-    buildPOGroupBasicDetailsHTML(currentPR) +
-    rollupBannerHTML +
-    groupingPanelHTML +
-    `<div id="poGroupCardsContainer">${groupCardsHTML}</div>` +
-    `<div style="margin-top:22px;border-top:1px solid var(--border);padding-top:16px">
-      <div class="section-title" style="margin-bottom:10px">💬 Comments</div>
-      <div id="commentsList">${renderComments(comments)}</div>
-      <div style="position:relative;display:flex;gap:8px;margin-top:10px">
-        <div style="position:relative;flex:1">
-          <input class="form-control" id="commentInput" placeholder="Add a comment… use @ to tag someone" style="width:100%" onkeydown="if(event.key==='Enter'&&document.getElementById('mentionDd').style.display==='none')addComment()"/>
-          <div id="mentionDd" style="display:none;position:absolute;z-index:9999;left:0;bottom:calc(100% + 4px);min-width:220px;max-height:200px;overflow-y:auto;background:white;border:1px solid var(--border);border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,0.14)"></div>
-        </div>
-        <button class="btn btn-secondary btn-sm" onclick="addComment()">Post</button>
-      </div>
-    </div>`;
-
-  const footer = document.getElementById('prModalFooter');
-  // Close refreshes the underlying list too — otherwise a PO Group that
-  // just closed (or a rollup that just flipped to "Closed") only shows
-  // up correctly after the next full page load, since the background
-  // list array isn't live-updated while the modal is open.
-  footer.innerHTML = `<button class="btn btn-secondary" onclick="closeModal('prModal'); refreshUnderlyingList();">Close</button>`;
-
-  openModal('prModal');
-  setTimeout(function () { window.initCommentBox && window.initCommentBox('commentInput', 'mentionDd'); }, 50);
-
-  // Populate each PO Group card's action area after the card HTML is in the DOM.
-  poGroups.forEach(g => renderPOGroupActions(g, partLines, quotationsByGroup[g.id] || [], vendorList));
-}
-window.openPRNewModel = openPRNewModel;
-
-// ── Opt a legacy request into the new part/PO-group model ──────────
-// Called from procurement.html when Procurement decides a request needs
-// to be split across more than one vendor. Irreversible by design (once
-// parts are grouped into vendor-specific POs, collapsing back to a
-// single PO doesn't map cleanly) — confirm before flipping.
-async function enablePartLevelTracking(prId) {
-  // Only relies on currentPR (already loaded by the time this button is
-  // clickable, since it only renders inside an open request modal) —
-  // not on any page-specific list variable name, so this can't break if
-  // called from a page whose list array happens to be named differently.
-  if (currentPR && (currentPR.parts || []).length < 2) {
-    showToast('This request only has one part — Part-Level PO Tracking is for splitting multiple parts across vendors.', 'error');
-    return;
-  }
-  if (!confirm('This will switch this request to Part-Level PO Tracking, letting you split its parts across multiple vendor POs. This cannot be undone for this request. Continue?')) return;
-  showLoader(true);
-  try {
-    const { error } = await db.from('procurement_requests')
-      .update({ is_legacy: false, rollup_status: 'in_progress', updated_at: new Date().toISOString() })
-      .eq('id', prId);
-    if (error) throw error;
-    showToast('Part-Level PO Tracking enabled for this request.', 'success');
-    await openPRNewModel(prId);
-  } catch (e) {
-    showToast('Error: ' + e.message, 'error');
-  } finally {
-    showLoader(false);
-  }
-}
-window.enablePartLevelTracking = enablePartLevelTracking;
-
-// Self-contained fallback for addComment() — Accounts and Master don't
-// define their own version of this (Procurement/Engineer/PM do, and
-// those pages' own richer versions take priority since this only
-// defines the function if it isn't already present on the page).
-if (typeof window.addComment !== 'function') {
-  window.addComment = async function addComment() {
-    const input = document.getElementById('commentInput'), text = input?.value.trim();
-    if (!text || !currentPR) return;
-    try {
-      await window.postComment(currentPR.id, currentUser.id, text);
-      input.value = '';
-      const c = await loadComments(currentPR.id);
-      document.getElementById('commentsList').innerHTML = renderComments(c);
-    } catch (e) { showToast('Comment failed', 'error'); }
-  };
-}
-
-// ── Accounts payment form, shared across every phase a payment can be
-// raised from (pm_approved through payment_pending). Mirrors the legacy
-// Smartsheet-based flow (Payment ID + screenshot), scoped to a PO Group.
-function renderPOGroupPaymentForm(group, contextHTML) {
-  return `
-    ${contextHTML}
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-      <select class="form-control" style="max-width:120px" id="payType-${group.id}">
-        <option value="advance">Advance</option>
-        <option value="balance">Balance</option>
-        <option value="full">Full</option>
-      </select>
-      <input class="form-control" style="max-width:120px" type="number" id="payAmt-${group.id}" placeholder="Amount"/>
-      <input class="form-control" style="max-width:140px" type="number" id="payPoValue-${group.id}" placeholder="Total PO value"/>
+      ${v.email?`<div style="font-size:0.76rem;color:var(--gray-3);margin-left:8px">${v.email}${v.phone?' · '+v.phone:''}</div>`:''}
+      ${pt?`<div style="margin-left:auto;font-size:0.72rem;padding:4px 10px;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.18);border-radius:5px;color:#6366f1;white-space:nowrap">💳 ${pt.label}</div>`:''}
     </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-      <input class="form-control" style="max-width:200px" type="text" id="paySmartsheetId-${group.id}" placeholder="Smartsheet Payment ID"/>
-      <input class="form-control" style="max-width:220px" type="file" accept=".png,.jpg,.jpeg,.pdf" id="payScreenshot-${group.id}"/>
-    </div>
-    <button class="btn btn-primary btn-sm" onclick="handleRecordPayment('${group.id}')">Record Payment →</button>`;
-}
-
-// ── PO Group action area — phase-specific controls, gated by page role ──
-// window.PO_GROUP_PAGE_ROLE must be set by each page before calling
-// openPRNewModel: 'procurement' | 'pm' | 'engineer' | 'accounts' | 'master'.
-// This mirrors the exact role split already used by the legacy flow
-// (e.g. Procurement invokes GRN as a trigger; Engineer performs the
-// actual GRN/QC entry — same split, just scoped per PO Group now).
-function renderPOGroupActions(group, partLines, quotations, vendorList) {
-  const el = document.getElementById(`po-group-actions-${group.id}`);
-  if (!el) return;
-  const phase = group.phase;
-  const role = window.PO_GROUP_PAGE_ROLE || 'procurement';
-  let html = '';
-
-  const readOnly = (msg) => `<div style="font-size:0.78rem;color:var(--gray-3)">${msg}</div>`;
-
-  if (phase === 'quotation_pending') {
-    if (role === 'procurement') {
-      const existingHTML = quotations.length
-        ? `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">${quotations.map(q => renderPOGroupQuotationCard(group.id, q, false)).join('')}</div>`
-        : `<div style="font-size:0.78rem;color:var(--gray-4);margin-bottom:10px">No quotations added yet — add at least one below.</div>`;
-      const vendorOptionsHTML = `<option value="">— Select vendor —</option>` +
-        (vendorList || []).map(v => `<option value="${v.id}" data-name="${v.name}">${v.name}${v.specialization ? ' (' + v.specialization + ')' : ''}</option>`).join('');
-      html = `
-        <div class="detail-key" style="margin-bottom:6px">Quotations for this Group</div>
-        ${existingHTML}
-        <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px">
-          <div class="form-label" style="margin-bottom:6px;font-size:0.75rem">Add Another Quotation</div>
-          <div class="form-group" style="margin-bottom:8px">
-            <select class="form-control" id="quoteVendor-${group.id}">${vendorOptionsHTML}</select>
-          </div>
-          <div class="form-group" style="margin-bottom:8px">
-            <input type="file" class="form-control" id="quoteFile-${group.id}" accept=".png,.jpg,.jpeg,.pdf"/>
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-            <input class="form-control" style="max-width:120px" type="number" id="quoteAmt-${group.id}" placeholder="Amount"/>
-            <select class="form-control" style="max-width:90px" id="quoteCur-${group.id}">${(window.CURRENCIES||['INR','USD']).map(c => `<option value="${c}">${c}</option>`).join('')}</select>
-            <input class="form-control" style="max-width:140px" type="number" id="quoteLt-${group.id}" placeholder="Lead time (days)"/>
-          </div>
-          <button class="btn btn-secondary btn-sm" onclick="handleAddPOGroupQuote('${group.id}')">+ Add Quotation</button>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start">
+      <div>
+        <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--gray-4);margin-bottom:10px;display:flex;align-items:center;gap:6px">
+          📦 Orders <span style="background:var(--off-white);border:1px solid var(--border);border-radius:10px;padding:1px 7px;font-size:0.68rem">${orders.length}</span>
         </div>
-        ${quotations.length ? `<div style="margin-top:12px"><button class="btn btn-primary btn-sm" onclick="handleSharePOGroupQuotes('${group.id}')">Share ${quotations.length} Quotation${quotations.length>1?'s':''} for Engineer Verification →</button></div>` : ''}`;
-    } else {
-      html = readOnly('⏳ Awaiting quotation upload from Procurement.');
-    }
-  } else if (phase === 'quoted') {
-    // Mirrors legacy buildQuoteReview(): Engineer verifies every quote,
-    // then picks whether this group needs client sign-off or goes
-    // straight to PM. Same two-path decision as the single-PO flow —
-    // just scoped to this one group's quotations instead of the PR's.
-    if (role === 'engineer' || role === 'master') {
-      html = renderEngineerPOGroupReview(group, quotations);
-    } else if (role === 'procurement') {
-      html = (quotations.length
-        ? `<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">${quotations.map(q => renderPOGroupQuotationCard(group.id, q, false)).join('')}</div>`
-        : '') + readOnly('⏳ Awaiting Engineer verification.') +
-        `<div style="margin-top:8px"><button class="btn btn-secondary btn-sm" onclick="handleRequoteGroup('${group.id}')">Request Re-Quote (new cycle)</button></div>`;
-    } else {
-      html = readOnly('⏳ Awaiting Engineer verification.');
-    }
-  } else if (phase === 'pending_pm_approval') {
-    const isPMPath = group.approval_path === 'project_manager';
-    const engineerSelectedQ = quotations.find(q => q.id === group.selected_quotation_id) || quotations.find(q => q.is_selected);
-    if (role === 'pm' || role === 'master') {
-      if (isPMPath) {
-        // Engineer forwarded directly — PM sees every quote and picks the final one, same as before.
-        const selectedId = _poGroupSelectedQuote[group.id] || null;
-        html = `<div style="font-size:0.78rem;color:var(--gray-3);margin-bottom:8px">Engineer forwarded directly to you — select a final quotation, then approve.</div>
-          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">${quotations.map(q => renderPOGroupQuotationCard(group.id, q, true, selectedId)).join('')}</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-primary btn-sm" onclick="handlePMApproveGroup('${group.id}')">✓ Select &amp; Approve PO Group</button>
-            <button class="btn btn-danger btn-sm" onclick="handlePMRejectGroup('${group.id}')">✗ Reject</button>
-          </div>`;
-      } else {
-        // Client path — Engineer already picked the quote and attached approval; PM just reviews.
-        html = `<div style="font-size:0.78rem;color:var(--gray-3);margin-bottom:10px">Engineer selected a quote and attached client approval. Review and decide.</div>
-          ${engineerSelectedQ ? `<div style="margin-bottom:10px">${renderPOGroupQuotationCard(group.id, engineerSelectedQ, false)}</div>` : ''}
-          ${group.client_approval_screenshot ? `<div style="margin-bottom:10px;padding:10px;background:rgba(22,163,74,0.06);border:1px solid rgba(22,163,74,0.2);border-radius:var(--radius)">
-            <div class="detail-key" style="color:#16a34a;margin-bottom:6px">✓ Client Approval Screenshot</div>
-            <img src="${group.client_approval_screenshot}" style="max-width:100%;max-height:220px;object-fit:contain;border-radius:6px;border:1px solid var(--border)" onerror="this.style.display='none'"/>
-            ${group.client_approval_notes ? `<p style="margin-top:6px;font-size:0.8rem;color:var(--gray-3)">${group.client_approval_notes}</p>` : ''}
-          </div>` : ''}
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-primary btn-sm" onclick="handlePMApproveGroup('${group.id}')">✓ Approve PO Group</button>
-            <button class="btn btn-danger btn-sm" onclick="handlePMRejectGroup('${group.id}')">✗ Reject</button>
-          </div>`;
-      }
-    } else if (role === 'procurement') {
-      html = readOnly('⏳ Awaiting PM final approval for this PO Group.') +
-        `<div style="margin-top:8px"><button class="btn btn-secondary btn-sm" onclick="handleRequoteGroup('${group.id}')">Request Re-Quote (new cycle)</button></div>`;
-    } else {
-      html = readOnly('⏳ Awaiting PM final approval.');
-    }
-  } else if (phase === 'pm_approved') {
-    if (role === 'procurement') {
-      html = `
-      <div style="font-size:0.78rem;color:#16a34a;margin-bottom:8px">✓ PM Approved — ready to place order.</div>
-      <button class="btn btn-primary btn-sm" onclick="handlePlaceOrderForGroup('${group.id}')">Place Order →</button>`;
-    } else if (role === 'accounts' || role === 'master') {
-      html = renderPOGroupPaymentForm(group, `<div style="font-size:0.78rem;color:#16a34a;margin-bottom:8px">✓ PM Approved — raise an advance payment now if the vendor needs it before starting work, or wait until goods are received.</div>`);
-    } else {
-      html = readOnly('✓ PM Approved — awaiting order placement by Procurement.');
-    }
-  } else if (phase === 'order_placed') {
-    if (role === 'procurement') {
-      html = `
-      <div style="font-size:0.78rem;color:var(--gray-3);margin-bottom:8px">🛒 Order placed.</div>
-      <button class="btn btn-primary btn-sm" onclick="handleInvokeGRNForGroup('${group.id}')">Goods Received — Notify Engineer for QC →</button>`;
-    } else if (role === 'accounts' || role === 'master') {
-      html = renderPOGroupPaymentForm(group, `<div style="font-size:0.78rem;color:var(--gray-3);margin-bottom:8px">🛒 Order placed — raise an advance payment if due before the goods arrive.</div>`);
-    } else {
-      html = readOnly('🛒 Order placed — awaiting goods receipt.');
-    }
-  } else if (phase === 'grn_pending') {
-    if (role === 'engineer' || role === 'master') {
-      const groupParts = partLines.filter(p => p.po_group_id === group.id);
-      html = `
-        <div style="font-size:0.78rem;color:var(--gray-3);margin-bottom:8px">📦 Perform GRN / QC.</div>
-        <table class="parts-table" style="width:100%;margin-bottom:8px">
-          <thead><tr><th>Part</th><th style="width:70px">Received</th><th style="width:70px">Accepted</th></tr></thead>
-          <tbody>${groupParts.map((p, i) => `<tr><td>${p.name}</td>
-            <td><input type="number" min="0" class="form-control" id="grnRcvd-${group.id}-${i}" style="width:60px"/></td>
-            <td><input type="number" min="0" class="form-control" id="grnAccpt-${group.id}-${i}" style="width:60px"/></td></tr>`).join('')}</tbody>
-        </table>
-        <div style="display:flex;gap:8px">
-          <button class="btn btn-primary btn-sm" onclick="handleSubmitGRN('${group.id}', true)">Submit GRN — QC Passed ✓</button>
-          <button class="btn btn-danger btn-sm" onclick="handleSubmitGRN('${group.id}', false)">Submit GRN — QC Failed ✗</button>
-        </div>`;
-    } else if (role === 'accounts' || role === 'master') {
-      html = renderPOGroupPaymentForm(group, `<div style="font-size:0.78rem;color:var(--gray-3);margin-bottom:8px">📦 GRN / QC in progress — raise an advance payment if still due.</div>`);
-    } else {
-      html = readOnly('📦 GRN / QC in progress — waiting on Engineer.');
-    }
-  } else if (phase === 'rework_pending') {
-    if (role === 'engineer' || role === 'procurement' || role === 'master') {
-      html = `
-      <div style="font-size:0.78rem;color:var(--red);margin-bottom:8px">✗ QC Failed — sent back to vendor for rework/return.</div>
-      <button class="btn btn-secondary btn-sm" onclick="handleResubmitRework('${group.id}')">Vendor Reshipped — Resume GRN/QC</button>`;
-    } else if (role === 'accounts') {
-      html = renderPOGroupPaymentForm(group, `<div style="font-size:0.78rem;color:var(--red);margin-bottom:8px">✗ QC Failed — item(s) returned to vendor. Payments already raised are unaffected.</div>`);
-    } else {
-      html = readOnly('✗ QC Failed — item(s) returned to vendor for rework.');
-    }
-  } else if (phase === 'qc_passed' || phase === 'payment_pending') {
-    if (role === 'accounts' || role === 'master') {
-      html = renderPOGroupPaymentForm(group, `<div style="font-size:0.78rem;color:${phase === 'qc_passed' ? '#16a34a' : 'var(--gray-3)'};margin-bottom:8px">${phase === 'qc_passed' ? '✅ QC Passed — raise the balance/full payment.' : '💰 Partial payment recorded — balance still due.'}</div>`);
-    } else {
-      html = readOnly(phase === 'qc_passed' ? '✅ QC Passed — awaiting payment from Accounts.' : '💰 Partial payment recorded — balance pending with Accounts.');
-    }
-  } else if (phase === 'closed') {
-    html = `<div style="font-size:0.78rem;color:#16a34a">✔️ Closed — received, QC'd, and paid.</div>`;
-  } else if (phase === 'rejected' || phase === 'declined') {
-    html = `<div style="font-size:0.78rem;color:var(--red)">✗ ${phase === 'rejected' ? 'Rejected' : 'Declined'}.</div>`;
-  }
-  el.innerHTML = html;
-}
-
-// ── Handlers wired to the buttons above ─────────────────────────────
-async function handleCreatePOGroup(prId) {
-  const checked = Array.from(document.querySelectorAll('.ungrouped-part-cb:checked')).map(cb => cb.value);
-  const vendorSel = document.getElementById('groupVendorSelect');
-  const vendorId = vendorSel?.value || null;
-  const vendorLabel = vendorSel?.selectedOptions?.[0]?.dataset?.name || vendorSel?.selectedOptions?.[0]?.textContent || 'Vendor Group';
-  if (!vendorId) { showToast('Select a vendor for this group.', 'error'); return; }
-  const group = await createPOGroupFromParts(prId, checked, vendorId, vendorLabel, currentUser?.id);
-  if (group) await openPRNewModel(prId);
-}
-
-// Adds one quotation to a PO Group's collection. Group stays in
-// quotation_pending so Procurement can keep adding more (one per
-// vendor being compared) before handing the whole set to PM —
-// mirrors legacy's "upload several, then Share Quotations" flow.
-async function handleAddPOGroupQuote(groupId) {
-  const vendorSel = document.getElementById(`quoteVendor-${groupId}`);
-  const vendorId = vendorSel?.value || null;
-  const vendorName = vendorSel?.selectedOptions?.[0]?.dataset?.name || vendorSel?.selectedOptions?.[0]?.textContent || null;
-  if (!vendorId) { showToast('Select a vendor for this quotation.', 'error'); return; }
-  const fileEl = document.getElementById(`quoteFile-${groupId}`);
-  const amt = document.getElementById(`quoteAmt-${groupId}`)?.value;
-  const cur = document.getElementById(`quoteCur-${groupId}`)?.value || 'INR';
-  const lt = document.getElementById(`quoteLt-${groupId}`)?.value;
-  showLoader(true);
-  try {
-    let fileUrl = null, fileName = null, fileType = null;
-    if (fileEl?.files?.[0]) {
-      const f = fileEl.files[0];
-      const uploaded = await uploadFileToStorage(f, `pr/${groupId}/po-group-quotations`);
-      fileUrl = uploaded?.url || null; fileName = uploaded?.name || f.name; fileType = uploaded?.type || f.type;
-    }
-    const { error } = await db.from('po_group_quotations').insert({
-      po_group_id: groupId, vendor_id: vendorId, vendor_name: vendorName,
-      file_name: fileName, file_url: fileUrl, file_type: fileType,
-      amount: amt ? parseFloat(amt) : null, currency: cur,
-      lead_time_days: lt ? parseInt(lt) : null, uploaded_by: currentUser?.id || null,
-    });
-    if (error) throw error;
-    showToast('Quotation added.', 'success');
-  } catch (e) {
-    showToast('Error: ' + e.message, 'error');
-  } finally {
-    showLoader(false);
-    await openPRNewModel(currentPR.id);
-  }
-}
-
-// Explicit hand-off once all quotes for a group are in — moves the
-// group to 'quoted' so Engineer can verify and route it onward.
-async function handleSharePOGroupQuotes(groupId) {
-  const { data: group } = await db.from('po_groups').select('*').eq('id', groupId).single();
-  const ok = await setPOGroupPhase(group, 'quoted');
-  if (!ok) return;
-  showToast('Quotations shared with Engineer for verification.', 'success');
-  notifyRoleOfPOGroupEvent(currentPR.id, `Quotations ready for verification — "${group.group_label}" on PR-${String(currentPR.request_number).padStart(4,'0')}.`, 'engineer');
-  await openPRNewModel(currentPR.id);
-}
-
-async function handleRequoteGroup(groupId) {
-  const { data: group } = await db.from('po_groups').select('*').eq('id', groupId).single();
-  const reason = prompt('Reason for re-quote (e.g. "quote rejected", "price renegotiated"):') || 'Re-quote requested';
-  const newGroup = await requoteCycle(group, reason, currentUser?.id);
-  if (newGroup) await openPRNewModel(currentPR.id);
-}
-
-async function handlePMApproveGroup(groupId) {
-  const { data: group } = await db.from('po_groups').select('*').eq('id', groupId).single();
-  const { data: quotations } = await db.from('po_group_quotations').select('*').eq('po_group_id', groupId);
-  const selectedId = _poGroupSelectedQuote[groupId] || (quotations || []).find(q => q.is_selected)?.id || null;
-  const selectedQuote = (quotations || []).find(q => q.id === selectedId);
-  if (!selectedQuote) { showToast('Select a final quotation before approving.', 'error'); return; }
-
-  showLoader(true);
-  try {
-    // Mark the chosen quote selected, clear any other selection on this group.
-    await db.from('po_group_quotations').update({ is_selected: false }).eq('po_group_id', groupId);
-    await db.from('po_group_quotations').update({ is_selected: true }).eq('id', selectedQuote.id);
-
-    // The approved quote's vendor becomes the group's vendor of record —
-    // this is what Place Order / GRN / Payment downstream key off of.
-    await setPOGroupPhase(group, 'pm_approved', {
-      vendor_id: selectedQuote.vendor_id || group.vendor_id,
-      group_label: selectedQuote.vendor_name || group.group_label,
-      selected_quotation_id: selectedQuote.id,
-    });
-    showToast('PO Group approved with selected quotation.', 'success');
-    notifyRoleOfPOGroupEvent(currentPR.id, `"${group.group_label}" approved (${selectedQuote.vendor_name || 'vendor'} selected) — ready to place order on PR-${String(currentPR.request_number).padStart(4,'0')}.`, 'procurement');
-  } catch (e) {
-    showToast('Error: ' + e.message, 'error');
-  } finally {
-    showLoader(false);
-    delete _poGroupSelectedQuote[groupId];
-    await openPRNewModel(currentPR.id);
-  }
-}
-
-async function handlePMRejectGroup(groupId) {
-  const reason = prompt('Reason for rejecting this PO Group\'s quotation:');
-  if (reason === null) return;
-  const { data: group } = await db.from('po_groups').select('*').eq('id', groupId).single();
-  await setPOGroupPhase(group, 'rejected', { rejection_reason: reason });
-  showToast('PO Group rejected.', 'error');
-  notifyRoleOfPOGroupEvent(currentPR.id, `"${group.group_label}" quotation rejected on PR-${String(currentPR.request_number).padStart(4,'0')} — ${reason}`, 'procurement');
-  await openPRNewModel(currentPR.id);
-}
-
-// Replaces the old prompt()-only PO number entry with the same rich
-// "PO Paper" preview/PDF/branding flow Procurement already uses for
-// single-vendor requests (openPOModal/confirmGeneratePO in
-// procurement.html) — just scoped to this one group's parts, vendor,
-// and selected quotation instead of the whole PR. Reuses the same
-// #poModal shell and its generic helpers (recalcPO, downloadPO,
-// _freezePOInputs/_restorePOInputs, numToWords, PAYMENT_TERMS_OPTIONS),
-// which only exist on procurement.html — the only page this button
-// renders on (Place Order is procurement-role-only, see renderPOGroupActions).
-async function handlePlaceOrderForGroup(groupId) {
-  await openPOGroupModal(groupId);
-}
-
-async function openPOGroupModal(groupId) {
-  showLoader(true);
-  const { data: group } = await db.from('po_groups').select('*, vendors(*)').eq('id', groupId).single();
-  const partLines = await dbFetch(() => db.from('request_part_lines').select('*').eq('po_group_id', groupId).order('part_index'), 'group part lines');
-  const groupQuotes = await dbFetch(() => db.from('po_group_quotations').select('*').eq('po_group_id', groupId), 'group quotations');
-  showLoader(false);
-
-  const pr = currentPR;
-  const vendor = group.vendors || null;
-  const selectedQ = (groupQuotes || []).find(q => q.id === group.selected_quotation_id) || (groupQuotes || []).find(q => q.is_selected) || (groupQuotes || [])[0] || null;
-
-  const now = new Date();
-  const fy = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
-  const fyShort = `${String(fy).slice(2)}-${String(fy + 1).slice(2)}`;
-  const groupTag = (group.group_label || 'GRP').replace(/[^A-Za-z0-9]/g, '').substring(0, 6).toUpperCase() || 'GRP';
-  const poNumber = `IIIPO/${fyShort}/${String(pr.request_number).padStart(4, '0')}-${groupTag}`;
-  const todayStr = now.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '/');
-  const deliveryDate = selectedQ?.lead_time_days
-    ? new Date(Date.now() + selectedQ.lead_time_days * 86400000).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '/')
-    : '—';
-  const pt = (window.PAYMENT_TERMS_OPTIONS || []).find(p => p.value === vendor?.payment_terms);
-  const ptLabel = vendor?.payment_terms === 'custom' ? (vendor?.custom_payment_terms || 'Custom Terms') : (pt?.label || 'As agreed');
-  const currency = selectedQ?.currency || 'INR';
-  const currSymbol = currency === 'INR' ? '₹' : currency;
-
-  const baseAmt = parseFloat(selectedQ?.amount || 0);
-  const cgstPct = 9, sgstPct = 9;
-  const cgstAmt = Math.round(baseAmt * cgstPct / 100 * 100) / 100;
-  const sgstAmt = Math.round(baseAmt * sgstPct / 100 * 100) / 100;
-  const netPayable = baseAmt + cgstAmt + sgstAmt;
-
-  const savedLogo = localStorage.getItem('po_logo');
-  const savedSig = localStorage.getItem('po_sig');
-  const logoSrc = savedLogo || 'https://nxhvxfvfhvbkymgvmwwi.supabase.co/storage/v1/object/public/assets/Inventindia_Logo-2.png';
-  const sigSrc = savedSig || '../stamp.png';
-
-  const defaultTermsHTML = `- <strong>Packing :</strong> Goods must be packed in new containers with clear markings for content, gross weight, tare weight, net weight, and hazard info. We will reject goods that don't meet these packing requirements.
-- <strong>Delivery :</strong> Goods should be delivered at the desired destination between 9 AM to 5 PM. We shall allow the delivery of the vehicle inside our premises at any time, but unloading of goods is as per Instructions.
-- <strong>Payment :</strong> This will be according to the terms mentioned in the Purchase Order.
-- <strong>Weight &amp; Purity :</strong> Both the parameters should be in accordance with the order form. Any difference in weight or purity will be calculated to achieve the real quantity supplied and payment shall be made on this real quantity.
-- <strong>Mandatory Documents Set :</strong> Material supplied should be accompanied with invoice for buyer along with duplicate for transporter. All supplied document/s must clearly indicate our purchase order number &amp; date, else the payment may not be processed.
-- <strong>Jurisdiction :</strong> Subject To Ahmedabad jurisdiction only.`;
-
-  document.getElementById('poModalSub').textContent = `${poNumber} — ${pr.project_name} (${group.group_label})`;
-
-  const partsArr = (partLines || []).length ? partLines : [{ name: group.group_label || '—', qty: 1, spec: '' }];
-  const totalQty = partsArr.reduce((s, x) => s + (x.qty || 1), 0) || 1;
-  const itemRows = partsArr.map((p, i) => {
-    const unitRate = partsArr.length > 1 ? (baseAmt / totalQty) : (baseAmt / (p.qty || 1));
-    const rowTotal = unitRate * (p.qty || 1);
-    return `<tr>
-      <td class="center">${i + 1}</td>
-      <td class="center"><input class="po-meta-input" style="text-align:center" placeholder="—"/></td>
-      <td><div class="item-desc-main">${p.name || '—'}</div>${p.spec ? `<div class="item-desc-sub">${p.spec}</div>` : ''}</td>
-      <td class="center"><input class="po-meta-input" style="text-align:center" placeholder="—"/></td>
-      <td class="center">${p.qty || 1}</td>
-      <td class="center">${p.uom || 'Nos'}</td>
-      <td class="right"><input class="po-meta-input" id="pog-unitrate-${i}" style="text-align:right" type="number" value="${unitRate.toFixed(2)}" oninput="recalcPOGroupRow(${i},${p.qty || 1})"/></td>
-      <td class="right" id="pog-rowtotal-${i}">${currSymbol} ${rowTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-    </tr>`;
-  }).join('');
-
-  document.getElementById('poModalBody').innerHTML = `
-    <div style="margin-bottom:12px;padding:9px 12px;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.2);border-radius:6px;font-size:0.78rem;display:flex;align-items:center;flex-wrap:wrap;gap:12px">
-      <span>⚙️ Review and edit fields directly in the PO below. Adjust tax rates here:</span>
-      <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap">
-        <label style="font-size:0.74rem;white-space:nowrap">CGST %</label>
-        <input id="cgstInput" type="number" value="${cgstPct}" class="po-tax-input" onchange="recalcPO()"/>
-        <label style="font-size:0.74rem;white-space:nowrap">SGST %</label>
-        <input id="sgstInput" type="number" value="${sgstPct}" class="po-tax-input" onchange="recalcPO()"/>
-        <label style="font-size:0.74rem;white-space:nowrap">P&amp;F</label>
-        <input id="pnfInput" type="number" value="0" class="po-tax-input" style="width:70px" onchange="recalcPO()"/>
-      </div>
-    </div>
-
-    <div id="poPreviewBox">
-      <div class="po-top-bar">
-        <div style="width:130px"></div>
-        <div class="po-paper-title">Purchase Order</div>
-        <div id="poLogoSlot" style="width:130px;display:flex;justify-content:flex-end">
-          <img src="${logoSrc}" class="po-logo-img" alt="Logo" crossorigin="anonymous" onerror="this.style.display='none'"/>
-        </div>
-      </div>
-
-      <div class="po-addr-grid" style="border-top:1px solid #999">
-        <div class="po-addr-cell">
-          <div class="cell-head">Name and Address of Buyer :</div>
-          <div class="company-name">INVENTINDIA INNOVATIONS PVT. LTD.</div>
-          Ch03, Inspire Business Park,<br/>
-          Adani Shantigram, Near Vaishnodevi Circle, Gandhinagar,<br/>
-          Ahmedabad (Gujarat) India - 382421<br/>
-          GSTIN : 24AACCI7644H1ZK<br/>
-          Contact Person: Jaimin Prajapati<br/>
-          Email: Jaimin.p@inventindia.com<br/>
-          Contact No.: 9924077107<br/>
-          Place of Supply: Gujarat.India
-        </div>
-        <div class="po-addr-cell">
-          <table style="width:100%;font-size:0.74rem">
-            <tr><td style="font-weight:600;white-space:nowrap;padding-right:6px;padding-bottom:2px">PO Number :</td><td><input class="po-meta-input" id="poPreviewNum" value="${poNumber}" style="font-weight:700;font-size:0.82rem"/></td></tr>
-            <tr><td style="font-weight:600;white-space:nowrap;padding-right:6px;padding-bottom:2px">PO Date :</td><td><input class="po-meta-input" id="poDate" value="${todayStr}"/></td></tr>
-            <tr><td style="font-weight:600;white-space:nowrap;padding-right:6px;padding-bottom:2px">Delivery Date :</td><td><input class="po-meta-input" id="poDelivery" value="${deliveryDate}"/></td></tr>
-            <tr><td style="font-weight:600;white-space:nowrap;padding-right:6px;padding-bottom:2px">Payment Terms :</td><td>${ptLabel}</td></tr>
-            <tr><td style="font-weight:600;white-space:nowrap;padding-right:6px;padding-bottom:2px">Delivery Terms :</td><td>NA</td></tr>
-            <tr><td style="font-weight:600;white-space:nowrap;padding-right:6px;padding-bottom:2px">Mode of Transport :</td><td>NA</td></tr>
-            <tr><td style="font-weight:600;white-space:nowrap;padding-right:6px;padding-bottom:2px">Final Destination :</td><td>Inventindia</td></tr>
-            <tr><td style="font-weight:600;white-space:nowrap;padding-right:6px;padding-bottom:2px">Quote Ref :</td><td><input class="po-meta-input" id="poQuoteRef" placeholder="—"/></td></tr>
-            <tr><td style="font-weight:600;white-space:nowrap;padding-right:6px;padding-bottom:2px">Indent Number :</td><td><input class="po-meta-input" id="poIndent" value="NA"/></td></tr>
-            <tr><td style="font-weight:600;white-space:nowrap;padding-right:6px;padding-bottom:2px">Project Code/Name :</td><td><input class="po-meta-input" id="poProjectCode" value="${pr.project_name || 'NA'} — ${group.group_label || ''}"/></td></tr>
-          </table>
-        </div>
-      </div>
-
-      <div class="po-addr-grid">
-        <div class="po-addr-cell">
-          <div class="cell-head">Name and Address of Supplier :</div>
-          <div class="company-name">${vendor?.name || group.group_label || '—'}</div>
-          ${vendor?.address ? vendor.address + '<br/>' : ''}
-          ${vendor?.contact_person ? `Contact: ${vendor.contact_person}<br/>` : ''}
-          ${vendor?.phone ? `Phone: ${vendor.phone}<br/>` : ''}
-          ${vendor?.email ? `${vendor.email}<br/>` : ''}
-          ${vendor?.GSTIN ? `GSTIN : ${vendor.GSTIN}<br/>` : ''}
-          ${vendor?.country ? `Country : ${vendor.country}<br/>` : ''}
-          ${vendor?.vendor_type ? `Vendor Type : ${vendor.vendor_type}<br/>` : ''}
-          Place of Supply: Gujarat.India
-        </div>
-        <div class="po-addr-cell">
-          <div class="cell-head">Shipping Details :</div>
-          <div class="company-name">INVENTINDIA INNOVATIONS PVT. LTD.</div>
-          Ch03, Inspire Business Park,<br/>
-          Adani Shantigram, Ahmedabad (Gujarat) India - 382421<br/>
-          GSTIN : 24AACC17644H1ZK<br/>
-          Contact Person: Jaimin Prajapati<br/>
-          Email: Jaimin.p@inventindia.com<br/>
-          Contact No.: 9924077107<br/>
-          Place of Supply: Gujarat.India
-        </div>
-      </div>
-
-      <table class="po-items-table">
-        <thead>
-          <tr>
-            <th style="width:42px">Sr No</th>
-            <th style="width:72px">Item Code</th>
-            <th>Description</th>
-            <th style="width:72px">HSN/SAC Code</th>
-            <th style="width:64px">Quantity</th>
-            <th style="width:52px">UOM</th>
-            <th style="width:82px">Unit Rate</th>
-            <th style="width:96px">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${itemRows}
-          <tr style="height:22px"><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-          <tr style="height:22px"><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
-        </tbody>
-      </table>
-
-      <div class="po-bottom-grid">
-        <div class="po-left-bottom">
-          <div class="bank-section">
-            <div style="font-weight:700;font-size:0.71rem;margin-bottom:5px">Bank Details:</div>
-            <table style="width:100%">
-              <tr><td>Account Holder Name</td><td>: Inventindia Innovations Private Limited</td></tr>
-              <tr><td>Bank Name</td><td>: ICICI Bank</td></tr>
-              <tr><td>A/C No</td><td>: 461105000085</td></tr>
-              <tr><td>IFCS Code</td><td>: ICIC0004611</td></tr>
-            </table>
-          </div>
-          <div class="po-terms-section">
-            <div class="terms-head">Terms &amp; Conditions:</div>
-            <div id="poTermsEditable" class="po-terms-editable" contenteditable="true">${defaultTermsHTML}</div>
-          </div>
-        </div>
-
-        <div>
-          <table class="po-amount-table">
-            <tr><td>Basic Amount :</td><td id="poBasicAmt">${currSymbol} ${baseAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td></tr>
-            <tr><td>Discount (%) :</td><td id="poDiscount">0.00</td></tr>
-            <tr><td>Amount after Discount :</td><td id="poAfterDiscount">${currSymbol} ${baseAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td></tr>
-            <tr><td>P&amp;F Charge :</td><td id="poPnf">${currSymbol} 0.00</td></tr>
-            <tr><td>CGST % &nbsp; <span id="poCgstPctLabel">${cgstPct}</span>.00 :</td><td id="poCgst">${currSymbol} ${cgstAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td></tr>
-            <tr><td>SGST % &nbsp; <span id="poSgstPctLabel">${sgstPct}</span>.00 :</td><td id="poSgst">${currSymbol} ${sgstAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td></tr>
-            <tr class="net-row"><td>Net Payable (INR) :</td><td id="poNet">${currSymbol} ${netPayable.toLocaleString('en-IN', { minimumFractionDigits: 0 })}</td></tr>
-            <tr class="words-row"><td colspan="2"><strong>Amount in words :</strong><br/><span id="poWords">${(window.numToWords ? numToWords(netPayable) : '')}</span></td></tr>
-          </table>
-
-          <div class="po-sig-section">
-            <div class="po-sig-img-wrap">
-              <div id="poSigSlot">
-                <img src="${sigSrc}" alt="Authorized Signatory" style="max-height:68px;max-width:100%;object-fit:contain" onerror="this.style.display='none'"/>
-              </div>
+        ${orders.length?`<div style="display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto">
+          ${orders.map(o=>`<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--off-white);border:1px solid var(--border);border-radius:6px">
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;font-size:0.78rem">PR-${String(o.request_number).padStart(4,'0')}</div>
+              <div style="font-size:0.7rem;color:var(--gray-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${o.project_name}</div>
+              <div style="font-size:0.65rem;color:var(--gray-4)">${fmtDate(o.created_at)}</div>
             </div>
-            <div class="po-sig-label">(Authorized Signatory)</div>
-          </div>
+            ${getPhaseBadge(o.phase)}
+          </div>`).join('')}
+        </div>`:`<div style="padding:20px;text-align:center;background:var(--off-white);border:1px solid var(--border);border-radius:6px"><div style="font-size:1.5rem;margin-bottom:4px">📭</div><p style="color:var(--gray-4);font-size:0.78rem">No orders yet</p></div>`}
+      </div>
+      <div>
+        <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--gray-4);margin-bottom:10px;display:flex;align-items:center;gap:6px">
+          ⭐ Ratings <span style="background:var(--off-white);border:1px solid var(--border);border-radius:10px;padding:1px 7px;font-size:0.68rem">${ratings.length}</span>
         </div>
+        ${ratings.length?`<div style="display:flex;flex-direction:column;gap:6px;max-height:340px;overflow-y:auto">
+          ${ratings.map(r=>{
+            let tatR=0,qualR=0,noteText='';
+            try{ const p=JSON.parse(r.comment||'{}'); tatR=p.tat||0; qualR=p.quality||0; noteText=p.note||''; }catch(e){ noteText=r.comment||''; }
+            const hasDual = tatR>0 && qualR>0;
+            function miniStars(n){ return [1,2,3,4,5].map(i=>`<span style="color:${i<=n?'#f59e0b':'#d1d5db'};font-size:0.75rem">★</span>`).join(''); }
+            return `<div style="padding:9px 10px;background:var(--off-white);border:1px solid var(--border);border-radius:6px">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;margin-bottom:5px">
+                <span style="color:#f59e0b;letter-spacing:1px;font-size:0.82rem">${'★'.repeat(r.rating)}${'☆'.repeat(5-r.rating)}<span style="color:var(--gray-4);font-size:0.65rem;margin-left:4px">(overall)</span></span>
+                <span style="font-size:0.65rem;color:var(--gray-4)">${fmtDate(r.created_at)}</span>
+              </div>
+              ${hasDual?`<div style="display:flex;gap:12px;padding:6px 8px;background:white;border:1px solid var(--border);border-radius:4px;margin-bottom:5px">
+                <div><div style="font-size:0.6rem;color:var(--gray-4);font-weight:600;margin-bottom:2px">⏱ TAT</div><div>${miniStars(tatR)}</div></div>
+                <div style="width:1px;background:var(--border)"></div>
+                <div><div style="font-size:0.6rem;color:var(--gray-4);font-weight:600;margin-bottom:2px">✅ Quality</div><div>${miniStars(qualR)}</div></div>
+              </div>`:''}
+              <div style="font-size:0.7rem;color:var(--gray-4);margin-bottom:3px">${r.users?.name||'Unknown'}${r.procurement_requests?.project_name?' · '+r.procurement_requests.project_name:''}</div>
+              ${noteText?`<p style="font-size:0.76rem;color:var(--gray-3);line-height:1.4">${noteText}</p>`:(!hasDual&&r.comment?`<p style="font-size:0.76rem;color:var(--gray-3);line-height:1.4">${r.comment}</p>`:'<p style="font-size:0.7rem;color:var(--gray-4);font-style:italic">No comment</p>')}
+            </div>`;
+          }).join('')}
+        </div>`:`<div style="padding:20px;text-align:center;background:var(--off-white);border:1px solid var(--border);border-radius:6px"><div style="font-size:1.5rem;margin-bottom:4px">⭐</div><p style="color:var(--gray-4);font-size:0.78rem">No ratings yet</p></div>`}
       </div>
+    </div>`;
+}
 
-      <div class="po-doc-footer">
-        <span>This is a computer generated document</span>
-        <span>Jurisdiction : Subject To Ahmedabad jurisdiction only.</span>
+// ── VENDOR ENQUIRY ───────────────────────────────────────────
+function openVendorEnquiry(vendor) {
+  if(typeof vendor === 'string') {
+    try { vendor = JSON.parse(vendor.split('&quot;').join('"')); } catch(e) { return; }
+  }
+  let ov=document.getElementById('_vendorEnquiryModal');
+  if(!ov){ov=document.createElement('div');ov.id='_vendorEnquiryModal';ov.className='modal-overlay';ov.onclick=e=>{if(e.target===ov)ov.classList.remove('active');};document.body.appendChild(ov);}
+  const pt = PAYMENT_TERMS_OPTIONS.find(p=>p.value===vendor.payment_terms);
+  ov.innerHTML=`<div class="modal" style="max-width:500px">
+    <div class="modal-header"><div><div class="modal-title">${vendor.name}</div><div class="modal-title-sub">${vendor.specialization||'General Supplier'}</div></div><button class="modal-close" onclick="document.getElementById('_vendorEnquiryModal').classList.remove('active')">✕</button></div>
+    <div class="modal-body">
+      <div class="enquiry-contact-grid">
+        <div><div class="enquiry-contact-label">Contact Person</div><div class="enquiry-contact-value">${vendor.contact_person||'—'}</div></div>
+        <div><div class="enquiry-contact-label">Specialization</div><div class="enquiry-contact-value">${vendor.specialization||'—'}</div></div>
+        <div><div class="enquiry-contact-label">Email</div><div class="enquiry-contact-value">${vendor.email?`<a href="mailto:${vendor.email}">${vendor.email}</a>`:'—'}</div></div>
+        <div><div class="enquiry-contact-label">Phone</div><div class="enquiry-contact-value">${vendor.phone||'—'}</div></div>
+        ${pt?`<div style="grid-column:1/-1"><div class="enquiry-contact-label">Payment Terms</div><div class="enquiry-contact-value" style="color:#6366f1">💳 ${pt.label}</div></div>`:''}
       </div>
+      ${vendor.notes?`<div style="border-top:1px solid var(--border);padding-top:12px"><div class="detail-key" style="margin-bottom:5px">Notes</div><p style="font-size:0.8rem;color:var(--gray-3);line-height:1.5">${vendor.notes}</p></div>`:''}
+      <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:13px"><div class="detail-key" style="margin-bottom:5px">Rating</div><div>${starRating(vendor.avg_rating,vendor.rating_count)}</div></div>
     </div>
-  `;
-
-  window._poBaseAmt = baseAmt;
-  window._poCurrSymbol = currSymbol;
-  window._poCgstPct = cgstPct;
-  window._poSgstPct = sgstPct;
-  window._poGroupPartsArr = partsArr;
-  window._poGroupId = groupId;
-  window._poGroupSelectedQuoteId = selectedQ?.id || null;
-
-  // Point the modal's Confirm button at the group-scoped save handler
-  // instead of the legacy single-PO confirmGeneratePO(). Download PDF
-  // stays wired to the existing generic downloadPO() (works off
-  // #poPreviewBox regardless of which flow opened the modal).
-  const confirmBtn = document.querySelector('#poModal .modal-footer .btn-primary');
-  if (confirmBtn) confirmBtn.setAttribute('onclick', `confirmGeneratePOGroupOrder('${groupId}')`);
-
-  openModal('poModal');
+    <div class="modal-footer">
+      ${vendor.email?`<a href="mailto:${vendor.email}?subject=Enquiry%20from%20ProcureOps" class="btn btn-primary">✉ Send Email</a>`:''}
+      <button class="btn btn-secondary" onclick="document.getElementById('_vendorEnquiryModal').classList.remove('active')">Close</button>
+    </div>
+  </div>`;
+  ov.classList.add('active');
 }
-window.openPOGroupModal = openPOGroupModal;
 
-// Group-scoped row recalculation — mirrors legacy recalcPORow but reads
-// from window._poGroupPartsArr (this group's own part lines) instead of
-// currentPR.parts, since a PR with several PO Groups has several
-// independent part sets and totals.
-function recalcPOGroupRow(idx, qty) {
-  const input = document.getElementById(`pog-unitrate-${idx}`);
-  const totalCell = document.getElementById(`pog-rowtotal-${idx}`);
-  const sym = window._poCurrSymbol || '₹';
-  if (!input || !totalCell) return;
-  const unitRate = parseFloat(input.value) || 0;
-  const rowTotal = unitRate * qty;
-  totalCell.textContent = `${sym} ${rowTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-
-  const partsArr = window._poGroupPartsArr && window._poGroupPartsArr.length ? window._poGroupPartsArr : [{ qty: 1 }];
-  let newBase = 0;
-  partsArr.forEach((p, i) => {
-    const el = document.getElementById(`pog-unitrate-${i}`);
-    newBase += (parseFloat(el?.value) || 0) * (p.qty || 1);
-  });
-  window._poBaseAmt = newBase;
-  const basicEl = document.getElementById('poBasicAmt');
-  if (basicEl) basicEl.textContent = `${sym} ${newBase.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-  const afterEl = document.getElementById('poAfterDiscount');
-  if (afterEl) afterEl.textContent = `${sym} ${newBase.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
-  if (typeof recalcPO === 'function') recalcPO();
+// ── COMMENTS ────────────────────────────────────────────────
+// Cache of all users for @mention autocomplete
+var _allUsersCache = null;
+async function _loadAllUsers() {
+  if (_allUsersCache && _allUsersCache.length) return _allUsersCache;
+  const { data, error } = await db.from('users').select('id,name,email').order('name');
+  if (error) { console.warn('_loadAllUsers failed:', error.message); return _allUsersCache || []; }
+  _allUsersCache = data || [];
+  return _allUsersCache;
 }
-window.recalcPOGroupRow = recalcPOGroupRow;
+window._loadAllUsers = _loadAllUsers;
 
-// Group-scoped save: mirrors confirmGeneratePO() — captures the PO
-// paper as a PDF, uploads it, records the purchase_orders row (tagged
-// with po_group_id so it's attributable to this specific vendor split),
-// attaches it to the PR, comments, and advances the group's phase.
-async function confirmGeneratePOGroupOrder(groupId) {
-  showLoader(true);
-  const poNumber = document.getElementById('poPreviewNum')?.value || '';
-  const cgstPct = parseFloat(document.getElementById('cgstInput')?.value || 9);
-  const sgstPct = parseFloat(document.getElementById('sgstInput')?.value || 9);
-  const pnf = parseFloat(document.getElementById('pnfInput')?.value || 0);
-  const base = window._poBaseAmt || 0;
-  const netPayable = base + Math.round(base * cgstPct / 100 * 100) / 100 + Math.round(base * sgstPct / 100 * 100) / 100 + pnf;
+window.loadComments = async function (prId) {
+  const { data, error } = await db.from('pr_comments').select('*,users(name)').eq('pr_id', prId).order('created_at');
+  if (error) { console.error("Load comments error:", error); return []; }
+  return data || [];
+};
 
-  const { data: group } = await db.from('po_groups').select('*').eq('id', groupId).single();
-  const currency = window._poCurrSymbol === '₹' ? 'INR' : (window._poCurrSymbol || 'INR');
-
-  // A group can only ever get one purchase_orders row (Place Order isn't
-  // re-clickable once order_placed). If one's already there, this call is
-  // a PDF-attach retry (see "⚠️ PDF not attached" below) — reuse the
-  // existing record instead of inserting a duplicate, and don't re-advance
-  // the phase or re-post the "PO generated" comment a second time.
-  const { data: existingPO } = await db.from('purchase_orders').select('*').eq('po_group_id', groupId).maybeSingle();
-
-  if (!existingPO) {
-    // Step 1: save the PO record itself, tagged to this group.
-    // NOTE: purchase_orders.quotation_id has a foreign key into pr_quotations
-    // (the legacy single-PO quotes table). This group flow selects from
-    // po_group_quotations instead — a different table with its own id space —
-    // so writing that id into quotation_id always violates the FK. It goes
-    // into po_group_quotation_id (its own FK into po_group_quotations)
-    // instead; quotation_id is left null for group-flow POs.
-    const { error: poErr } = await db.from('purchase_orders').insert({
-      pr_id: group.pr_id, po_group_id: groupId, po_number: poNumber, po_date: new Date().toISOString(),
-      vendor_id: group.vendor_id, po_group_quotation_id: window._poGroupSelectedQuoteId || null,
-      total_amount: netPayable, currency, generated_by: currentUser.id,
-    });
-    if (poErr) { showLoader(false); showToast('Error saving PO: ' + poErr.message, 'error'); return; }
+window.postComment = async function(prId, userId, text) {
+  if (!text?.trim()) return;
+  const { error } = await db.from('pr_comments').insert({ pr_id: prId, user_id: userId, comment: text.trim() });
+  if (error) throw error;
+  // Extract @mentions and notify tagged users (matched against real user list)
+  const targets = await resolveMentionedUsers(text, userId);
+  if (targets.length > 0) {
+    await sendMentionNotifications(prId, userId, text, targets);
   }
+};
 
-  // Step 2: render the PO paper to PDF and upload it. Everything above is
-  // a plain DB write and basically can't fail; this step involves
-  // html2canvas + jsPDF + a Storage upload, all of which can throw for
-  // reasons outside our control (a slow-loading logo image, a storage
-  // policy hiccup) — which is exactly why it's kept behind its own
-  // try/catch instead of one wrapping the whole function: a failure here
-  // must never take down the PO record that's already safely saved above.
-  // The trade-off is that it CAN fail silently from the user's point of
-  // view (PO shows up, no PDF) — that's what the retry affordance in
-  // renderPOGroupDocsAndPayments() ("⚠️ PDF not attached — Generate PDF")
-  // is for; it re-invokes this exact function, which is why the
-  // existingPO check above matters.
-  let pdfUrl = null;
-  try {
-    const previewEl = document.getElementById('poPreviewBox');
-    const frozen = _freezePOInputs(previewEl);
-    const canvas = await html2canvas(previewEl, { scale: 2, useCORS: true, backgroundColor: '#ffffff' });
-    _restorePOInputs(frozen);
+// Finds every "@..." occurrence in the text and matches it against the real
+// user list, preferring the longest name match so multi-word names aren't
+// cut short and single-word names don't swallow the next sentence word
+// (e.g. "@Sandy please approve" must resolve to "Sandy", not "Sandy please").
+async function resolveMentionedUsers(text, actorId) {
+  const users = await _loadAllUsers();
+  if (!users.length) return [];
 
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const imgW = 210;
-    const imgH = (canvas.height * imgW) / canvas.width;
-    pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, imgW, imgH);
+  // Build every possible match string per user: the full name, plus each
+  // leading-word prefix (e.g. "Sandy Mehta" -> ["sandy mehta", "sandy"]).
+  // This lets "@Sandy please approve" resolve to "Sandy Mehta" using just
+  // the first name, while "@Rajesh Kumar Patel" still prefers the fullest
+  // match available for that user.
+  const candidates = [];
+  for (const u of users) {
+    const words = u.name.toLowerCase().split(/\s+/).filter(Boolean);
+    for (let i = words.length; i >= 1; i--) {
+      candidates.push({ user: u, text: words.slice(0, i).join(' ') });
+    }
+  }
+  // Longest candidate strings first, so fuller names win over shorter ones.
+  candidates.sort((a, b) => b.text.length - a.text.length);
 
-    const pdfBlob = pdf.output('blob');
-    const fileName = `${poNumber.replace(/\//g, '-')}_${Date.now()}.pdf`;
-    const storagePath = `po/${group.pr_id}/${groupId}/${fileName}`;
+  const found = new Map(); // id -> user
+  const atRe = /@/g;
+  let m;
+  while ((m = atRe.exec(text)) !== null) {
+    const startIdx = m.index + 1;
+    // Only consider the start of a mention (not mid-word, e.g. an email address)
+    if (m.index > 0 && /\S/.test(text[m.index - 1])) continue;
 
-    const { error: uploadErr } = await db.storage.from('attachments').upload(storagePath, pdfBlob, { contentType: 'application/pdf' });
-    if (uploadErr) {
-      console.warn('Storage upload failed:', uploadErr.message, '— falling back to base64 storage');
-      try {
-        const reader = new FileReader();
-        const base64Url = await new Promise((res, rej) => { reader.onload = () => res(reader.result); reader.onerror = rej; reader.readAsDataURL(pdfBlob); });
-        await db.from('pr_attachments').insert({
-          pr_id: group.pr_id, po_group_id: groupId, uploaded_by: currentUser.id, attachment_type: 'other',
-          file_name: `PO_${poNumber.replace(/\//g, '-')}.pdf`, file_url: base64Url,
-        });
-        pdfUrl = base64Url;
-      } catch (fbErr) {
-        console.warn('Base64 fallback also failed:', fbErr);
-        showToast('PO saved — PDF could not be stored: ' + uploadErr.message, 'error');
+    const rest = text.slice(startIdx);
+    const restLower = rest.toLowerCase();
+
+    for (const c of candidates) {
+      if (restLower.startsWith(c.text)) {
+        // Require the match to end at a word boundary (end of string,
+        // whitespace, or punctuation) so "Sam" doesn't match inside "Samuel".
+        const nextChar = rest[c.text.length];
+        if (nextChar === undefined || /[^A-Za-z]/.test(nextChar)) {
+          if (c.user.id !== actorId) found.set(c.user.id, c.user);
+          break; // longest match already found for this @, stop here
+        }
       }
+    }
+  }
+  return [...found.values()];
+}
+
+// Inserts one row per mentioned user directly into `notifications` — no
+// edge function / email dependency here (this app's Supabase project
+// doesn't have one deployed). Non-blocking: a failure here should never
+// stop the comment itself from posting.
+async function sendMentionNotifications(prId, actorId, commentText, targets) {
+  try {
+    if (!targets?.length) return;
+    const mentionedUserIds = targets.map(u => u.id);
+
+    // Delegate to edge function — it handles both DB notification insert AND email.
+    // NOTE: supabase-js functions.invoke() resolves with {data, error} on a
+    // non-2xx response, it does NOT throw — so the error must be checked
+    // explicitly or failures (and missing notification rows) go unnoticed.
+    const { data, error } = await db.functions.invoke('notify-mention', {
+      body: {
+        pr_id:               prId,
+        actor_id:            actorId,
+        comment_text:        commentText,
+        mentioned_user_ids:  mentionedUserIds,
+      },
+    });
+    if (error) {
+      console.error('notify-mention failed:', error.message || error, error.context || '');
     } else {
-      const { data: urlData } = db.storage.from('attachments').getPublicUrl(storagePath);
-      pdfUrl = urlData?.publicUrl;
-      await db.from('pr_attachments').insert({
-        pr_id: group.pr_id, po_group_id: groupId, uploaded_by: currentUser.id, attachment_type: 'other',
-        file_name: `PO_${poNumber.replace(/\//g, '-')}.pdf`, file_url: pdfUrl,
-      });
+      console.log('notify-mention ok:', data);
     }
-  } catch (pdfErr) {
-    console.warn('PDF generation failed:', pdfErr);
-    showToast('PO saved — PDF generation failed: ' + pdfErr.message, 'error');
+  } catch(e) {
+    // Non-blocking — log but don't surface to user
+    console.warn('Mention notification failed (non-blocking):', e?.message || e);
   }
-
-  // Step 3: advance phase + comment + notify — only the first time. A
-  // retry that's just backfilling a missing PDF must not re-fire
-  // notifications or bounce the phase (it's already order_placed, possibly
-  // even further along by now).
-  if (!existingPO) {
-    await setPOGroupPhase(group, 'order_placed');
-    const commentText = pdfUrl
-      ? `📄 Purchase Order ${poNumber} generated for "${group.group_label}". Net Payable: ${window._poCurrSymbol || '₹'}${netPayable.toLocaleString('en-IN')} — [View PO PDF](${pdfUrl})`
-      : `📄 Purchase Order ${poNumber} generated for "${group.group_label}". Net Payable: ${window._poCurrSymbol || '₹'}${netPayable.toLocaleString('en-IN')}`;
-    if (typeof window.postComment === 'function') await window.postComment(group.pr_id, currentUser.id, commentText);
-  } else if (pdfUrl && typeof window.postComment === 'function') {
-    await window.postComment(group.pr_id, currentUser.id, `📎 PDF re-attached for Purchase Order ${poNumber} ("${group.group_label}") — [View PO PDF](${pdfUrl})`);
-  }
-
-  showLoader(false);
-  if (!pdfUrl) {
-    showToast(`PO ${poNumber} saved, but the PDF still failed to attach — check your connection and try "Generate PDF" again from the PO panel.`, 'error');
-  } else {
-    showToast(`PO ${poNumber} ${existingPO ? 'PDF attached' : 'generated & saved as attachment'}!`, 'success');
-  }
-  closeModal('poModal');
-  await openPRNewModel(currentPR.id);
 }
-window.confirmGeneratePOGroupOrder = confirmGeneratePOGroupOrder;
+window.sendMentionNotifications = sendMentionNotifications;
+window.resolveMentionedUsers = resolveMentionedUsers;
 
-async function handleInvokeGRNForGroup(groupId) {
-  const { data: group } = await db.from('po_groups').select('*').eq('id', groupId).single();
-  await setPOGroupPhase(group, 'grn_pending');
-  notifyRoleOfPOGroupEvent(currentPR.id, `Goods received for "${group.group_label}" — GRN/QC needed on PR-${String(currentPR.request_number).padStart(4,'0')}.`, 'engineer');
-  await openPRNewModel(currentPR.id);
-}
+// Sends one notification to every user in the system (used for
+// system-wide announcements, e.g. "we added @mentions"). pr_id is left
+// null since a broadcast isn't tied to any specific request — the bell's
+// click handler already guards on `if (prId)` before trying to open a PR,
+// so a null pr_id just marks it read on click.
+window.broadcastNotification = async function(message) {
+  const text = (message || '').trim();
+  if (!text) throw new Error('Message is empty');
+  const users = await _loadAllUsers();
+  if (!users.length) return { count: 0 };
+  const rows = users.map(u => ({ user_id: u.id, pr_id: null, message: text, is_read: false }));
+  const { error } = await db.from('notifications').insert(rows);
+  if (error) throw error;
+  return { count: rows.length };
+};
 
-async function handleSubmitGRN(groupId, passed) {
-  const { data: group } = await db.from('po_groups').select('*').eq('id', groupId).single();
-  const partLines = await fetchPartLines(currentPR.id);
-  const groupParts = partLines.filter(p => p.po_group_id === groupId);
-  const lines = groupParts.map((p, i) => ({
-    name: p.name,
-    received: parseFloat(document.getElementById(`grnRcvd-${groupId}-${i}`)?.value || 0),
-    accepted: parseFloat(document.getElementById(`grnAccpt-${groupId}-${i}`)?.value || 0),
-  }));
-  await submitPOGroupGRN(groupId, {
-    qc_result: passed ? 'qc_passed' : 'qc_failed',
-    lines,
-  }, currentUser?.id);
-  const prLabel = `PR-${String(currentPR.request_number).padStart(4,'0')}`;
-  if (passed) {
-    notifyRoleOfPOGroupEvent(currentPR.id, `QC passed for "${group.group_label}" — ready for payment on ${prLabel}.`, 'accounts');
-  } else {
-    notifyRoleOfPOGroupEvent(currentPR.id, `QC failed for "${group.group_label}" on ${prLabel} — sent to Rework/Return.`, 'procurement');
-  }
-  await openPRNewModel(currentPR.id);
-}
-
-async function handleResubmitRework(groupId) {
-  const { data: group } = await db.from('po_groups').select('*').eq('id', groupId).single();
-  await resubmitAfterRework(group);
-  notifyRoleOfPOGroupEvent(currentPR.id, `Vendor reshipped for "${group.group_label}" — GRN/QC needed again on PR-${String(currentPR.request_number).padStart(4,'0')}.`, 'engineer');
-  await openPRNewModel(currentPR.id);
-}
-
-async function handleRecordPayment(groupId) {
-  const type = document.getElementById(`payType-${groupId}`)?.value || 'full';
-  const amt = parseFloat(document.getElementById(`payAmt-${groupId}`)?.value || 0);
-  const poValue = parseFloat(document.getElementById(`payPoValue-${groupId}`)?.value || 0) || null;
-  const smartsheetId = document.getElementById(`paySmartsheetId-${groupId}`)?.value?.trim() || null;
-  const screenshotFile = document.getElementById(`payScreenshot-${groupId}`)?.files?.[0] || null;
-  if (!amt) { showToast('Enter a payment amount.', 'error'); return; }
-  let screenshotUrl = null;
-  if (screenshotFile) {
-    showLoader(true);
-    try { screenshotUrl = (await uploadFileToStorage(screenshotFile, `pr/${currentPR.id}/po-group-payments`)).url; }
-    catch (e) { showLoader(false); showToast('Screenshot upload error: ' + e.message, 'error'); return; }
-    showLoader(false);
-  }
-  await recordPOGroupPayment(groupId, type, amt, 'INR', poValue, currentUser?.id, smartsheetId, screenshotUrl);
-  const { data: group } = await db.from('po_groups').select('*').eq('id', groupId).single();
-  if (group.phase === 'closed' && currentPR.created_by) {
-    notifyUserOfPOGroupEvent(currentPR.id, currentPR.created_by, `"${group.group_label}" fully paid and closed on PR-${String(currentPR.request_number).padStart(4,'0')}.`);
-  }
-  await openPRNewModel(currentPR.id);
-}
-
-window.renderPOGroupActions = renderPOGroupActions;
-window.handleCreatePOGroup = handleCreatePOGroup;
-window.handleAddPOGroupQuote = handleAddPOGroupQuote;
-window.handleSharePOGroupQuotes = handleSharePOGroupQuotes;
-window.renderPOGroupQuotationCard = renderPOGroupQuotationCard;
-window.handleRequoteGroup = handleRequoteGroup;
-window.handlePMApproveGroup = handlePMApproveGroup;
-window.handlePMRejectGroup = handlePMRejectGroup;
-window.handlePlaceOrderForGroup = handlePlaceOrderForGroup;
-window.handleInvokeGRNForGroup = handleInvokeGRNForGroup;
-window.handleSubmitGRN = handleSubmitGRN;
-window.handleResubmitRework = handleResubmitRework;
-window.handleRecordPayment = handleRecordPayment;
-
-// ── LIST-VIEW DECORATION ────────────────────────────────────────────
-// Call after rendering a request table. For every row whose request is
-// part/PO-group-tracked, replaces the placeholder phase-badge cell with
-// the PO Group chip strip, and the lead-time cell with BOTH a per-request
-// (worst-case, slowest PO) figure and, on hover/title, the per-PO figures
-// — satisfying "both, shown separately" without needing a wider table.
-// Expects the row markup to include `id="phase-cell-${req.id}"` and
-// `id="leadtime-cell-${req.id}"` on the relevant <td> elements.
-async function decoratePartLevelListRows(reqs) {
-  const targets = (reqs || []).filter(r => r.is_legacy === false);
-  if (!targets.length) return;
-
-  const ids = targets.map(r => r.id);
-  const allGroups = await dbFetch(
-    () => db.from('po_groups').select('*, vendors(name)').in('pr_id', ids).eq('current_version', true),
-    'list-view PO groups'
+function highlightMentions(text) {
+  if (!text) return '';
+  // Escape HTML first
+  let safe = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // po-groups.js and procurement.html auto-post system comments containing
+  // markdown-style links — e.g. "PO generated ... — [View PO PDF](https://...)"
+  // — when a PO PDF, GRN, or payment screenshot is attached. This was never
+  // converted to a real link, so those comments just showed the raw
+  // "[View PO PDF](https://...)" text and the attachment was effectively
+  // unreachable from the comment feed. Convert [label](url) to a clickable
+  // link before mention-highlighting (safe: text is already HTML-escaped
+  // above, so the () and [] here are literal, not live HTML).
+  safe = safe.replace(/\[([^\[\]]+)\]\((https?:\/\/[^\s)]+|data:[^\s)]+)\)/g,
+    '<a href="$2" target="_blank" rel="noopener" style="color:#6366f1;font-weight:600;text-decoration:underline">$1</a>'
   );
-  const byPr = {};
-  (allGroups || []).forEach(g => (byPr[g.pr_id] = byPr[g.pr_id] || []).push(g));
+  // Highlight @mentions
+  return safe.replace(/@([A-Za-z]+(?:\s+[A-Za-z]+)?)/g,
+    '<span style="color:#6366f1;font-weight:600;background:rgba(99,102,241,0.08);border-radius:3px;padding:0 3px">@$1</span>'
+  );
+}
+window.highlightMentions = highlightMentions;
 
-  targets.forEach(r => {
-    const groups = byPr[r.id] || [];
-    const phaseCell = document.getElementById(`phase-cell-${r.id}`);
-    if (phaseCell) phaseCell.innerHTML = renderPOGroupChips(groups);
+function renderComments(comments) {
+  if(!comments.length) return '<p style="color:var(--gray-4);font-size:0.78rem;text-align:center;padding:14px 0">No comments yet</p>';
+  return `<div class="comment-list">${comments.map(c=>`
+    <div class="comment-item">
+      <div class="comment-avatar">${(c.users?.name||'?').split(' ').map(n=>n[0]).join('').slice(0,2)}</div>
+      <div class="comment-bubble">
+        <div class="comment-meta">${c.users?.name||'Unknown'} · ${fmtDateTime(c.created_at)}</div>
+        <div class="comment-text">${highlightMentions(c.comment)}</div>
+      </div>
+    </div>`).join('')}</div>`;
+}
 
-    const ltCell = document.getElementById(`leadtime-cell-${r.id}`);
-    if (ltCell) {
-      const now = Date.now();
-      const perPO = groups.map(g => {
-        const created = new Date(g.created_at).getTime();
-        const closedAt = PO_GROUP_TERMINAL.has(g.phase) ? new Date(g.updated_at).getTime() : now;
-        return { label: g.group_label, days: Math.round((closedAt - created) / 86400000) };
+// ── NOTIFICATION BELL ─────────────────────────────────────────
+// Call window.initNotifBell(currentUser, openPRCallback) once after login.
+window.initNotifBell = function(currentUser, openPRFn) {
+  if (!currentUser) return;
+
+  async function loadAndRender() {
+    try {
+      const { data } = await db.from('notifications')
+        .select('*').eq('user_id', currentUser.id).eq('is_read', false)
+        .order('created_at', { ascending: false }).limit(30);
+      _renderBell(data || []);
+    } catch(e) { console.warn('Notif load failed', e); }
+  }
+
+  function _renderBell(items) {
+    let bell = document.getElementById('notifBell');
+    if (!bell) {
+      const anchor = document.querySelector('.page-header, .topbar, nav, header');
+      if (!anchor) return;
+      bell = document.createElement('div');
+      bell.id = 'notifBell';
+      bell.style.cssText = 'position:relative;display:inline-flex;align-items:center;cursor:pointer;margin-left:10px;vertical-align:middle';
+      bell.innerHTML = [
+        '<button id="notifBellBtn" style="background:none;border:none;cursor:pointer;font-size:1.25rem;position:relative;padding:4px 6px;line-height:1" title="Notifications">',
+        '  \uD83D\uDD14',
+        '  <span id="notifDot" style="display:none;position:absolute;top:3px;right:3px;width:8px;height:8px;background:#ef4444;border-radius:50%;border:2px solid white"></span>',
+        '</button>',
+        '<div id="notifPanel" style="display:none;position:absolute;top:calc(100% + 6px);right:0;width:330px;max-height:400px;overflow-y:auto;background:white;border:1px solid var(--border);border-radius:10px;box-shadow:0 8px 28px rgba(0,0,0,0.16);z-index:10000">',
+        '  <div style="padding:11px 14px;border-bottom:1px solid var(--border);font-weight:600;font-size:0.85rem;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:white;z-index:1">',
+        '    \uD83D\uDD14 Notifications',
+        '    <button id="notifMarkAll" style="font-size:0.72rem;color:#6366f1;background:none;border:none;cursor:pointer;font-weight:500">Mark all read</button>',
+        '  </div>',
+        '  <div id="notifList"></div>',
+        '</div>'
+      ].join('');
+      anchor.appendChild(bell);
+
+      document.getElementById('notifBellBtn').addEventListener('click', function(e) {
+        e.stopPropagation();
+        var p = document.getElementById('notifPanel');
+        var isOpen = p.style.display !== 'none';
+        p.style.display = isOpen ? 'none' : 'block';
+        if (!isOpen) {
+          setTimeout(function() {
+            document.addEventListener('click', function _nc(e2) {
+              if (!bell.contains(e2.target)) {
+                p.style.display = 'none';
+                document.removeEventListener('click', _nc);
+              }
+            });
+          }, 0);
+        }
       });
-      const worst = perPO.length ? Math.max(...perPO.map(p => p.days)) : null;
-      const title = perPO.map(p => `${p.label}: ${p.days}d`).join(' · ');
-      ltCell.innerHTML = worst === null ? '—' :
-        `<span title="${title}" style="font-family:var(--font-mono);font-size:0.75rem" data-sort-value="${worst}">${worst}d <span style="color:var(--gray-4)">(slowest PO)</span></span>`;
+
+      document.getElementById('notifMarkAll').addEventListener('click', async function() {
+        try { await db.from('notifications').update({ is_read: true }).eq('user_id', currentUser.id).eq('is_read', false); } catch(e) {}
+        await loadAndRender();
+      });
+    }
+
+    var dot = document.getElementById('notifDot');
+    if (dot) dot.style.display = items.length ? 'block' : 'none';
+
+    var list = document.getElementById('notifList');
+    if (!list) return;
+    if (!items.length) {
+      list.innerHTML = '<div style="padding:28px 16px;text-align:center;color:var(--gray-4);font-size:0.8rem">\u2705 You\'re all caught up!</div>';
+      return;
+    }
+
+    list.innerHTML = items.map(function(n) {
+      var msg = (n.message||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      var ts  = typeof fmtDateTime === 'function' ? fmtDateTime(n.created_at) : n.created_at;
+      return '<div class="_notif-item" data-id="'+n.id+'" data-pr="'+(n.pr_id||'')+'" '+
+        'style="padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.12s" '+
+        'onmouseover="this.style.background=\'rgba(99,102,241,0.05)\'" onmouseout="this.style.background=\'white\'">'+
+        '<div style="font-size:0.79rem;color:var(--gray-1);line-height:1.45">'+msg+'</div>'+
+        '<div style="font-size:0.68rem;color:var(--gray-4);margin-top:3px">'+ts+'</div>'+
+        '</div>';
+    }).join('');
+
+    list.querySelectorAll('._notif-item').forEach(function(el) {
+      el.addEventListener('click', async function() {
+        var nid = el.dataset.id, prId = el.dataset.pr;
+        try { await db.from('notifications').update({ is_read: true }).eq('id', nid); } catch(e) {}
+        var p = document.getElementById('notifPanel');
+        if (p) p.style.display = 'none';
+        if (prId && typeof openPRFn === 'function') openPRFn(prId);
+        await loadAndRender();
+      });
+    });
+  }
+
+  loadAndRender();
+  setInterval(loadAndRender, 60000);
+};
+
+// ── COMMENT BOX WITH @MENTION ─────────────────────────────────
+// Call window.initCommentBox(inputId, dropdownId) after the modal renders.
+window.initCommentBox = function(inputId, dropdownId) {
+  var _mentionStart = -1;
+  var input = document.getElementById(inputId);
+  var dd    = document.getElementById(dropdownId);
+  if (!input || !dd) return;
+
+  input.addEventListener('input', async function() {
+    var text   = input.value;
+    var cursor = input.selectionStart;
+    var before = text.slice(0, cursor);
+    var atIdx  = before.lastIndexOf('@');
+
+    if (atIdx === -1 || (atIdx > 0 && /\S/.test(before[atIdx - 1]))) {
+      dd.style.display = 'none'; _mentionStart = -1; return;
+    }
+    var query = before.slice(atIdx + 1);
+    if (query.length > 25 || /\s{2}/.test(query)) { dd.style.display = 'none'; return; }
+    _mentionStart = atIdx;
+
+    var users = await window._loadAllUsers();
+    var q = query.toLowerCase();
+    var matches = users.filter(function(u) { return u.name.toLowerCase().includes(q); }).slice(0, 8);
+    if (!matches.length) { dd.style.display = 'none'; return; }
+
+    dd.style.display = 'block';
+    dd.innerHTML = matches.map(function(u) {
+      var initials = u.name.split(' ').map(function(n){ return n[0]; }).join('').slice(0,2);
+      var safeName = u.name.replace(/</g,'&lt;').replace(/"/g,'&quot;');
+      return '<div data-name="'+safeName+'" '+
+        'style="padding:8px 12px;cursor:pointer;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--border)" '+
+        'onmouseover="this.style.background=\'rgba(99,102,241,0.07)\'" onmouseout="this.style.background=\'white\'">'+
+        '<div style="width:27px;height:27px;border-radius:50%;background:rgba(99,102,241,0.14);display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;color:#6366f1;flex-shrink:0">'+initials+'</div>'+
+        '<span style="font-size:0.82rem;font-weight:500">'+u.name.replace(/</g,'&lt;')+'</span>'+
+        '</div>';
+    }).join('');
+
+    dd.querySelectorAll('[data-name]').forEach(function(el) {
+      el.addEventListener('mousedown', function(e) {
+        e.preventDefault();
+        var name = el.dataset.name;
+        var t    = input.value;
+        var bef  = t.slice(0, _mentionStart);
+        var aft  = t.slice(input.selectionStart);
+        input.value = bef + '@' + name + ' ' + aft;
+        var pos = bef.length + name.length + 2;
+        input.setSelectionRange(pos, pos);
+        dd.style.display = 'none';
+        _mentionStart = -1;
+        input.focus();
+      });
+    });
+  });
+};
+
+// ── BOM PARSER (CSV + XLSX) ─────────────────────────────────────────────
+// Exact BOM Template Columns (positions A→I):
+//   A: Sr. No.
+//   B: Part Number
+//   C: Part Name  ← REQUIRED
+//   D: Material Specifications
+//   E: Department  (Electronics / ID / Mechanical / General Hardware / Others)
+//   F: Quantity (per Set)
+//   G: Unit of Measurement  (per-set unit)
+//   H: Total Qty
+//   I: Unit of Measurement  (total unit)
+
+function parseBOMRows(rows) {
+  if (!rows || rows.length < 2) throw new Error('File has no data rows');
+
+  // Normalize header (handles merged headers, extra rows, etc.)
+  // Try up to row 3 to find the header row (some templates have title rows above)
+  var headerRowIdx = 0;
+  for (var h = 0; h < Math.min(3, rows.length); h++) {
+    var testH = rows[h].map(function(c){ return String(c||'').toLowerCase().trim(); });
+    if (testH.some(function(c){ return c.includes('part name') || c.includes('item name') || c.includes('part number'); })) {
+      headerRowIdx = h;
+      break;
+    }
+  }
+
+  var header = rows[headerRowIdx].map(function(h){ return String(h||'').toLowerCase().trim(); });
+
+  // Map exact template positions — fall back to flexible detection
+  function col(tests, exactPos) {
+    if (exactPos !== undefined && !header[exactPos]?.includes('uom') && !header[exactPos]?.includes('unit')) {
+      // exact positional match — check it's roughly right
+    }
+    for (var t of tests) {
+      var i = header.findIndex(function(c){ return c.includes(t); });
+      if (i >= 0) return i;
+    }
+    return -1;
+  }
+
+  // Template: A=Sr.No B=PartNo C=PartName D=MatSpec E=Dept F=QtyPerSet G=UOM H=TotalQty I=TotalUOM
+  var snoIdx    = col(['sr. no','sr no','s.no','sno','#','sl no','serial']);
+  var partNoIdx = col(['part number','part no','pn','code','item code']);
+  var nameIdx   = col(['part name','item name','name','description']); // Col C
+  var specIdx   = col(['material spec','specification','spec','material description','material']); // Col D
+  var deptIdx   = col(['department','dept']); // Col E
+  var qtySetIdx = col(['quantity (per','qty (per','per set','quantity per set']); // Col F
+  var uomSetIdx = -1; // Col G — first "unit of measurement" that isn't col I
+  var totalQtyIdx = col(['total qty','total quantity']); // Col H
+  var totalUomIdx = -1; // Col I — second "unit of measurement"
+
+  // Find the two UOM columns (G and I)
+  var uomPositions = [];
+  header.forEach(function(h, i) {
+    if (h === 'unit of measurement' || h === 'uom' || h === 'unit') uomPositions.push(i);
+  });
+  if (uomPositions.length >= 1) uomSetIdx   = uomPositions[0];
+  if (uomPositions.length >= 2) totalUomIdx = uomPositions[1];
+
+  if (nameIdx < 0) throw new Error('Could not find "Part Name" column. Please use the official BOM template.');
+
+  var parts = [];
+  for (var r = headerRowIdx + 1; r < rows.length; r++) {
+    var row = rows[r];
+    if (!row || row.every(function(c){ return !String(c||'').trim(); })) continue;
+
+    var rawName = String(row[nameIdx] || '').trim();
+    if (!rawName || rawName.toLowerCase() === 'nan' || rawName.toLowerCase() === 'example') continue;
+
+    var partNo   = partNoIdx >= 0 ? String(row[partNoIdx] || '').trim() : '';
+    var matSpec  = specIdx   >= 0 ? String(row[specIdx]   || '').trim() : '';
+    var dept     = deptIdx   >= 0 ? String(row[deptIdx]   || '').trim() : '';
+    // Normalize dept to allowed values
+    var deptNorm = '';
+    if (dept) {
+      var dl = dept.toLowerCase();
+      if (dl.includes('electron'))       deptNorm = 'Electronics';
+      else if (dl.includes('id')||dl.includes('industrial')) deptNorm = 'ID';
+      else if (dl.includes('mech'))      deptNorm = 'Mechanical';
+      else if (dl.includes('hardware'))  deptNorm = 'General Hardware';
+      else if (dl.includes('other'))     deptNorm = 'Others';
+      else                               deptNorm = dept; // keep as-is
+    }
+
+    // Qty: prefer Total Qty (col H) if available and non-zero, else Qty per Set (col F)
+    var totalQtyRaw = totalQtyIdx >= 0 ? String(row[totalQtyIdx] || '').replace(/[^0-9.]/g, '') : '';
+    var qtySetRaw   = qtySetIdx   >= 0 ? String(row[qtySetIdx]   || '').replace(/[^0-9.]/g, '') : '';
+    var qty = parseInt(totalQtyRaw) || parseInt(qtySetRaw) || 1;
+
+    // UOM: prefer total UOM (col I) if available, else per-set UOM (col G)
+    var totalUom = totalUomIdx >= 0 ? String(row[totalUomIdx] || '').trim() : '';
+    var setUom   = uomSetIdx   >= 0 ? String(row[uomSetIdx]   || '').trim() : '';
+    var uom = totalUom || setUom || 'pcs';
+
+    // Part Number enrichment
+    var partNoStr = (partNo && partNo !== 'NA' && partNo !== 'na') ? partNo : '';
+
+    parts.push({
+      name:       rawName,
+      qty:        qty,
+      uom:        uom,
+      department: deptNorm,
+      spec:       matSpec,
+      part_number: partNoStr,
+    });
+  }
+
+  if (!parts.length) throw new Error('No valid parts found. Please check your BOM file.');
+  return parts;
+}
+
+function parseCSVToRows(text) {
+  var lines = text.split(/\r?\n/);
+  return lines.map(function(line){
+    var result=[], cur='', inQ=false;
+    for(var i=0;i<line.length;i++){
+      if(line[i]==='"'){inQ=!inQ;}
+      else if(line[i]===','&&!inQ){result.push(cur.trim());cur='';}
+      else{cur+=line[i];}
+    }
+    result.push(cur.trim());
+    return result.map(function(c){ return c.replace(/^"|"$/g,''); });
+  }).filter(function(r){ return r.length > 1 || (r.length===1 && r[0]); });
+}
+
+function parseBOMFile(file) {
+  return new Promise(function(resolve, reject) {
+    var reader = new FileReader();
+    var isCSV  = /\.(csv|txt)$/i.test(file.name) || file.type === 'text/csv';
+    var isXLSX = /\.(xlsx|xls|xlsm|ods)$/i.test(file.name) || file.type.includes('spreadsheet') || file.type.includes('excel');
+
+    if (isCSV) {
+      reader.onload = function(e) {
+        try { resolve(parseBOMRows(parseCSVToRows(e.target.result))); }
+        catch(err) { reject(err); }
+      };
+      reader.readAsText(file);
+    } else if (isXLSX) {
+      if (typeof XLSX === 'undefined') { reject(new Error('XLSX library not loaded — please refresh.')); return; }
+      reader.onload = function(e) {
+        try {
+          var wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'});
+          // Prefer "BoM" sheet, then first sheet
+          var sheetName = wb.SheetNames.find(function(n){ return n.toLowerCase().replace(/\s/g,'').includes('bom'); }) || wb.SheetNames[0];
+          var ws = wb.Sheets[sheetName];
+          var rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:''});
+          resolve(parseBOMRows(rows));
+        } catch(err) { reject(err); }
+      };
+      reader.readAsArrayBuffer(file);
+    } else {
+      reject(new Error('Unsupported file type. Please upload a CSV or Excel (.xlsx) file.'));
     }
   });
 }
-window.decoratePartLevelListRows = decoratePartLevelListRows;
 
-// ── SORTABLE COLUMNS — generic client-side helper ───────────────────
-// Attach to any <th> via onclick="sortRowsBy(reqsArray, 'created_at', renderFn, this)".
-// Toggles asc/desc, re-renders via the passed render function, and marks
-// the active header with a ▲/▼ indicator so it works consistently across
-// every role's page without bespoke per-column sort code.
-let _lastSortKey = null, _lastSortDir = 1;
-function sortRowsBy(rows, key, renderFn, thEl) {
-  _lastSortDir = (_lastSortKey === key) ? -_lastSortDir : 1;
-  _lastSortKey = key;
-  const sorted = [...rows].sort((a, b) => {
-    let av = a[key], bv = b[key];
-    // Prefer a data-sort-value if the cell computed one (e.g. lead time days)
-    if (key === '__leadtime__') {
-      const ac = document.getElementById(`leadtime-cell-${a.id}`);
-      const bc = document.getElementById(`leadtime-cell-${b.id}`);
-      av = ac?.querySelector('[data-sort-value]')?.dataset.sortValue ?? -1;
-      bv = bc?.querySelector('[data-sort-value]')?.dataset.sortValue ?? -1;
-    }
-    if (av == null) av = '';
-    if (bv == null) bv = '';
-    if (typeof av === 'string') av = av.toLowerCase();
-    if (typeof bv === 'string') bv = bv.toLowerCase();
-    return av > bv ? _lastSortDir : av < bv ? -_lastSortDir : 0;
+// ── PARTS EDITOR ─────────────────────────────────────────────
+var _partsEditorRows = _partsEditorRows || [];
+function initPartsEditor(containerId, initialParts=[]) {
+  _partsEditorRows = initialParts.map((p,i)=>({...p,_id:p._id||i}));
+  renderPartsEditor(containerId);
+}
+const DEPT_OPTIONS = [
+  {val:'',label:'— Dept —'},
+  {val:'Electronics',label:'Electronics'},
+  {val:'ID',label:'Industrial Design'},
+  {val:'Mechanical',label:'Mechanical'},
+  {val:'General Hardware',label:'General Hardware'},
+  {val:'Others',label:'Others'},
+];
+function renderPartsEditor(containerId) {
+  const c=document.getElementById(containerId); if(!c) return;
+  c.innerHTML=`
+    <div style="overflow-x:auto">
+    <table class="parts-table" style="width:100%;min-width:600px">
+      <thead><tr>
+        <th style="width:28px">#</th>
+        <th>Part Name *</th>
+        <th style="width:65px">Qty *</th>
+        <th style="width:50px">UOM</th>
+        <th style="width:110px">Department</th>
+        <th>Material Spec</th>
+        <th style="width:36px"></th>
+      </tr></thead>
+      <tbody id="partsRows">${_partsEditorRows.map((p,i)=>partsRowHTML(i,p)).join('')}</tbody>
+    </table>
+    </div>
+    <button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px;border:1px dashed var(--border-strong)" onclick="addPartsRow('${containerId}')">+ Add Part</button>
+  `;
+}
+function partsRowHTML(i, p={}) {
+  const deptOpts = DEPT_OPTIONS.map(d=>`<option value="${d.val}" ${(p.department||'')==d.val?'selected':''}>${d.label}</option>`).join('');
+  return `<tr id="prow-${p._id??i}">
+    <td style="color:var(--gray-4);text-align:center;font-family:var(--font-mono);font-size:0.72rem">${i+1}</td>
+    <td><input type="text" class="parts-table" placeholder="e.g. M8 Bolt" value="${p.name||''}" onchange="updatePartField(${p._id??i},'name',this.value)" style="width:100%;border:none;outline:none;font-family:var(--font-body);font-size:0.82rem;padding:2px 4px;background:transparent"/></td>
+    <td><div class="qty-cell">
+      <button type="button" class="qty-btn" onclick="changeQty(${p._id??i},-1)">−</button>
+      <input type="number" class="qty-input" value="${p.qty||1}" min="1" onchange="updatePartField(${p._id??i},'qty',+this.value||1)"/>
+      <button type="button" class="qty-btn" onclick="changeQty(${p._id??i},1)">+</button>
+    </div></td>
+    <td><input type="text" placeholder="pcs" value="${p.uom||''}" onchange="updatePartField(${p._id??i},'uom',this.value)" style="width:100%;border:none;outline:none;font-size:0.78rem;padding:2px 4px;background:transparent;text-align:center"/></td>
+    <td><select onchange="updatePartField(${p._id??i},'department',this.value)" style="width:100%;border:1px solid var(--border);border-radius:4px;font-size:0.75rem;padding:2px 4px;background:white">${deptOpts}</select></td>
+    <td><input type="text" placeholder="Material, grade, dimensions..." value="${p.spec||''}" onchange="updatePartField(${p._id??i},'spec',this.value)" style="width:100%;border:none;outline:none;font-family:var(--font-body);font-size:0.82rem;padding:2px 4px;background:transparent"/></td>
+    <td><button type="button" class="btn btn-danger btn-sm" style="padding:3px 7px" onclick="removePartsRow(${p._id??i},'partsEditorContainer')">✕</button></td>
+  </tr>`;
+}
+function addPartsRow(containerId) {
+  const id=Date.now();
+  _partsEditorRows.push({_id:id,name:'',qty:1,uom:'pcs',department:'',spec:''});
+  renderPartsEditor(containerId);
+}
+function removePartsRow(rowId, containerId) {
+  _partsEditorRows=_partsEditorRows.filter(r=>r._id!==rowId);
+  renderPartsEditor(containerId||'partsEditorContainer');
+}
+function updatePartField(rowId, field, value) {
+  const r=_partsEditorRows.find(r=>r._id===rowId); if(r) r[field]=value;
+}
+function changeQty(rowId, delta) {
+  const r=_partsEditorRows.find(r=>r._id===rowId); if(!r) return;
+  r.qty=Math.max(1,(r.qty||1)+delta);
+  const input=document.querySelector(`#prow-${rowId} .qty-input`); if(input) input.value=r.qty;
+}
+function getPartsFromEditor() {
+  _partsEditorRows.forEach(r=>{
+    const row=document.getElementById(`prow-${r._id}`); if(!row) return;
+    const inputs=row.querySelectorAll('input');
+    const selects=row.querySelectorAll('select');
+    if(inputs[0]) r.name=inputs[0].value.trim();
+    if(inputs[1]) r.qty=+inputs[1].value||1;
+    if(inputs[2]) r.uom=inputs[2].value.trim();
+    if(selects[0]) r.department=selects[0].value;
+    if(inputs[3]) r.spec=inputs[3].value.trim();
   });
-  if (thEl) {
-    thEl.parentNode.querySelectorAll('th').forEach(th => th.removeAttribute('data-sort-dir'));
-    thEl.setAttribute('data-sort-dir', _lastSortDir === 1 ? 'asc' : 'desc');
-  }
-  renderFn(sorted);
+  return _partsEditorRows.filter(r=>r.name).map(({name,qty,uom,department,spec})=>({
+    name, qty:qty||1, uom:uom||'pcs', department:department||'', spec:spec||''
+  }));
 }
-window.sortRowsBy = sortRowsBy;
 
-// ── QUEUE VISIBILITY: which requests need this role's attention ────
-// Legacy pages filter their "action needed" tab by procurement_requests
-// .phase — which freezes the instant a request becomes part-tracked
-// (is_legacy=false), since the real state moved to po_groups. Without
-// this, a part-tracked request needing e.g. PM approval would silently
-// never appear in PM's Clearance/Final tabs. This computes the same
-// thing from po_groups so every page's existing tab logic can OR it in.
-const ROLE_ACTION_PHASES = {
-  procurement: ['quotation_pending', 'pm_approved', 'order_placed'],
-  engineer:    ['quoted', 'grn_pending'],
-  pm:          ['pending_pm_approval'],
-  accounts:    ['qc_passed', 'payment_pending'],
-  master:      [],
-};
-const ROLE_TO_DB_ROLE = {
-  procurement: 'procurement_manager',
-  pm:          'project_manager',
-  engineer:    'engineer',
-  accounts:    'accounts',
-  master:      'master',
-};
-
-// Returns a Set of procurement_requests.id that have at least one
-// current-version PO Group sitting in a phase this role needs to act on.
-// For 'procurement' specifically, also includes requests with parts that
-// haven't been grouped to a vendor yet — grouping itself is an action.
-async function fetchActionableRequestIds(prIds, role) {
-  const phases = ROLE_ACTION_PHASES[role];
-  const ids = (prIds || []).filter(Boolean);
-  if (!ids.length) return new Set();
-
-  const result = new Set();
-  if (phases && phases.length) {
-    const rows = await dbFetch(
-      () => db.from('po_groups').select('pr_id').in('pr_id', ids).eq('current_version', true).in('phase', phases),
-      'actionable PO groups'
-    );
-    (rows || []).forEach(r => result.add(r.pr_id));
-  }
-  if (role === 'procurement') {
-    const ungrouped = await dbFetch(
-      () => db.from('request_part_lines').select('pr_id').in('pr_id', ids).eq('status', 'unassigned'),
-      'ungrouped part lines'
-    );
-    (ungrouped || []).forEach(r => result.add(r.pr_id));
-  }
-  return result;
 }
-window.fetchActionableRequestIds = fetchActionableRequestIds;
-
-// Call once after a page loads its request list, before first render.
-// Stamps `_hasPartLevelAction` onto each request object so existing
-// tab-filter and needsAction logic can simply add `|| r._hasPartLevelAction`
-// without needing to know anything about po_groups.
-async function stampPartLevelActionFlags(requests, role) {
-  const partTracked = (requests || []).filter(r => r.is_legacy === false);
-  if (!partTracked.length) return requests;
-  const actionable = await fetchActionableRequestIds(partTracked.map(r => r.id), role);
-  requests.forEach(r => { r._hasPartLevelAction = actionable.has(r.id); });
-  return requests;
-}
-window.stampPartLevelActionFlags = stampPartLevelActionFlags;
-
-// ── IN-APP NOTIFICATIONS on PO Group handoffs ───────────────────────
-// Uses the existing `notifications` table directly (same one @mentions
-// use) rather than the notify-phase Edge Function, since that function
-// is built around legacy phase strings — calling it with PO Group phase
-// names (e.g. 'quotation_pending', 'pm_approved') risks a mismatched or
-// silently wrong notification. This is self-contained and safe.
-async function notifyRoleOfPOGroupEvent(prId, message, role) {
-  try {
-    const dbRole = ROLE_TO_DB_ROLE[role];
-    if (!dbRole) return;
-    const users = await dbFetch(() => db.from('users').select('id').eq('role', dbRole), 'role users');
-    if (!users || !users.length) return;
-    const rows = users.map(u => ({ user_id: u.id, pr_id: prId, message, is_read: false }));
-    await db.from('notifications').insert(rows);
-  } catch (e) {
-    console.warn('[po-groups] notification (non-blocking):', e.message);
-  }
-}
-async function notifyUserOfPOGroupEvent(prId, userId, message) {
-  if (!userId) return;
-  try { await db.from('notifications').insert({ user_id: userId, pr_id: prId, message, is_read: false }); }
-  catch (e) { console.warn('[po-groups] notification (non-blocking):', e.message); }
-}
-window.notifyRoleOfPOGroupEvent = notifyRoleOfPOGroupEvent;
-window.notifyUserOfPOGroupEvent = notifyUserOfPOGroupEvent;
-window.PO_GROUP_PHASES = PO_GROUP_PHASES;
-window.poGroupPhaseMeta = poGroupPhaseMeta;
-
-// Every page names its list-reload function `loadRequests` (Procurement,
-// Engineer, PM, Master) except Accounts, which has `loadPartLevelPayments`
-// for its dedicated tab. Calling whichever exists on the current page
-// keeps the background list honest the moment the modal closes.
-function refreshUnderlyingList() {
-  try {
-    if (typeof window.loadRequests === 'function') window.loadRequests();
-    else if (typeof window.loadPartLevelPayments === 'function') window.loadPartLevelPayments();
-  } catch (e) { console.warn('[po-groups] list refresh on close failed (non-blocking):', e.message); }
-}
-window.refreshUnderlyingList = refreshUnderlyingList;
-window.poGroupPhaseBadgeHTML = poGroupPhaseBadgeHTML;
-window.ensurePartLinesExist = ensurePartLinesExist;
-window.fetchPartLines = fetchPartLines;
-window.fetchPOGroups = fetchPOGroups;
-window.createPOGroupFromParts = createPOGroupFromParts;
-window.ungroupPartLine = ungroupPartLine;
-window.requoteCycle = requoteCycle;
-window.setPOGroupPhase = setPOGroupPhase;
-window.submitPOGroupGRN = submitPOGroupGRN;
-window.resubmitAfterRework = resubmitAfterRework;
-window.recordPOGroupPayment = recordPOGroupPayment;
-window.computeRollupLabel = computeRollupLabel;
-window.renderPOGroupChips = renderPOGroupChips;
-window.renderPOGroupCard = renderPOGroupCard;
-window.renderUngroupedPartsPanel = renderUngroupedPartsPanel;
