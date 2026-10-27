@@ -1125,8 +1125,9 @@ function renderPOGroupActions(group, partLines, quotations, vendorList) {
           <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:10px">${quotations.map(q => renderPOGroupQuotationCard(group.id, q, true, selectedId)).join('')}</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn btn-primary btn-sm" onclick="handlePMApproveGroup('${group.id}')">✓ Select &amp; Approve PO Group</button>
-            <button class="btn btn-danger btn-sm" onclick="handlePMRejectGroup('${group.id}')">✗ Reject</button>
-          </div>`;
+            <button class="btn btn-danger btn-sm" onclick="togglePMRejectPanel('${group.id}')">✗ Reject</button>
+          </div>
+          ${renderPMRejectPanel(group.id)}`;
       } else {
         // Client path — Engineer already picked the quote and attached approval; PM just reviews.
         html = `<div style="font-size:0.78rem;color:var(--gray-3);margin-bottom:10px">Engineer selected a quote and attached client approval. Review and decide.</div>
@@ -1138,8 +1139,9 @@ function renderPOGroupActions(group, partLines, quotations, vendorList) {
           </div>` : ''}
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn btn-primary btn-sm" onclick="handlePMApproveGroup('${group.id}')">✓ Approve PO Group</button>
-            <button class="btn btn-danger btn-sm" onclick="handlePMRejectGroup('${group.id}')">✗ Reject</button>
-          </div>`;
+            <button class="btn btn-danger btn-sm" onclick="togglePMRejectPanel('${group.id}')">✗ Reject</button>
+          </div>
+          ${renderPMRejectPanel(group.id)}`;
       }
     } else if (role === 'procurement') {
       html = readOnly('⏳ Awaiting PM final approval for this PO Group.') +
@@ -1308,13 +1310,55 @@ async function handlePMApproveGroup(groupId) {
   }
 }
 
+// Reject panel mirrors the legacy PM reject flow (rejectOptionsHTML in
+// pm.html): a mandatory reason plus a choice between asking Procurement
+// for more vendor quotes (new re-quote cycle for this group) or closing
+// the group outright.
+function renderPMRejectPanel(groupId) {
+  return `<div id="pmRejectPanel-${groupId}" style="display:none;margin-top:12px;padding:12px;background:rgba(214,43,43,0.05);border:1px solid rgba(214,43,43,0.18);border-radius:var(--radius)">
+    <div class="form-label" style="margin-bottom:6px">Reason for rejection *</div>
+    <textarea class="form-control" id="pmRejectReason-${groupId}" placeholder="Why is this quotation being rejected?" style="margin-bottom:10px"></textarea>
+    <div class="form-label" style="margin-bottom:6px">What happens next? *</div>
+    <label style="display:flex;gap:8px;align-items:center;font-size:0.82rem;margin-bottom:6px;cursor:pointer">
+      <input type="radio" name="pmRejectAction-${groupId}" value="more_vendors" checked style="accent-color:var(--red)"/> Request more vendor options (new quote cycle)
+    </label>
+    <label style="display:flex;gap:8px;align-items:center;font-size:0.82rem;margin-bottom:10px;cursor:pointer">
+      <input type="radio" name="pmRejectAction-${groupId}" value="close" style="accent-color:var(--red)"/> Close this PO Group
+    </label>
+    <button class="btn btn-danger btn-sm" onclick="handlePMRejectGroup('${groupId}')">✗ Confirm Rejection</button>
+  </div>`;
+}
+
+function togglePMRejectPanel(groupId) {
+  const el = document.getElementById(`pmRejectPanel-${groupId}`);
+  if (!el) return;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+  if (el.style.display === 'block') document.getElementById(`pmRejectReason-${groupId}`)?.focus();
+}
+window.togglePMRejectPanel = togglePMRejectPanel;
+
 async function handlePMRejectGroup(groupId) {
-  const reason = prompt('Reason for rejecting this PO Group\'s quotation:');
-  if (reason === null) return;
-  const { data: group } = await db.from('po_groups').select('*').eq('id', groupId).single();
-  await setPOGroupPhase(group, 'rejected', { rejection_reason: reason });
-  showToast('PO Group rejected.', 'error');
-  notifyRoleOfPOGroupEvent(currentPR.id, `"${group.group_label}" quotation rejected on PR-${String(currentPR.request_number).padStart(4,'0')} — ${reason}`, 'procurement');
+  const reason = document.getElementById(`pmRejectReason-${groupId}`)?.value.trim();
+  if (!reason) { showToast('Please enter a reason for rejection.', 'error'); return; }
+  const action = [...document.getElementsByName(`pmRejectAction-${groupId}`)].find(r => r.checked)?.value || 'more_vendors';
+  const { data: group, error } = await db.from('po_groups').select('*').eq('id', groupId).single();
+  if (error || !group) { showToast('Could not load PO Group: ' + (error?.message || 'not found'), 'error'); return; }
+  const prNo = `PR-${String(currentPR.request_number).padStart(4,'0')}`;
+
+  if (action === 'more_vendors') {
+    // Same mechanism Procurement's "Request Re-Quote" uses: supersede this
+    // cycle, open a fresh quotation_pending group with the same parts.
+    const newGroup = await requoteCycle(group, `PM rejected quotation: ${reason}`, currentUser?.id);
+    if (!newGroup) return;
+    showToast('Rejected — Procurement will source more quotations.', 'error');
+    notifyRoleOfPOGroupEvent(currentPR.id, `"${group.group_label}" quotation rejected by PM on ${prNo} — more vendor options requested. Reason: ${reason}`, 'procurement');
+  } else {
+    const ok = await setPOGroupPhase(group, 'rejected', { rejection_reason: reason });
+    if (!ok) return;
+    showToast('PO Group rejected and closed.', 'error');
+    notifyRoleOfPOGroupEvent(currentPR.id, `"${group.group_label}" rejected and closed by PM on ${prNo} — ${reason}`, 'procurement');
+  }
+  try { await window.postComment(currentPR.id, currentUser.id, `PM Rejected "${group.group_label}": ${reason} — ${action === 'more_vendors' ? 'more vendors requested.' : 'group closed.'}`); } catch (e) {}
   await openPRNewModel(currentPR.id);
 }
 
