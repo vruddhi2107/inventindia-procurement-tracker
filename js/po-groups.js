@@ -23,6 +23,7 @@ const PO_GROUP_PHASES = [
   { key: 'qc_passed',         label: 'QC Passed',         badge: 'badge-green' },
   { key: 'payment_pending',   label: 'Payment Pending',   badge: 'badge-orange' },
   { key: 'closed',            label: 'Closed',            badge: 'badge-green' },
+  { key: 'pending_decline_approval', label: 'Decline Pending PM', badge: 'badge-orange' },
   { key: 'rejected',          label: 'Rejected',          badge: 'badge-red' },
   { key: 'declined',          label: 'Declined',          badge: 'badge-red' },
 ];
@@ -589,7 +590,7 @@ function renderPOGroupTimeline(group) {
   const isRework = phase === 'rework_pending';
   // Rework isn't on the main track — it's a loop back into GRN/QC — so it
   // occupies that same slot for progress purposes and gets its own tag.
-  const effectivePhase = isRework ? 'grn_pending' : phase;
+  const effectivePhase = isRework ? 'grn_pending' : (phase === 'pending_decline_approval' ? (ts._decline_from || 'quotation_pending') : phase);
   const idx = isTerminalBad ? PO_GROUP_TRACK_ORDER.length : PO_GROUP_TRACK_ORDER.indexOf(effectivePhase);
 
   function shortDate(iso) {
@@ -1207,11 +1208,93 @@ function renderPOGroupActions(group, partLines, quotations, vendorList) {
     }
   } else if (phase === 'closed') {
     html = `<div style="font-size:0.78rem;color:#16a34a">✔️ Closed — received, QC'd, and paid.</div>`;
+  } else if (phase === 'pending_decline_approval') {
+    html = renderGroupDeclineApproval(group, role);
   } else if (phase === 'rejected' || phase === 'declined') {
-    html = `<div style="font-size:0.78rem;color:var(--red)">✗ ${phase === 'rejected' ? 'Rejected' : 'Declined'}.</div>`;
+    html = `<div style="font-size:0.78rem;color:var(--red)">✗ ${phase === 'rejected' ? 'Rejected' : 'Declined'}.${group.rejection_reason ? ' Reason: ' + group.rejection_reason : ''}</div>`;
+  }
+  // Procurement can decline a PO Group (with a reason, subject to PM approval)
+  // at any stage up to order placement — same as the legacy "Decline this Request".
+  if ((role === 'procurement' || role === 'master') && PO_GROUP_DECLINABLE.has(phase)) {
+    html += renderGroupDeclinePanel(group.id);
   }
   el.innerHTML = html;
 }
+
+
+// ── DECLINE (Procurement → PM approval), scoped per PO Group ─────────
+// Mirrors legacy declinePR()/approveDecline()/rejectDecline(): Procurement
+// submits a reason, the group parks in pending_decline_approval, and the PM
+// either approves (group → declined, terminal) or rejects the decline (group
+// returns to the phase it was declined from).
+const PO_GROUP_DECLINABLE = new Set(['quotation_pending', 'quoted', 'pending_pm_approval', 'pm_approved', 'order_placed']);
+
+function renderGroupDeclinePanel(groupId) {
+  const reasons = Array.isArray(window.DECLINE_REASONS) ? window.DECLINE_REASONS : (typeof DECLINE_REASONS !== 'undefined' ? DECLINE_REASONS : []);
+  return `<div style="margin-top:12px;padding:12px 14px;background:rgba(214,43,43,0.04);border:1px solid rgba(214,43,43,0.18);border-radius:var(--radius)">
+    <div style="font-size:0.82rem;font-weight:700;color:var(--red);margin-bottom:8px">🚫 Decline this PO Group</div>
+    ${reasons.length ? `<select class="form-control" id="pogDeclineReason-${groupId}" style="font-size:0.82rem;margin-bottom:8px">
+      <option value="">— Select a reason —</option>${reasons.map(r => `<option value="${r}">${r}</option>`).join('')}
+    </select>` : ''}
+    <textarea class="form-control" id="pogDeclineNotes-${groupId}" placeholder="${reasons.length ? 'Additional notes (optional)' : 'Reason for declining *'}" style="min-height:56px;font-size:0.82rem;margin-bottom:8px"></textarea>
+    <button class="btn btn-sm" style="background:var(--red);color:#fff;border:none" onclick="handleDeclineGroup('${groupId}')">Submit Decline for PM Approval</button>
+  </div>`;
+}
+
+async function handleDeclineGroup(groupId) {
+  const sel = document.getElementById(`pogDeclineReason-${groupId}`)?.value || '';
+  const notes = document.getElementById(`pogDeclineNotes-${groupId}`)?.value.trim() || '';
+  const reason = sel ? (notes ? `${sel} — ${notes}` : sel) : notes;
+  if (!reason) { showToast('Please give a reason for declining.', 'error'); return; }
+  if (!confirm(`Submit decline for PM approval?\n\nReason: ${reason}`)) return;
+  const { data: group, error } = await db.from('po_groups').select('*').eq('id', groupId).single();
+  if (error || !group) { showToast('Could not load PO Group.', 'error'); return; }
+  const ts = addPOGroupPhaseTimestamp(group, 'pending_decline_approval');
+  ts._decline_from = group.phase;
+  const ok = await setPOGroupPhase(group, 'pending_decline_approval', { rejection_reason: reason, phase_timestamps: ts });
+  if (!ok) return;
+  showToast('Decline submitted for PM approval.', 'success');
+  try { await window.postComment(currentPR.id, currentUser.id, `Procurement requested decline of "${group.group_label}": ${reason}`); } catch (e) {}
+  notifyRoleOfPOGroupEvent(currentPR.id, `Decline requested for "${group.group_label}" on PR-${String(currentPR.request_number).padStart(4,'0')} — ${reason}`, 'pm');
+  await openPRNewModel(currentPR.id);
+}
+window.handleDeclineGroup = handleDeclineGroup;
+
+function renderGroupDeclineApproval(group, role) {
+  const reasonBox = `<div style="margin-bottom:10px;padding:10px;background:rgba(214,43,43,0.06);border:1px solid rgba(214,43,43,0.2);border-radius:var(--radius)">
+    <div class="detail-key" style="color:var(--red);margin-bottom:4px">Procurement's Reason for Decline</div>
+    <div style="font-size:0.82rem;color:#dc2626;font-weight:600">${group.rejection_reason || '—'}</div></div>`;
+  if (role === 'pm' || role === 'master') {
+    return `${reasonBox}
+      <textarea class="form-control" id="pogDeclineDecision-${group.id}" placeholder="Your rationale for approving or rejecting this decline *" style="min-height:56px;margin-bottom:8px"></textarea>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-success btn-sm" onclick="handleDecideGroupDecline('${group.id}', true)">Approve Decline</button>
+        <button class="btn btn-danger btn-sm" onclick="handleDecideGroupDecline('${group.id}', false)">✗ Reject Decline</button>
+      </div>`;
+  }
+  return reasonBox + `<div style="font-size:0.78rem;color:var(--gray-3)">⏳ Decline awaiting PM decision.</div>`;
+}
+
+async function handleDecideGroupDecline(groupId, approve) {
+  const notes = document.getElementById(`pogDeclineDecision-${groupId}`)?.value.trim();
+  if (!notes) { showToast('Please add decision notes.', 'error'); return; }
+  const { data: group, error } = await db.from('po_groups').select('*').eq('id', groupId).single();
+  if (error || !group) { showToast('Could not load PO Group.', 'error'); return; }
+  const prNo = `PR-${String(currentPR.request_number).padStart(4,'0')}`;
+  let ok;
+  if (approve) {
+    ok = await setPOGroupPhase(group, 'declined');
+  } else {
+    const back = (group.phase_timestamps || {})._decline_from || 'quotation_pending';
+    ok = await setPOGroupPhase(group, back, { rejection_reason: null });
+  }
+  if (!ok) return;
+  showToast(approve ? 'Decline approved.' : 'Decline rejected — group returned to Procurement.', approve ? 'success' : 'error');
+  try { await window.postComment(currentPR.id, currentUser.id, `PM ${approve ? 'approved' : 'rejected'} decline of "${group.group_label}": ${notes}`); } catch (e) {}
+  notifyRoleOfPOGroupEvent(currentPR.id, `PM ${approve ? 'approved' : 'rejected'} the decline of "${group.group_label}" on ${prNo} — ${notes}`, 'procurement');
+  await openPRNewModel(currentPR.id);
+}
+window.handleDecideGroupDecline = handleDecideGroupDecline;
 
 // ── Handlers wired to the buttons above ─────────────────────────────
 async function handleCreatePOGroup(prId) {
@@ -1905,7 +1988,7 @@ window.sortRowsBy = sortRowsBy;
 const ROLE_ACTION_PHASES = {
   procurement: ['quotation_pending', 'pm_approved', 'order_placed'],
   engineer:    ['quoted', 'grn_pending'],
-  pm:          ['pending_pm_approval'],
+  pm:          ['pending_pm_approval', 'pending_decline_approval'],
   accounts:    ['qc_passed', 'payment_pending'],
   master:      [],
 };
