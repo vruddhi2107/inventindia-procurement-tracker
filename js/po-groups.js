@@ -317,12 +317,13 @@ async function recordPOGroupPayment(poGroupId, paymentType, amount, currency, po
 
 // ── ROLLUP DISPLAY HELPERS (client-side mirror of the SQL trigger,
 //    used for instant UI feedback before the DB round-trips) ──────────
-function computeRollupLabel(poGroups) {
+function computeRollupLabel(poGroups, partLines) {
+  const pending = (partLines || []).filter(p => p.status === 'unassigned').length;
   if (!poGroups || !poGroups.length) return { label: 'No PO Groups Yet', closed: false };
   const closedCount = poGroups.filter(g => PO_GROUP_TERMINAL.has(g.phase)).length;
   const total = poGroups.length;
-  if (closedCount === total) return { label: 'Closed', closed: true };
-  return { label: `${closedCount} of ${total} POs Closed`, closed: false };
+  if (closedCount === total && !pending) return { label: 'Closed', closed: true };
+  return { label: `${closedCount} of ${total} POs Closed${pending ? ` · ${pending} part${pending > 1 ? 's' : ''} not yet grouped` : ''}`, closed: false };
 }
 
 // ── RENDER: PO Group chip strip for collapsed request-list rows ───────
@@ -764,6 +765,7 @@ function renderUngroupedPartsPanel(prId, ungroupedParts, vendorOptionsHTML) {
       <td>${p.name}</td>
       <td style="text-align:center;font-family:var(--font-mono)">${p.qty}</td>
       <td>${p.spec || '—'}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="handleDeclinePart('${p.id}')">✗ Decline</button></td>
     </tr>`).join('');
 
   return `
@@ -771,7 +773,7 @@ function renderUngroupedPartsPanel(prId, ungroupedParts, vendorOptionsHTML) {
     <div class="action-section-title" style="color:#4f46e5">🧩 Group Parts to a Vendor <span class="action-badge">ACTION AVAILABLE</span></div>
     <p style="font-size:0.82rem;color:var(--gray-3);margin-bottom:10px">Select the parts going to the same vendor, choose the vendor, and create a PO Group. Repeat for each vendor split.</p>
     <table class="parts-table" style="width:100%;margin-bottom:10px">
-      <thead><tr><th style="width:28px"></th><th>Part</th><th style="width:60px">Qty</th><th>Spec</th></tr></thead>
+      <thead><tr><th style="width:28px"></th><th>Part</th><th style="width:60px">Qty</th><th>Spec</th><th style="width:90px"></th></tr></thead>
       <tbody>${rows}</tbody>
     </table>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -919,7 +921,7 @@ async function openPRNewModel(id) {
   currentVendorListCache = vendorList;
 
   const ungroupedParts = partLines.filter(p => p.status === 'unassigned');
-  const rollup = computeRollupLabel(poGroups);
+  const rollup = computeRollupLabel(poGroups, partLines);
 
   const vendorOptionsHTML = `<option value="">— Select vendor —</option>` +
     vendorList.map(v => `<option value="${v.id}" data-name="${v.name}">${v.name}${v.specialization ? ' (' + v.specialization + ')' : ''}</option>`).join('');
@@ -944,6 +946,12 @@ async function openPRNewModel(id) {
       ${poSummaryHTML}
     </div>`;
 
+  const declinedParts = partLines.filter(p => p.status === 'declined');
+  const declinedPartsHTML = declinedParts.length ? `<div style="margin-bottom:14px;padding:10px 14px;border-radius:var(--radius);background:rgba(214,43,43,0.04);border:1px solid rgba(214,43,43,0.18)">
+      <div class="detail-key" style="color:var(--red);margin-bottom:6px">🚫 Declined Parts</div>
+      ${declinedParts.map(p => `<div style="font-size:0.78rem;margin-bottom:4px"><strong>${p.name}</strong> (×${p.qty}) — ${p.decline_reason || 'No reason recorded'}</div>`).join('')}
+    </div>` : '';
+
   const groupingPanelHTML = (window.PO_GROUP_PAGE_ROLE === 'procurement' || window.PO_GROUP_PAGE_ROLE === 'master')
     ? renderUngroupedPartsPanel(id, ungroupedParts, vendorOptionsHTML)
     : (ungroupedParts.length ? `<div style="font-size:0.78rem;color:var(--gray-4);margin-bottom:10px">🧩 ${ungroupedParts.length} part(s) not yet grouped to a vendor by Procurement.</div>` : '');
@@ -958,6 +966,7 @@ async function openPRNewModel(id) {
     renderEngineerAttachments(currentPR) +
     rollupBannerHTML +
     groupingPanelHTML +
+    declinedPartsHTML +
     `<div id="poGroupCardsContainer">${groupCardsHTML}</div>` +
     `<div style="margin-top:22px;border-top:1px solid var(--border);padding-top:16px">
       <div class="section-title" style="margin-bottom:10px">💬 Comments</div>
@@ -1295,6 +1304,33 @@ async function handleDecideGroupDecline(groupId, approve) {
   await openPRNewModel(currentPR.id);
 }
 window.handleDecideGroupDecline = handleDecideGroupDecline;
+
+
+// ── Decline an ungrouped part (Procurement) ─────────────────────────
+// For a part that will not be ordered at all. Requires a reason, stores it on
+// the part line (needs request_part_lines.decline_reason), logs a comment and
+// notifies the PM. Declined parts no longer block the request from closing.
+async function handleDeclinePart(partId) {
+  const part = (currentPartLinesCache || []).find(p => p.id === partId);
+  const reason = (prompt(`Reason for declining "${part?.name || 'this part'}" (it will not be ordered):`) || '').trim();
+  if (!reason) { showToast('A reason is required to decline a part.', 'error'); return; }
+  showLoader(true);
+  try {
+    const { error } = await db.from('request_part_lines')
+      .update({ status: 'declined', decline_reason: reason, updated_at: new Date().toISOString() })
+      .eq('id', partId);
+    if (error) throw error;
+    try { await window.postComment(currentPR.id, currentUser.id, `Procurement declined part "${part?.name || partId}": ${reason}`); } catch (e) {}
+    notifyRoleOfPOGroupEvent(currentPR.id, `Part "${part?.name || ''}" declined by Procurement on PR-${String(currentPR.request_number).padStart(4,'0')} — ${reason}`, 'pm');
+    showToast('Part declined.', 'success');
+  } catch (e) {
+    showToast('Error: ' + e.message + ' (has decline_reason column been added to request_part_lines?)', 'error');
+  } finally {
+    showLoader(false);
+    await openPRNewModel(currentPR.id);
+  }
+}
+window.handleDeclinePart = handleDeclinePart;
 
 // ── Handlers wired to the buttons above ─────────────────────────────
 async function handleCreatePOGroup(prId) {
