@@ -1582,9 +1582,8 @@ async function openPOGroupModal(groupId) {
         <div class="po-addr-cell">
           <div class="cell-head">Name and Address of Buyer :</div>
           <div class="company-name">INVENTINDIA INNOVATIONS PVT. LTD.</div>
-          Ch03, Inspire Business Park,<br/>
-          Adani Shantigram, Near Vaishnodevi Circle, Gandhinagar,<br/>
-          Ahmedabad (Gujarat) India - 382421<br/>
+          2nd floor, The Infinity, Beside 365 The festival,<br/>
+          Opp. Vaishnodevi circle, Gandhinagar, Gujarat - 382421<br/>
           GSTIN : 24AACCI7644H1ZK<br/>
           Contact Person: Jaimin Prajapati<br/>
           Email: Jaimin.p@inventindia.com<br/>
@@ -1623,8 +1622,8 @@ async function openPOGroupModal(groupId) {
         <div class="po-addr-cell">
           <div class="cell-head">Shipping Details :</div>
           <div class="company-name">INVENTINDIA INNOVATIONS PVT. LTD.</div>
-          Ch03, Inspire Business Park,<br/>
-          Adani Shantigram, Ahmedabad (Gujarat) India - 382421<br/>
+          2nd floor, The Infinity, Beside 365 The festival,<br/>
+          Opp. Vaishnodevi circle, Gandhinagar, Gujarat - 382421<br/>
           GSTIN : 24AACC17644H1ZK<br/>
           Contact Person: Jaimin Prajapati<br/>
           Email: Jaimin.p@inventindia.com<br/>
