@@ -1466,6 +1466,7 @@ async function openPOModal(prId) {
     <div style="margin-bottom:12px;padding:9px 12px;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.2);border-radius:6px;font-size:0.78rem;display:flex;align-items:center;flex-wrap:wrap;gap:12px">
       <span>⚙️ Review and edit fields directly in the PO below. Adjust tax rates here:</span>
       <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap">
+        ${poShipToSelectHTML()}
         <label style="font-size:0.74rem;white-space:nowrap">CGST %</label>
         <input id="cgstInput" type="number" value="${cgstPct}" class="po-tax-input" onchange="recalcPO()"/>
         <label style="font-size:0.74rem;white-space:nowrap">SGST %</label>
@@ -1530,17 +1531,7 @@ async function openPOModal(prId) {
           ${vendor?.vendor_type?`Vendor Type : ${vendor.vendor_type}<br/>`:''}
           Place of Supply: Gujarat.India
         </div>
-        <div class="po-addr-cell">
-          <div class="cell-head">Shipping Details :</div>
-          <div class="company-name">INVENTINDIA INNOVATIONS PVT. LTD.</div>
-          2nd floor, The Infinity, Beside 365 The festival,<br/>
-          Opp. Vaishnodevi circle, Gandhinagar, Gujarat - 382421<br/>
-          GSTIN : 24AACC17644H1ZK<br/>
-          Contact Person: Jaimin Prajapati<br/>
-          Email: Jaimin.p@inventindia.com<br/>
-          Contact No.: 9924077107<br/>
-          Place of Supply: Gujarat.India
-        </div>
+        <div class="po-addr-cell" id="poShipCell">${poShipCellInnerHTML('infinity')}</div>
       </div>
 
       <!-- Items table -->
