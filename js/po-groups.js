@@ -1494,6 +1494,65 @@ async function handlePlaceOrderForGroup(groupId) {
   await openPOGroupModal(groupId);
 }
 
+// ════════════════════════════════════════════════════
+// PO SHIP-TO ADDRESS
+// Lets the user choose where goods are delivered on a PO:
+//   "infinity"  → current office (The Infinity, Gandhinagar)
+//   "warehouse" → warehouse address
+// Both PO modals (group PO + single-vendor PO) use these helpers.
+// To change an address, edit PO_SHIP_TO_ADDRESSES only.
+// ════════════════════════════════════════════════════
+const PO_SHIP_TO_OPTIONS = [
+  { value: 'infinity',  label: 'Infinity office (current address)' },
+  { value: 'warehouse', label: 'Warehouse' },
+];
+const PO_SHIP_TO_ADDRESSES = {
+  infinity: {
+    company: 'INVENTINDIA INNOVATIONS PVT. LTD.',
+    lines: [
+      '2nd floor, The Infinity, Beside 365 The festival,',
+      'Opp. Vaishnodevi circle, Gandhinagar, Gujarat - 382421',
+    ],
+    gstin: '24AACC17644H1ZK',
+    contact: 'Jaimin Prajapati',
+    email: 'Jaimin.p@inventindia.com',
+    phone: '9924077107',
+  },
+  warehouse: {
+    company: 'INVENTINDIA INNOVATIONS PVT. LTD.',
+    lines: [
+      'Plot no 29, Hasmukh nagar colony, Opp. Shine engineering,',
+      'Khodiyar station road, Gandhinagar, Gujarat - 382421',
+    ],
+    gstin: '24AACC17644H1ZK',
+    contact: 'Jaimin Prajapati',
+    email: 'Jaimin.p@inventindia.com',
+    phone: '9924077107',
+  },
+};
+function poShipCellInnerHTML(key) {
+  const a = PO_SHIP_TO_ADDRESSES[key] || PO_SHIP_TO_ADDRESSES.infinity;
+  return `<div class="cell-head">Shipping Details :</div>
+          <div class="company-name">${a.company}</div>
+          ${a.lines.map(l => `${l}<br/>`).join('\n          ')}
+          GSTIN : ${a.gstin}<br/>
+          Contact Person: ${a.contact}<br/>
+          Email: ${a.email}<br/>
+          Contact No.: ${a.phone}<br/>
+          Place of Supply: Gujarat.India`;
+}
+function poShipToSelectHTML() {
+  return `<label style="font-size:0.74rem;white-space:nowrap">Ship To</label>
+        <select id="poShipTo" onchange="applyPOShipTo()" style="font-size:0.78rem;padding:3px 6px">
+          ${PO_SHIP_TO_OPTIONS.map(o => `<option value="${o.value}">${o.label}</option>`).join('')}
+        </select>`;
+}
+function applyPOShipTo() {
+  const key = document.getElementById('poShipTo')?.value || 'infinity';
+  const cell = document.getElementById('poShipCell');
+  if (cell) cell.innerHTML = poShipCellInnerHTML(key);
+}
+
 async function openPOGroupModal(groupId) {
   showLoader(true);
   const { data: group } = await db.from('po_groups').select('*, vendors(*)').eq('id', groupId).single();
@@ -1560,6 +1619,7 @@ async function openPOGroupModal(groupId) {
     <div style="margin-bottom:12px;padding:9px 12px;background:rgba(245,158,11,0.07);border:1px solid rgba(245,158,11,0.2);border-radius:6px;font-size:0.78rem;display:flex;align-items:center;flex-wrap:wrap;gap:12px">
       <span>⚙️ Review and edit fields directly in the PO below. Adjust tax rates here:</span>
       <div style="display:flex;gap:8px;align-items:center;margin-left:auto;flex-wrap:wrap">
+        ${poShipToSelectHTML()}
         <label style="font-size:0.74rem;white-space:nowrap">CGST %</label>
         <input id="cgstInput" type="number" value="${cgstPct}" class="po-tax-input" onchange="recalcPO()"/>
         <label style="font-size:0.74rem;white-space:nowrap">SGST %</label>
@@ -1619,17 +1679,7 @@ async function openPOGroupModal(groupId) {
           ${vendor?.vendor_type ? `Vendor Type : ${vendor.vendor_type}<br/>` : ''}
           Place of Supply: Gujarat.India
         </div>
-        <div class="po-addr-cell">
-          <div class="cell-head">Shipping Details :</div>
-          <div class="company-name">INVENTINDIA INNOVATIONS PVT. LTD.</div>
-          2nd floor, The Infinity, Beside 365 The festival,<br/>
-          Opp. Vaishnodevi circle, Gandhinagar, Gujarat - 382421<br/>
-          GSTIN : 24AACC17644H1ZK<br/>
-          Contact Person: Jaimin Prajapati<br/>
-          Email: Jaimin.p@inventindia.com<br/>
-          Contact No.: 9924077107<br/>
-          Place of Supply: Gujarat.India
-        </div>
+        <div class="po-addr-cell" id="poShipCell">${poShipCellInnerHTML('infinity')}</div>
       </div>
 
       <table class="po-items-table">
